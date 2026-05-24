@@ -14,7 +14,8 @@ const NAV = [
   { to: '/admin/bookings',   label: '預約管理', icon: '🗓️' },
   { to: '/admin/pricing',    label: '定價管理', icon: '💰' },
   { to: '/admin/page-builder', label: '頁面編輯', icon: '🖼' },
-  { to: '/admin/settings',   label: '系統設定', icon: '⚙️' },
+  { to: '/admin/settings',     label: '系統設定', icon: '⚙️' },
+  { to: '/admin/ai-analytics', label: 'AI 數據',  icon: '🤖' },
 ]
 
 export default function AdminLayout() {

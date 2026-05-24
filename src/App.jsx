@@ -37,6 +37,7 @@ import HomeworkAdmin      from './pages/admin/HomeworkAdmin'
 import PricingAdmin       from './pages/admin/PricingAdmin'
 import PageBuilder        from './pages/admin/PageBuilder'
 import SystemSettings     from './pages/admin/SystemSettings'
+import AIAnalytics        from './pages/admin/AIAnalytics'
 
 function StudentShell({ children }) {
   const { currentUser } = useAuth()
@@ -94,7 +95,7 @@ export default function App() {
           <Route path="/dashboard/profile"  element={<ProtectedRoute><StudentShell><Profile /></StudentShell></ProtectedRoute>} />
           <Route path="/dashboard/trial"        element={<ProtectedRoute><StudentShell><Trial /></StudentShell></ProtectedRoute>} />
           <Route path="/dashboard/trial-player" element={<ProtectedRoute><StudentShell><TrialPlayer /></StudentShell></ProtectedRoute>} />
-          <Route path="/dashboard/ai-tools" element={<ProtectedRoute requireTier="advanced"><StudentShell><AITools /></StudentShell></ProtectedRoute>} />
+          <Route path="/dashboard/ai-tools" element={<ProtectedRoute requireTier="basic"><StudentShell><AITools /></StudentShell></ProtectedRoute>} />
           <Route path="/dashboard/booking"  element={<ProtectedRoute requireTier="advanced"><StudentShell><OneOnOneBooking /></StudentShell></ProtectedRoute>} />
 
           {/* ── Managed member routes ── */}
@@ -116,6 +117,7 @@ export default function App() {
             <Route path="pricing"      element={<PricingAdmin />} />
             <Route path="page-builder" element={<PageBuilder />} />
             <Route path="settings"     element={<SystemSettings />} />
+            <Route path="ai-analytics" element={<AIAnalytics />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

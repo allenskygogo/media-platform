@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getSalesBlocks, getPricing, saveTrialSession } from '../data/mockData'
 import { initPixel, fbq } from '../utils/fbPixel'
+import { callAIFree, getFreeUsageStatus } from '../services/aiService'
 
 // ── Calendar helpers ──────────────────────────────────────────────────────────
 const DAYS = ['日','一','二','三','四','五','六']
@@ -417,6 +418,110 @@ function TextBlock({ block }) {
   )
 }
 
+// ── AI Free Trial Block ───────────────────────────────
+function AITrialBlock({ pricing }) {
+  const [industry,  setIndustry]  = useState('')
+  const [loading,   setLoading]   = useState(false)
+  const [result,    setResult]    = useState(null)
+  const [error,     setError]     = useState('')
+  const [status,    setStatus]    = useState(getFreeUsageStatus)
+
+  const handleGenerate = async () => {
+    if (!industry.trim() || loading) return
+    const fresh = getFreeUsageStatus()
+    setStatus(fresh)
+    if (fresh.remaining <= 0) {
+      setError('today_limit')
+      return
+    }
+    setLoading(true)
+    setResult(null)
+    setError('')
+    try {
+      const data = await callAIFree('topics', industry.trim())
+      setResult(data)
+      setStatus(getFreeUsageStatus())
+    } catch (e) {
+      if (e.message === 'LIMIT_EXCEEDED') setError('today_limit')
+      else setError('failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <section className="sp-section sp-ai-trial" id="ai-trial">
+      <div className="sp-container">
+        <div className="sp-ai-inner">
+          <div className="sp-ai-header">
+            <h2 className="sp-ai-title">免費試用 AI 選題生成</h2>
+            <p className="sp-ai-sub">輸入你的行業，馬上看看 AI 能幫你做什麼</p>
+            <div className="sp-ai-limit-badge">每日 {status.limit} 次免費 · 今日剩餘 {Math.max(0, status.remaining)} 次</div>
+          </div>
+
+          <div className="sp-ai-input-row">
+            <input
+              className="sp-ai-input"
+              placeholder="輸入你的行業或產品，例如：美食、親子、健身..."
+              value={industry}
+              onChange={e => setIndustry(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleGenerate()}
+              disabled={loading}
+            />
+            <button
+              className="sp-ai-btn"
+              onClick={handleGenerate}
+              disabled={loading || !industry.trim()}
+            >
+              {loading
+                ? <span className="sp-ai-typing"><span/><span/><span/></span>
+                : '免費生成選題'}
+            </button>
+          </div>
+
+          {error === 'today_limit' && (
+            <div className="sp-ai-error">
+              今日免費次數已用完，明天再來，或購買試聽課立即解鎖
+              <a href="#schedule" className="sp-ai-error-link">購買試聽課 ${pricing.trialPrice} →</a>
+            </div>
+          )}
+          {error === 'failed' && (
+            <div className="sp-ai-error">生成失敗，請稍後再試</div>
+          )}
+
+          {result && (
+            <div className="sp-ai-result">
+              <p className="sp-ai-result-label">✨ AI 為「{industry}」生成的爆款選題：</p>
+              {/* First 3: fully visible */}
+              {result.slice(0, 3).map((item, i) => (
+                <div key={i} className="sp-ai-topic-item">
+                  <span className="sp-ai-topic-num">T{i + 1}</span>
+                  <span>{item}</span>
+                </div>
+              ))}
+              {/* Last 5: blurred + unlock CTA */}
+              <div className="sp-ai-blur-wrap">
+                {result.slice(3).map((item, i) => (
+                  <div key={i} className="sp-ai-topic-item sp-ai-topic-blurred" aria-hidden="true">
+                    <span className="sp-ai-topic-num">T{i + 4}</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+                <div className="sp-ai-blur-overlay">
+                  <p className="sp-ai-blur-text">還有 5 個爆款選題等你解鎖 🔒</p>
+                  <a href="#schedule" className="btn btn-primary">
+                    購買試聽課 ${pricing.trialPrice} 立即解鎖
+                  </a>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function renderBlock(block, pricing) {
   if (!block.visible) return null
   switch (block.type) {
@@ -474,8 +579,14 @@ export default function SalesPage() {
         </div>
       </header>
 
-      {/* Blocks */}
-      {blocks.map(b => renderBlock(b, pricing))}
+      {/* Blocks — inject AI trial block after plan-comparison */}
+      {blocks.map(b => {
+        const rendered = renderBlock(b, pricing)
+        if (b.type === 'plan-comparison') {
+          return [rendered, <AITrialBlock key="ai-trial" pricing={pricing} />]
+        }
+        return rendered
+      })}
 
       {/* Footer */}
       <footer className="sp-footer">
