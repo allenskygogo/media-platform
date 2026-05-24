@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+worker/node_modules/
+
+# Build output
+dist/
+
+# Environment & secrets — NEVER commit these
+.env
+.env.local
+.env.*.local
+.dev.vars
+worker/.dev.vars
+
+# Editor
+.DS_Store
+.vscode/
+*.log

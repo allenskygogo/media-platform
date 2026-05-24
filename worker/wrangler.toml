@@ -1,0 +1,21 @@
+name               = "media-platform-api"
+main               = "index.js"
+compatibility_date = "2024-09-23"
+account_id         = "a7690c8b61158776e62541438f0ebda2"
+
+# ── Local dev ──────────────────────────────────────────────────────────────
+# Run with: npx wrangler dev
+# Defaults to http://localhost:8787
+
+# ── Secrets (do NOT put real values here) ─────────────────────────────────
+# Set via CLI:
+#   npx wrangler secret put CLOUDFLARE_ACCOUNT_ID
+#   npx wrangler secret put CLOUDFLARE_API_TOKEN
+#   npx wrangler secret put CLOUDFLARE_STREAM_KEY_ID
+#   npx wrangler secret put CLOUDFLARE_STREAM_SIGNING_KEY
+#
+# Or create a .dev.vars file (gitignored) for local dev:
+#   CLOUDFLARE_ACCOUNT_ID=your_account_id
+#   CLOUDFLARE_API_TOKEN=your_api_token
+#   CLOUDFLARE_STREAM_KEY_ID=your_key_id
+#   CLOUDFLARE_STREAM_SIGNING_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
