@@ -38,6 +38,7 @@ import PricingAdmin       from './pages/admin/PricingAdmin'
 import PageBuilder        from './pages/admin/PageBuilder'
 import SystemSettings     from './pages/admin/SystemSettings'
 import AIAnalytics        from './pages/admin/AIAnalytics'
+import PracticeAdmin      from './pages/admin/PracticeAdmin'
 
 function StudentShell({ children }) {
   const { currentUser } = useAuth()
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="page-builder" element={<PageBuilder />} />
             <Route path="settings"     element={<SystemSettings />} />
             <Route path="ai-analytics" element={<AIAnalytics />} />
+            <Route path="practice"     element={<PracticeAdmin />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

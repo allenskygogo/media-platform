@@ -16,6 +16,7 @@ const NAV = [
   { to: '/admin/page-builder', label: '頁面編輯', icon: '🖼' },
   { to: '/admin/settings',     label: '系統設定', icon: '⚙️' },
   { to: '/admin/ai-analytics', label: 'AI 數據',  icon: '🤖' },
+  { to: '/admin/practice',    label: '練習作業',  icon: '✍️' },
 ]
 
 export default function AdminLayout() {

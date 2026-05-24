@@ -276,3 +276,21 @@ export async function callAIFree(feature, input) {
   bumpFreeCount()
   return callAI(feature, input, 'free', null)
 }
+
+// ── Practice submissions ──────────────────────────────
+const PRACTICE_KEY = 'practice_submissions'
+
+export function getPracticeSubmissions() {
+  return JSON.parse(localStorage.getItem(PRACTICE_KEY) || '[]')
+}
+
+export function savePracticeSubmission(record) {
+  const submissions = getPracticeSubmissions()
+  submissions.push({
+    ...record,
+    id: Date.now().toString(),
+    submitted_at: new Date().toISOString(),
+    unlocked: true,
+  })
+  localStorage.setItem(PRACTICE_KEY, JSON.stringify(submissions))
+}
