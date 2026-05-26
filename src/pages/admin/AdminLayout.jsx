@@ -13,10 +13,12 @@ const NAV = [
   { to: '/admin/managed',    label: '頂流代操', icon: '🤝' },
   { to: '/admin/bookings',   label: '預約管理', icon: '🗓️' },
   { to: '/admin/pricing',    label: '定價管理', icon: '💰' },
-  { to: '/admin/page-builder', label: '頁面編輯', icon: '🖼' },
+  { to: '/admin/banners',      label: 'Banner 管理', icon: '🖼️' },
+  { to: '/admin/page-builder', label: '頁面編輯', icon: '📐' },
   { to: '/admin/settings',     label: '系統設定', icon: '⚙️' },
   { to: '/admin/ai-analytics', label: 'AI 數據',  icon: '🤖' },
   { to: '/admin/practice',    label: '練習作業',  icon: '✍️' },
+  { to: '/admin/beta',        label: '封測管理',  icon: '🧪' },
 ]
 
 export default function AdminLayout() {

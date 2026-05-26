@@ -6,7 +6,7 @@ import Header from './components/Header'
 import MobileTabBar from './components/MobileTabBar'
 import LeftSidebar from './components/LeftSidebar'
 
-import SalesPage       from './pages/SalesPage'
+import HomePage        from './pages/HomePage'
 import Login           from './pages/Login'
 import Register        from './pages/Register'
 import Pricing         from './pages/Pricing'
@@ -39,6 +39,9 @@ import PageBuilder        from './pages/admin/PageBuilder'
 import SystemSettings     from './pages/admin/SystemSettings'
 import AIAnalytics        from './pages/admin/AIAnalytics'
 import PracticeAdmin      from './pages/admin/PracticeAdmin'
+import BannerAdmin        from './pages/admin/BannerAdmin'
+import BetaAdmin          from './pages/admin/BetaAdmin'
+import BetaSignupPage     from './pages/BetaSignupPage'
 
 function StudentShell({ children }) {
   const { currentUser } = useAuth()
@@ -82,12 +85,13 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public sales page — logged-in users are auto-redirected inside SalesPage */}
-          <Route path="/"             element={<SalesPage />} />
+          {/* Public landing page — visible to all visitors, no auth required */}
+          <Route path="/"             element={<HomePage />} />
           <Route path="/login"        element={<Login />} />
           <Route path="/register"     element={<Register />} />
           <Route path="/pricing"      element={<Pricing />} />
           <Route path="/trial-login"  element={<TrialAutoLogin />} />
+          <Route path="/beta"         element={<BetaSignupPage />} />
 
           {/* ── Student routes ── */}
           <Route path="/dashboard" element={<ProtectedRoute><StudentShell><DashboardHome /></StudentShell></ProtectedRoute>} />
@@ -120,6 +124,8 @@ export default function App() {
             <Route path="settings"     element={<SystemSettings />} />
             <Route path="ai-analytics" element={<AIAnalytics />} />
             <Route path="practice"     element={<PracticeAdmin />} />
+            <Route path="banners"      element={<BannerAdmin />} />
+            <Route path="beta"         element={<BetaAdmin />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
