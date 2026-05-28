@@ -15,4 +15,5 @@ worker/.dev.vars
 # Editor
 .DS_Store
 .vscode/
+.claude/
 *.log
