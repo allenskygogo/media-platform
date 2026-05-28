@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getSystemSettings, saveSystemSettings } from '../../data/mockData'
 import BrandLogo from '../../components/BrandLogo'
 
 const BG_TIERS = [
-  { key: 'trial',    label: '試聽課背景圖',  color: 'rgba(0,150,255,0.4)',   desc: '試聽課會員首頁 Hero 背景' },
-  { key: 'standard', label: '達人班背景圖',  color: 'rgba(0,180,255,0.4)',   desc: '達人班會員首頁 Hero 背景' },
+  { key: 'trial',    label: '體驗課背景圖',  color: 'rgba(0,150,255,0.4)',   desc: '體驗課會員首頁 Hero 背景' },
+  { key: 'standard', label: '頂流達人背景圖', color: 'rgba(0,180,255,0.4)',   desc: '頂流達人會員首頁 Hero 背景' },
   { key: 'advanced', label: '頂流私塾背景圖', color: 'rgba(150,50,255,0.4)', desc: '頂流私塾會員首頁 Hero 背景' },
   { key: 'managed',  label: '頂流代操背景圖', color: 'rgba(200,100,60,0.4)', desc: '頂流代操會員首頁 Hero 背景' },
 ]
@@ -24,7 +25,7 @@ export default function SystemSettings() {
   const handleSave = () => {
     saveSystemSettings(settings)
     if (settings.siteName) document.title = settings.siteName
-    flash('設定已儲存 ✓')
+    flash('設定已儲存 已')
   }
 
   /* ── Logo upload ── */
@@ -67,6 +68,28 @@ export default function SystemSettings() {
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 720 }}>
+        <div className="card">
+          <div className="card-body">
+            <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 6 }}>網站設定入口</h3>
+            <p style={{ fontSize: 13, color: 'var(--gray-500)', marginBottom: 16 }}>
+              非日常營運功能集中放在這裡，主選單保留核心管理流程。
+            </p>
+            <div className="admin-settings-links">
+              <Link to="/admin/pricing">
+                <strong>定價設定</strong>
+                <span>體驗課、進階方案與代操服務價格</span>
+              </Link>
+              <Link to="/admin/banners">
+                <strong>Banner 管理</strong>
+                <span>會員首頁與方案頁視覺素材</span>
+              </Link>
+              <Link to="/admin/page-builder">
+                <strong>頁面編輯</strong>
+                <span>舊版內容頁與活動頁編輯入口</span>
+              </Link>
+            </div>
+          </div>
+        </div>
 
         {/* ── Logo ── */}
         <div className="card">
@@ -93,7 +116,7 @@ export default function SystemSettings() {
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <input ref={logoRef} type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" style={{ display: 'none' }} onChange={handleLogoUpload} />
-              <button className="btn btn-secondary" onClick={() => logoRef.current?.click()}>📁 上傳 Logo</button>
+              <button className="btn btn-secondary" onClick={() => logoRef.current?.click()}>上傳 Logo</button>
               {settings.logoUrl && <button className="btn btn-ghost" onClick={() => { set('logoUrl', ''); flash('已重設為預設 Logo，點「儲存」生效') }}>↩ 重設為預設</button>}
             </div>
             <p style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 10 }}>支援 PNG、SVG、WebP，建議高度 36px，最大 2 MB。</p>
@@ -135,7 +158,7 @@ export default function SystemSettings() {
                       <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 2 }}>{label}</div>
                       <div style={{ fontSize: 12, color: 'var(--gray-400)' }}>{desc}</div>
                       {url && (
-                        <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>✓ 已設定自訂背景圖</div>
+                        <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>已 已設定自訂背景圖</div>
                       )}
                     </div>
 
@@ -193,13 +216,13 @@ export default function SystemSettings() {
         <div className="card">
           <div className="card-body">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <div style={{ fontSize: 28 }}>📊</div>
+              <div style={{ fontSize: 28 }}>數據 </div>
               <div>
                 <h3 style={{ fontWeight: 700, fontSize: 16 }}>Facebook Pixel</h3>
                 <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>追蹤銷售頁訪客行為與廣告轉換</p>
               </div>
               {settings.fbPixelId && (
-                <span style={{ marginLeft: 'auto', background: 'var(--success-light)', color: 'var(--success)', padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>✅ 已啟用</span>
+                <span style={{ marginLeft: 'auto', background: 'var(--success-light)', color: 'var(--success)', padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>已啟用</span>
               )}
             </div>
             <div className="form-group">
@@ -211,7 +234,7 @@ export default function SystemSettings() {
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button className="btn btn-primary" onClick={handleSave}>💾 儲存所有設定</button>
+          <button className="btn btn-primary" onClick={handleSave}>儲存所有設定</button>
         </div>
       </div>
     </div>

@@ -12,8 +12,8 @@ const FEATURE_LABELS = {
 
 const PLAN_LABELS = {
   free:     '免費訪客',
-  trial:    '試聽課',
-  standard: '達人班',
+  trial:    '體驗課',
+  standard: '頂流達人',
   premium:  '頂流私塾',
   managed:  '頂流代操',
 }
@@ -105,7 +105,7 @@ export default function AIAnalytics() {
   return (
     <div className="admin-page">
       <div className="admin-page-header">
-        <h1 className="admin-page-title">🤖 AI 數據分析</h1>
+        <h1 className="admin-page-title">AI 數據分析</h1>
         <div className="ai-range-tabs">
           {[['today', '今日'], ['month', '本月'], ['all', '全部']].map(([k, l]) => (
             <button

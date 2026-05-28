@@ -59,7 +59,7 @@ export default function LiveAdmin() {
     saveSessions(all)
     setShowForm(false)
     setForm(EMPTY_FORM)
-    flash('✅ 場次已新增')
+    flash('場次已新增')
     refresh()
   }
 
@@ -118,7 +118,7 @@ export default function LiveAdmin() {
         <div className="card" style={{ marginBottom: 24 }}>
           <div className="card-header">
             <h2 className="card-title">新增直播場次</h2>
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowForm(false)}>✕</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowForm(false)}>×</button>
           </div>
           <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -241,7 +241,7 @@ export default function LiveAdmin() {
           <div className="card" style={{ alignSelf: 'start', position: 'sticky', top: 80 }}>
             <div className="card-header">
               <h2 className="card-title" style={{ fontSize: 14 }}>場次詳情</h2>
-              <button className="btn btn-ghost btn-sm" onClick={() => setDetailId(null)}>✕</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setDetailId(null)}>×</button>
             </div>
             <div className="card-body" style={{ fontSize: 14 }}>
               <p style={{ fontWeight: 700, marginBottom: 12 }}>{detailSession.title}</p>
@@ -288,7 +288,7 @@ export default function LiveAdmin() {
                           color: progress?.completed ? 'var(--success)' : progress ? 'var(--primary)' : 'var(--gray-400)',
                         }}>
                           {progress?.completed
-                            ? '✅ 已完課'
+                            ? '已完課'
                             : progress
                             ? `觀看至 ${Math.floor(progress.currentSecond / 60)} 分`
                             : '未觀看'}

@@ -6,7 +6,7 @@ import Header from './components/Header'
 import MobileTabBar from './components/MobileTabBar'
 import LeftSidebar from './components/LeftSidebar'
 
-import HomePage        from './pages/HomePage'
+import SalesPage       from './pages/SalesPage'
 import Login           from './pages/Login'
 import Register        from './pages/Register'
 import Pricing         from './pages/Pricing'
@@ -86,7 +86,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           {/* Public landing page — visible to all visitors, no auth required */}
-          <Route path="/"             element={<HomePage />} />
+          <Route path="/"             element={<SalesPage />} />
           <Route path="/login"        element={<Login />} />
           <Route path="/register"     element={<Register />} />
           <Route path="/pricing"      element={<Pricing />} />

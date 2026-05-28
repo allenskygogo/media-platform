@@ -65,7 +65,7 @@ function PreviewModal({ user, tplKey, onClose }) {
       <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">信件預覽 — 範本 {tplKey}</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <div style={{ marginBottom: 16 }}>
@@ -120,7 +120,7 @@ export default function TrialAdmin() {
   const manualComplete = (user) => {
     completeTrialInStorage(user.id)
     refresh()
-    flash(`✅ ${user.name} 已手動標記為完成，期限設為今天起 90 天`)
+    flash(`${user.name} 已手動標記為完成，期限設為今天起 90 天`)
   }
 
   const openEdit = (user) => {
@@ -135,7 +135,7 @@ export default function TrialAdmin() {
     saveUsers(all)
     refresh()
     setEditUser(null)
-    flash(`✅ ${editUser.name} 的使用期限已更新`)
+    flash(`${editUser.name} 的使用期限已更新`)
   }
 
   // Send reminder to a single student
@@ -143,7 +143,7 @@ export default function TrialAdmin() {
     const tplKey = nextReminderTemplate(user.id)
     recordReminder(user.id, tplKey)
     refresh()
-    flash(`📧 已模擬發送信件 ${tplKey} 給 ${user.name}`)
+    flash(`已模擬發送信件 ${tplKey} 給 ${user.name}`)
   }
 
   // Send today's reminder to all non-completed students
@@ -155,7 +155,7 @@ export default function TrialAdmin() {
       recordReminder(u.id, tplKey)
     })
     refresh()
-    flash(`📧 已模擬發送今日提醒給 ${pending.length} 位學員`)
+    flash(`已模擬發送今日提醒給 ${pending.length} 位學員`)
   }
 
   // Preview modal helpers
@@ -181,11 +181,11 @@ export default function TrialAdmin() {
     <div>
       <div className="page-heading">
         <div>
-          <h1>試聽管理</h1>
-          <p>初階學員試聽課進度總覽</p>
+          <h1>體驗課管理</h1>
+          <p>初階學員體驗課進度總覽</p>
         </div>
         <button className="btn btn-primary" onClick={sendAllReminders}>
-          📧 一鍵發送今日提醒
+          一鍵發送今日提醒
         </button>
       </div>
 
@@ -194,10 +194,10 @@ export default function TrialAdmin() {
       {/* Summary */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
         {[
-          { label: '未預約', val: statusCounts.none,      icon: '⬜', bg: 'var(--gray-100)' },
-          { label: '已預約', val: statusCounts.booked,    icon: '📅', bg: 'var(--advanced-light)' },
-          { label: '觀看中', val: statusCounts.watching,  icon: '▶️', bg: 'var(--primary-light)' },
-          { label: '已完成', val: statusCounts.completed, icon: '✅', bg: 'var(--success-light)' },
+          { label: '未預約', val: statusCounts.none,      icon: '未', bg: 'var(--gray-100)' },
+          { label: '已預約', val: statusCounts.booked,    icon: '約', bg: 'var(--advanced-light)' },
+          { label: '觀看中', val: statusCounts.watching,  icon: '播', bg: 'var(--primary-light)' },
+          { label: '已完成', val: statusCounts.completed, icon: '完', bg: 'var(--success-light)' },
         ].map(({ label, val, icon, bg }) => (
           <div key={label} className="stat-card">
             <div className="stat-icon" style={{ background: bg }}>{icon}</div>
@@ -349,7 +349,7 @@ export default function TrialAdmin() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">調整使用期限 — {editUser.name}</h2>
-              <button className="modal-close" onClick={() => setEditUser(null)}>✕</button>
+              <button className="modal-close" onClick={() => setEditUser(null)}>×</button>
             </div>
             <div className="modal-body">
               <div className="form-group">

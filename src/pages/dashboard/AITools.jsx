@@ -102,9 +102,10 @@ const SHOOT_FORMATS = [
 
 // ── Upgrade modal plans ───────────────────────────────
 const PLANS = [
-  { id: 'trial',   name: '體驗課',   price: '$980',     period: '90 天', current: true  },
-  { id: 'pro',     name: '達人班',   price: '$39,800',  period: '1 年',  current: false },
-  { id: 'premium', name: '頂流私塾', price: '$128,000', period: '1 年',  current: false },
+  { id: 'trial',   name: '體驗課',   note: '爆款選題 AI 3 個月', current: true  },
+  { id: 'creator', name: '頂流達人', note: '系統學會自媒體獲客方法', current: false },
+  { id: 'master',  name: '頂流私塾', note: '一對一陪跑與高階 AI 工具', current: false },
+  { id: 'managed', name: '頂流代操', note: '帳號全權管理服務', current: false },
 ]
 
 // ── Mock script generator ─────────────────────────────
@@ -387,7 +388,7 @@ const PLANNING_MOCK = {
     {
       key: 'monetize',
       title: '變現規劃',
-      content: `階段一（1-3個月）：知識付費 + 諮詢服務\n▌ 1對1諮詢：NT$2,000-5,000/小時，適合粉絲量500-5,000\n▌ 小群體工作坊：NT$3,000-8,000/人，每月1場\n▌ 數位產品：電子書或PDF工具包，NT$199-499\n\n階段二（3-6個月）：社群 + 課程\n▌ 付費社群：月費制NT$299-999/月\n▌ 系統課程：NT$5,800-39,800一次性\n\n階段三（6個月後）：品牌合作 + 代理\n▌ 業配接單 + 品牌大使 + 自有產品`,
+      content: `階段一（1-3個月）：知識付費 + 諮詢服務\n▌ 1對1諮詢：先驗證需求與成交話術\n▌ 小群體工作坊：每月固定主題測試\n▌ 數位產品：電子書或工具包，建立第一個可販售產品\n\n階段二（3-6個月）：社群 + 課程\n▌ 付費社群：建立固定內容節奏\n▌ 系統課程：將方法論包裝成完整學習路徑\n\n階段三（6個月後）：品牌合作 + 代理\n▌ 業配接單 + 品牌大使 + 自有產品`,
     },
     {
       key: 'segment',
@@ -533,10 +534,9 @@ function UpgradeModal({ onClose }) {
                 <span className="ait-plan-badge">目前方案</span>
               )}
               <div className="ait-plan-name">{plan.name}</div>
-              <div className="ait-plan-price">{plan.price}</div>
-              <div className="ait-plan-period">{plan.period}</div>
+              <div className="ait-plan-period">{plan.note}</div>
               {!plan.current && (
-                <button className="ait-plan-cta">立即升級</button>
+                <button className="ait-plan-cta">查看方案</button>
               )}
             </div>
           ))}
@@ -728,7 +728,7 @@ function TopicsPage() {
                       ))}
                     </div>
                     <div className="ait-upgrade-wall">
-                      <p className="ait-upgrade-wall-text">達人班學員專屬｜掌握四大腳本公式，完整架構不再對著鏡頭不知道說什麼</p>
+                      <p className="ait-upgrade-wall-text">頂流達人學員專屬｜掌握四大腳本公式，完整架構不再對著鏡頭不知道說什麼</p>
                       <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>立即升級解鎖</button>
                     </div>
                   </div>
@@ -926,7 +926,7 @@ function CopyPage() {
                       ))}
                     </div>
                     <div className="ait-upgrade-wall">
-                      <p className="ait-upgrade-wall-text">達人班學員專屬｜掌握四大腳本公式，每支影片都有完整架構，不再對著鏡頭不知道說什麼</p>
+                      <p className="ait-upgrade-wall-text">頂流達人學員專屬｜掌握四大腳本公式，每支影片都有完整架構，不再對著鏡頭不知道說什麼</p>
                       <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>立即升級解鎖</button>
                     </div>
                   </div>
@@ -1107,7 +1107,7 @@ function AnalysisPage() {
               </div>
               <div className="ait-upgrade-wall">
                 <p className="ait-upgrade-wall-text">
-                  達人班學員專屬｜完整拆解爆款邏輯，複製成功公式到你的帳號
+                  頂流達人學員專屬｜完整拆解爆款邏輯，複製成功公式到你的帳號
                 </p>
                 <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>
                   立即升級解鎖
@@ -1252,7 +1252,7 @@ function SocialPage() {
                 </div>
                 <div className="ait-upgrade-wall">
                   <p className="ait-upgrade-wall-text">
-                    達人班學員專屬｜一鍵生成 IG、FB、Threads 完整貼文，附 hashtag 策略
+                    頂流達人學員專屬｜一鍵生成 IG、FB、Threads 完整貼文，附 hashtag 策略
                   </p>
                   <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>
                     立即升級解鎖

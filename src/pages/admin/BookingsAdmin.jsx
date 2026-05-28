@@ -43,10 +43,10 @@ export default function BookingsAdmin() {
       {/* Summary cards */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
         {[
-          { label: '全部預約', val: counts.all, icon: '🗓️', bg: 'var(--primary-light)' },
-          { label: '待確認', val: counts.pending, icon: '⏳', bg: 'var(--advanced-light)' },
-          { label: '已確認', val: counts.confirmed, icon: '✅', bg: 'var(--success-light)' },
-          { label: '已取消', val: counts.cancelled, icon: '❌', bg: 'var(--danger-light)' },
+          { label: '全部預約', val: counts.all, icon: '預約', bg: 'var(--primary-light)' },
+          { label: '待確認', val: counts.pending, icon: '待', bg: 'var(--advanced-light)' },
+          { label: '已確認', val: counts.confirmed, icon: '確', bg: 'var(--success-light)' },
+          { label: '已取消', val: counts.cancelled, icon: '停', bg: 'var(--danger-light)' },
         ].map(({ label, val, icon, bg }) => (
           <div key={label} className="stat-card">
             <div className="stat-icon" style={{ background: bg }}>{icon}</div>
@@ -85,7 +85,7 @@ export default function BookingsAdmin() {
                     <td style={{ fontWeight: 600 }}>{getName(b.userId)}</td>
                     <td>
                       <span className={`badge ${b.type === 'oneonone' ? 'badge-advanced' : 'badge-managed'}`}>
-                        {b.type === 'oneonone' ? '🎓 一對一' : '🎬 拍攝'}
+                        {b.type === 'oneonone' ? '一對一' : '拍攝'}
                       </span>
                     </td>
                     <td style={{ fontWeight: 600 }}>{b.date}</td>

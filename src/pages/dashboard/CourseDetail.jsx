@@ -102,9 +102,9 @@ export default function CourseDetail() {
         ← 返回課程列表
       </button>
 
-      <div style={{ display:'grid', gridTemplateColumns: activeLesson ? '1fr 340px' : '1fr', gap:24 }}>
+      <div className={`course-detail-layout${activeLesson ? ' has-active-lesson' : ''}`}>
         {/* ── Left column ── */}
-        <div>
+        <div className="course-detail-main">
           {/* Course cover (when no lesson selected) */}
           {view === 'info' && (
             <div className="card" style={{ marginBottom:24 }}>
@@ -163,8 +163,8 @@ export default function CourseDetail() {
 
         {/* ── Right column: lesson list ── */}
         {activeLesson && (
-          <div>
-            <div className="card" style={{ position:'sticky', top:80 }}>
+          <div className="course-detail-sidebar">
+            <div className="card course-sidebar-card">
               <div className="card-header">
                 <h2 className="card-title">課程目錄</h2>
                 <span style={{ fontSize:13, color:'var(--gray-500)' }}>{course.lessons.length} 節</span>

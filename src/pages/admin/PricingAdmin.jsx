@@ -30,7 +30,7 @@ export default function PricingAdmin() {
 
   const handleSave = () => {
     savePricing(pricing)
-    flash('✅ 定價設定已儲存')
+    flash('定價設定已儲存')
   }
 
   const handleReset = () => {
@@ -60,7 +60,7 @@ export default function PricingAdmin() {
       <div className="page-heading">
         <div>
           <h1>定價管理</h1>
-          <p>設定各方案定價及優惠條件</p>
+          <p>設定各方案定價及優惠條件；測試版前台暫不顯示正式價格</p>
         </div>
       </div>
 
@@ -70,24 +70,24 @@ export default function PricingAdmin() {
         {/* Pricing settings */}
         <div>
           <div className="card" style={{ marginBottom:20 }}>
-            <div className="card-header"><h2 className="card-title">🎓 試聽課</h2></div>
+            <div className="card-header"><h2 className="card-title">體驗課</h2></div>
             <div className="card-body">
-              <PriceInput label="試聽課定價" value={pricing.trialPrice}
+              <PriceInput label="體驗課定價" value={pricing.trialPrice}
                 onChange={v => set('trialPrice', v)} />
             </div>
           </div>
 
           <div className="card" style={{ marginBottom:20 }}>
-            <div className="card-header"><h2 className="card-title">⭐ 達人班</h2></div>
+            <div className="card-header"><h2 className="card-title">頂流達人</h2></div>
             <div className="card-body">
               <PriceInput label="原價" value={pricing.advancedPrice}
                 onChange={v => set('advancedPrice', v)} />
-              <PriceInput label="試聽後 24 小時優惠價"
-                hint="學員完成試聽課後 24 小時內購買達人班時顯示此價格"
+              <PriceInput label="體驗後 24 小時優惠價"
+                hint="學員完成體驗課後 24 小時內購買頂流達人時顯示此價格"
                 value={pricing.advancedDiscountPrice}
                 onChange={v => set('advancedDiscountPrice', v)} />
               <div className="form-group">
-                <label className="form-label">試聽後優惠時效（小時）</label>
+                <label className="form-label">體驗後優惠時效（小時）</label>
                 <input type="number" className="form-input" style={{ maxWidth:100 }}
                   min={1} max={168} value={pricing.trialOfferHours}
                   onChange={e => set('trialOfferHours', Number(e.target.value))} />
@@ -96,12 +96,12 @@ export default function PricingAdmin() {
           </div>
 
           <div className="card" style={{ marginBottom:20 }}>
-            <div className="card-header"><h2 className="card-title">🏆 陪跑班</h2></div>
+            <div className="card-header"><h2 className="card-title">頂流私塾 / 頂流代操</h2></div>
             <div className="card-body">
               <PriceInput label="原價" value={pricing.managedPrice}
                 onChange={v => set('managedPrice', v)} />
               <p style={{ fontSize:13, color:'var(--gray-500)', marginTop:4, lineHeight:1.6 }}>
-                完課後折抵：陪跑班原價 - 學員實際付款的達人班金額。
+                完課後折抵：高階服務原價 - 學員實際付款的頂流達人金額。
                 折抵金額自動從學員資料的 <code>advancedPaidAmount</code> 欄位讀取。
               </p>
               <div className="form-group" style={{ marginTop:12 }}>
@@ -123,7 +123,7 @@ export default function PricingAdmin() {
         <div>
           {/* Expiry reminders */}
           <div className="card" style={{ marginBottom:20 }}>
-            <div className="card-header"><h2 className="card-title">📅 到期提醒記錄</h2></div>
+            <div className="card-header"><h2 className="card-title">到期提醒記錄</h2></div>
             <div className="card-body" style={{ padding:0 }}>
               {expiryLogs.length === 0 ? (
                 <p style={{ padding:'24px 20px', color:'var(--gray-400)', fontSize:13 }}>暫無到期提醒記錄</p>
@@ -171,10 +171,10 @@ export default function PricingAdmin() {
 
           {/* Trial reminders */}
           <div className="card">
-            <div className="card-header"><h2 className="card-title">📧 試聽提醒記錄</h2></div>
+            <div className="card-header"><h2 className="card-title">體驗提醒記錄</h2></div>
             <div className="card-body" style={{ padding:0 }}>
               {trialLogs.length === 0 ? (
-                <p style={{ padding:'24px 20px', color:'var(--gray-400)', fontSize:13 }}>暫無待試聽學員</p>
+                <p style={{ padding:'24px 20px', color:'var(--gray-400)', fontSize:13 }}>暫無待體驗學員</p>
               ) : (
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
                   <thead>

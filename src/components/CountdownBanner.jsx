@@ -23,7 +23,7 @@ function useCountdown(targetMs) {
   return remaining
 }
 
-/** Banner for the 24h advanced plan discount after trial completion. */
+/** Banner for the 24h creator plan upgrade prompt after trial completion. */
 export function AdvancedOfferBanner({ offer }) {
   const navigate  = useNavigate()
   const deadline  = Date.now() + offer.remainingMs
@@ -33,10 +33,9 @@ export function AdvancedOfferBanner({ offer }) {
   return (
     <div className="offer-banner offer-banner-advanced">
       <div className="offer-banner-inner">
-        <span className="offer-banner-emoji">⭐</span>
         <div className="offer-banner-text">
-          <strong>恭喜完成試聽課！達人班限時優惠</strong>
-          <span>原價 NT${offer.normalPrice.toLocaleString()}，優惠價 NT${offer.discountPrice.toLocaleString()}</span>
+          <strong>恭喜完成體驗課！可評估升級頂流達人</strong>
+          <span>從 AI 選題體驗，進入完整自媒體獲客系統課。</span>
         </div>
         <div className="offer-banner-countdown">
           <span className="offer-countdown-label">優惠剩餘</span>
@@ -51,7 +50,7 @@ export function AdvancedOfferBanner({ offer }) {
   )
 }
 
-/** Banner for the 24h managed plan discount after all courses completed. */
+/** Banner for the 24h managed-service prompt after all courses completed. */
 export function CompletionOfferBanner({ offer }) {
   const navigate  = useNavigate()
   const deadline  = Date.now() + offer.remainingMs
@@ -61,14 +60,9 @@ export function CompletionOfferBanner({ offer }) {
   return (
     <div className="offer-banner offer-banner-completion">
       <div className="offer-banner-inner">
-        <span className="offer-banner-emoji">🎉</span>
         <div className="offer-banner-text">
-          <strong>恭喜完課！陪跑班限時優惠 24 小時</strong>
-          <span>
-            原價 NT${offer.normalPrice.toLocaleString()}，
-            折抵達人班學費 NT${offer.deduction.toLocaleString()}，
-            應付 NT${offer.discountPrice.toLocaleString()}
-          </span>
+          <strong>恭喜完課！可評估頂流私塾或頂流代操</strong>
+          <span>若需要一對一陪跑或團隊代操，可以查看下一階段服務。</span>
         </div>
         <div className="offer-banner-countdown">
           <span className="offer-countdown-label">優惠剩餘</span>

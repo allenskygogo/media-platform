@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { getUsers, saveUsers, getProjects, saveProjects, addDays } from '../../data/mockData'
 
 const EMPTY_USER = { name: '', email: '', password: '', contractExpiry: '', igUsername: '', igFollowers: '', igPosts: '', igLikes: '', ttUsername: '', ttFollowers: '', ttVideos: '', ttViews: '' }
-const STATUS_META = { planning: { label: '企劃中', emoji: '💡' }, filming: { label: '拍攝中', emoji: '🎬' }, editing: { label: '剪輯中', emoji: '✂️' }, completed: { label: '已完成', emoji: '✅' } }
+const STATUS_META = { planning: { label: '企劃中', mark: '企' }, filming: { label: '拍攝中', mark: '拍' }, editing: { label: '剪輯中', mark: '剪' }, completed: { label: '已完成', mark: '完' } }
 
 export default function ManagedAdmin() {
   const [managedUsers, setManagedUsers] = useState(() => getUsers().filter(u => u.tier === 'managed'))
@@ -116,7 +116,7 @@ export default function ManagedAdmin() {
             {/* Social accounts */}
             <div className="card">
               <div className="card-header">
-                <h2 className="card-title">📱 社群帳號資訊</h2>
+                <h2 className="card-title">社群帳號資訊</h2>
                 <button className="btn btn-secondary btn-sm" onClick={() => { setEditSocial(selectedUser); setSocialForm({ igUsername: selectedUser.socialAccounts?.instagram?.username || '', igFollowers: selectedUser.socialAccounts?.instagram?.followers || '', igPosts: selectedUser.socialAccounts?.instagram?.recentPosts || '', igLikes: selectedUser.socialAccounts?.instagram?.avgLikes || '', ttUsername: selectedUser.socialAccounts?.tiktok?.username || '', ttFollowers: selectedUser.socialAccounts?.tiktok?.followers || '', ttVideos: selectedUser.socialAccounts?.tiktok?.recentVideos || '', ttViews: selectedUser.socialAccounts?.tiktok?.avgViews || '', contractExpiry: selectedUser.contractExpiry || '' }) }}>編輯</button>
               </div>
               <div className="card-body">
@@ -142,7 +142,7 @@ export default function ManagedAdmin() {
 
             {/* Video projects */}
             <div className="card">
-              <div className="card-header"><h2 className="card-title">🎬 影片製作進度</h2></div>
+              <div className="card-header"><h2 className="card-title">影片製作進度</h2></div>
               <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {/* Add project */}
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -162,7 +162,7 @@ export default function ManagedAdmin() {
                         </div>
                         <select value={p.status} onChange={e => updateProjectStatus(p.id, e.target.value)}
                           style={{ padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1.5px solid var(--gray-300)', fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>
-                          {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{v.emoji} {v.label}</option>)}
+                          {Object.entries(STATUS_META).map(([k, v]) => <option key={k} value={k}>{v.mark} {v.label}</option>)}
                         </select>
                       </div>
                     )
@@ -171,7 +171,7 @@ export default function ManagedAdmin() {
             </div>
           </div>
         ) : (
-          <div className="empty-state"><div className="empty-state-icon">👈</div><h3>選擇客戶</h3><p>從左側列表選擇一位代操會員來管理</p></div>
+          <div className="empty-state"><div className="empty-state-icon"></div><h3>選擇客戶</h3><p>從左側列表選擇一位代操會員來管理</p></div>
         )}
       </div>
 
@@ -179,7 +179,7 @@ export default function ManagedAdmin() {
       {showNewUser && (
         <div className="modal-overlay" onClick={() => setShowNewUser(false)}>
           <div className="modal" style={{ maxWidth: 580 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header"><h2 className="modal-title">新增代操會員帳號</h2><button className="modal-close" onClick={() => setShowNewUser(false)}>✕</button></div>
+            <div className="modal-header"><h2 className="modal-title">新增代操會員帳號</h2><button className="modal-close" onClick={() => setShowNewUser(false)}>×</button></div>
             <div className="modal-body">
               <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8 }}>帳號基本資訊</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
@@ -190,13 +190,13 @@ export default function ManagedAdmin() {
                   </div>
                 ))}
               </div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8 }}>📸 Instagram 資訊</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8 }}>Instagram 資訊</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
                 {[['igUsername','IG 帳號名稱'], ['igFollowers','粉絲數'], ['igPosts','近期貼文數'], ['igLikes','平均讚數']].map(([k, lbl]) => (
                   <div key={k} className="form-group"><label className="form-label">{lbl}</label><input className="form-input" value={newUserForm[k]} onChange={nuf(k)} /></div>
                 ))}
               </div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8 }}>🎵 TikTok 資訊</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8 }}>TikTok 資訊</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {[['ttUsername','TikTok 帳號名稱'], ['ttFollowers','粉絲數'], ['ttVideos','近期影片數'], ['ttViews','平均觀看數']].map(([k, lbl]) => (
                   <div key={k} className="form-group"><label className="form-label">{lbl}</label><input className="form-input" value={newUserForm[k]} onChange={nuf(k)} /></div>
@@ -215,19 +215,19 @@ export default function ManagedAdmin() {
       {editSocial && (
         <div className="modal-overlay" onClick={() => setEditSocial(null)}>
           <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header"><h2 className="modal-title">編輯帳號資訊 — {editSocial.name}</h2><button className="modal-close" onClick={() => setEditSocial(null)}>✕</button></div>
+            <div className="modal-header"><h2 className="modal-title">編輯帳號資訊 — {editSocial.name}</h2><button className="modal-close" onClick={() => setEditSocial(null)}>×</button></div>
             <div className="modal-body">
               <div className="form-group" style={{ marginBottom: 12 }}>
                 <label className="form-label">合約效期</label>
                 <input type="date" className="form-input" value={socialForm.contractExpiry} onChange={sf('contractExpiry')} />
               </div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8 }}>📸 Instagram</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8 }}>Instagram</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
                 {[['igUsername','帳號'], ['igFollowers','粉絲數'], ['igPosts','近期貼文'], ['igLikes','平均讚數']].map(([k, lbl]) => (
                   <div key={k} className="form-group"><label className="form-label">{lbl}</label><input className="form-input" value={socialForm[k] || ''} onChange={sf(k)} /></div>
                 ))}
               </div>
-              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8 }}>🎵 TikTok</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8 }}>TikTok</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {[['ttUsername','帳號'], ['ttFollowers','粉絲數'], ['ttVideos','近期影片'], ['ttViews','平均觀看']].map(([k, lbl]) => (
                   <div key={k} className="form-group"><label className="form-label">{lbl}</label><input className="form-input" value={socialForm[k] || ''} onChange={sf(k)} /></div>

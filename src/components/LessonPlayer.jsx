@@ -106,21 +106,14 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
   return (
     <div className="lesson-player-wrap">
       {/* Top bar */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+      <div className="lesson-player-topbar">
+        <div className="lesson-player-status-row">
           {isFirstWatch ? (
-            <span style={{
-              background:'#fee2e2', color:'#b91c1c', borderRadius:999,
-              padding:'4px 12px', fontSize:12, fontWeight:700,
-              display:'flex', alignItems:'center', gap:6,
-            }}>
+            <span className="lesson-player-status lesson-player-status-locked">
               🔒 首次觀看 · 無法暫停或快轉
             </span>
           ) : (
-            <span style={{
-              background:'var(--success-light)', color:'var(--success)', borderRadius:999,
-              padding:'4px 12px', fontSize:12, fontWeight:700,
-            }}>
+            <span className="lesson-player-status lesson-player-status-replay">
               ✅ 重播模式 · 可自由暫停快轉
             </span>
           )}

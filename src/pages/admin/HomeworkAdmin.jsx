@@ -29,7 +29,7 @@ function RejectModal({ submission, onReject, onClose }) {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">退回作業</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <p style={{ fontSize:14, color:'var(--gray-600)', marginBottom:16 }}>
@@ -89,7 +89,7 @@ function SpecModal({ lessonId, lessonTitle, currentSpec, onSave, onClose }) {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">設定作業規範 — {lessonTitle}</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <div className="form-group">
@@ -135,7 +135,7 @@ export default function HomeworkAdmin() {
   const handleApprove = (id) => {
     approveHomework(id)
     refresh()
-    flash('✅ 已批准作業，學員下一堂課解鎖')
+    flash('已批准作業，學員下一堂課解鎖')
   }
 
   const handleReject = (id, reason) => {
@@ -146,7 +146,7 @@ export default function HomeworkAdmin() {
 
   const handleSaveSpec = (lessonId, spec) => {
     saveHomeworkSpec(lessonId, spec)
-    flash('✅ 作業規範已儲存')
+    flash('作業規範已儲存')
   }
 
   // Enrich homework with user/course/lesson info
@@ -241,7 +241,7 @@ export default function HomeworkAdmin() {
                         style={{ fontSize:10, padding:'2px 6px', marginTop:4 }}
                         onClick={() => setSpecTarget({ lessonId: hw.lessonId, lessonTitle: hw.lesson?.title, spec: hw.spec })}
                       >
-                        ⚙ 編輯作業規範
+                        編輯作業規範
                       </button>
                     </td>
 

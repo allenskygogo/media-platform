@@ -15,11 +15,11 @@ const EMPTY_LESSON = { title:'', duration:'', free:false }
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = {
-    ready:       { label:'✅ 已上傳', bg:'var(--success-light)', color:'var(--success)' },
-    pendingupload:{ label:'⏳ 處理中', bg:'var(--advanced-light)', color:'var(--advanced-text)' },
-    downloading: { label:'⏳ 下載中', bg:'var(--advanced-light)', color:'var(--advanced-text)' },
-    queued:      { label:'⏳ 排隊中', bg:'var(--advanced-light)', color:'var(--advanced-text)' },
-    error:       { label:'❌ 錯誤',   bg:'var(--danger-light)',   color:'var(--danger)' },
+    ready:       { label:'已上傳', bg:'var(--success-light)', color:'var(--success)' },
+    pendingupload:{ label:'處理中', bg:'var(--advanced-light)', color:'var(--advanced-text)' },
+    downloading: { label:'下載中', bg:'var(--advanced-light)', color:'var(--advanced-text)' },
+    queued:      { label:'排隊中', bg:'var(--advanced-light)', color:'var(--advanced-text)' },
+    error:       { label:'錯誤',   bg:'var(--danger-light)',   color:'var(--danger)' },
     none:        { label:'—  未上傳', bg:'var(--gray-100)',       color:'var(--gray-500)' },
   }
   const c = cfg[status] || cfg.none
@@ -117,12 +117,12 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
       <div className="modal" style={{ maxWidth:520 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">上傳影片 — {lessonTitle}</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           {!workerConfigured() && (
             <div className="cf-not-configured" style={{ marginBottom:12 }}>
-              <span style={{ fontSize:20 }}>⚠️</span>
+              <span style={{ fontSize:20 }}></span>
               <div><strong>Worker 未設定</strong><br /><span style={{ fontSize:12 }}>請在 .env.local 設定 VITE_WORKER_URL 並重啟 Vite</span></div>
             </div>
           )}
@@ -140,13 +140,13 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
               >
                 {file ? (
                   <div>
-                    <div style={{ fontSize:24, marginBottom:8 }}>🎬</div>
+                    <div style={{ fontSize:24, marginBottom:8 }}>影片 </div>
                     <p style={{ fontWeight:700 }}>{file.name}</p>
                     <p style={{ fontSize:12, color:'var(--gray-400)' }}>{(file.size/1024/1024).toFixed(1)} MB</p>
                   </div>
                 ) : (
                   <div>
-                    <div style={{ fontSize:32, marginBottom:8 }}>📁</div>
+                    <div style={{ fontSize:32, marginBottom:8 }}>檔案 </div>
                     <p style={{ fontWeight:600 }}>拖曳影片到此處，或點擊選擇檔案</p>
                     <p style={{ fontSize:12, color:'var(--gray-400)', marginTop:4 }}>支援 MP4、MOV、WebM</p>
                   </div>
@@ -178,7 +178,7 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
           {/* Done */}
           {phase === 'done' && (
             <div style={{ textAlign:'center', padding:'24px 0' }}>
-              <div style={{ fontSize:40, marginBottom:12 }}>✅</div>
+              <div style={{ fontSize:40, marginBottom:12 }}>已</div>
               <p style={{ fontWeight:700 }}>上傳完成，已自動綁定此課堂</p>
             </div>
           )}
@@ -186,7 +186,7 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
           {/* Error */}
           {phase === 'error' && (
             <div style={{ textAlign:'center', padding:'24px 0' }}>
-              <div style={{ fontSize:40, marginBottom:12 }}>❌</div>
+              <div style={{ fontSize:40, marginBottom:12 }}>錯誤</div>
               <p style={{ color:'var(--danger)', fontWeight:700 }}>{errMsg}</p>
               <button className="btn btn-secondary" style={{ marginTop:12 }} onClick={() => setPhase('idle')}>重試</button>
             </div>
@@ -214,7 +214,7 @@ function HomeworkModal({ lessonId, lessonTitle, onClose }) {
       <div className="modal" style={{ maxWidth:540 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">設定作業規範 — {lessonTitle}</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <div className="form-group">
@@ -332,7 +332,7 @@ export default function CoursesAdmin() {
   }
   const homeworkStatus = (lessonId) => {
     const spec = getHomeworkSpec(lessonId)
-    return spec?.spec ? '✅ 已設定' : '— 未設定'
+    return spec?.spec ? '已設定' : '— 未設定'
   }
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -342,7 +342,7 @@ export default function CoursesAdmin() {
     <div>
       <div className="page-actions" style={{ marginBottom:24 }}>
         <div className="page-heading" style={{ margin:0 }}>
-          <h1>課程 & 影片管理</h1>
+          <h1>課程與影片管理</h1>
           <p>共 {courses.length} 門課程，點課程進入管理課堂與上傳影片</p>
         </div>
         <button className="btn btn-primary" onClick={openNewCourse}>＋ 新增課程</button>
@@ -352,7 +352,7 @@ export default function CoursesAdmin() {
 
       {!workerConfigured() && (
         <div className="cf-not-configured" style={{ marginBottom:20 }}>
-          <span style={{ fontSize:20 }}>⚠️</span>
+          <span style={{ fontSize:20 }}></span>
           <div>
             <strong>Cloudflare Worker 未設定</strong><br />
             <span style={{ fontSize:12 }}>影片上傳功能需要設定 VITE_WORKER_URL。<a href="https://workers.cloudflare.com" target="_blank" rel="noreferrer">了解更多</a></span>
@@ -367,14 +367,14 @@ export default function CoursesAdmin() {
           return (
             <div key={c.id} className="course-admin-card">
               <div className="course-admin-card-header">
-                <span className={`badge badge-${c.tier}`}>{c.tier==='basic'?'🎓 初階':'🏆 進階'}</span>
+                <span className={`badge badge-${c.tier}`}>{c.tier==='basic'?'初階':'進階'}</span>
                 <span className={`badge ${c.published?'badge-published':'badge-draft'}`}>{c.published?'上架':'草稿'}</span>
               </div>
               <h3 className="course-admin-card-title">{c.title}</h3>
               <p className="course-admin-card-meta">{c.instructor} · {lessons.length} 堂 · {c.duration||'—'}</p>
               <div className="course-admin-card-stats">
-                <span>🎬 {uploaded}/{lessons.length} 已上傳</span>
-                <span>👥 {c.students.toLocaleString()} 人</span>
+                <span>{uploaded}/{lessons.length} 已上傳</span>
+                <span>{c.students.toLocaleString()} 人</span>
               </div>
               <div className="course-admin-card-actions">
                 <button className="btn btn-primary btn-sm" onClick={() => enterCourse(c)}>進入課程 →</button>
@@ -392,7 +392,7 @@ export default function CoursesAdmin() {
           <div className="modal" style={{ maxWidth:560 }} onClick={e=>e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">{editCourseId ? '編輯課程' : '新增課程'}</h2>
-              <button className="modal-close" onClick={() => setShowCourseModal(false)}>✕</button>
+              <button className="modal-close" onClick={() => setShowCourseModal(false)}>×</button>
             </div>
             <div className="modal-body">
               <div className="form-group">
@@ -407,8 +407,8 @@ export default function CoursesAdmin() {
                 <div className="form-group">
                   <label className="form-label">會員等級</label>
                   <select className="form-select" value={courseForm.tier} onChange={e=>setCourseForm(f=>({...f,tier:e.target.value}))}>
-                    <option value="basic">🎓 初階</option>
-                    <option value="advanced">🏆 進階</option>
+                    <option value="basic">初階</option>
+                    <option value="advanced">進階</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -428,8 +428,8 @@ export default function CoursesAdmin() {
                 <div className="form-group">
                   <label className="form-label">發布狀態</label>
                   <select className="form-select" value={String(courseForm.published)} onChange={e=>setCourseForm(f=>({...f,published:e.target.value==='true'}))}>
-                    <option value="true">✅ 上架</option>
-                    <option value="false">📝 草稿</option>
+                    <option value="true">上架</option>
+                    <option value="false">草稿</option>
                   </select>
                 </div>
               </div>
@@ -450,7 +450,7 @@ export default function CoursesAdmin() {
           <div className="modal" style={{ maxWidth:400 }} onClick={e=>e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">確認刪除</h2>
-              <button className="modal-close" onClick={() => setDeleteId(null)}>✕</button>
+              <button className="modal-close" onClick={() => setDeleteId(null)}>×</button>
             </div>
             <div className="modal-body">
               <p>確定要刪除《{courses.find(c=>c.id===deleteId)?.title}》嗎？此操作無法復原。</p>
@@ -488,7 +488,7 @@ export default function CoursesAdmin() {
         <div className="card-body" style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:16 }}>
           <div>
             <div style={{ display:'flex', gap:8, marginBottom:8 }}>
-              <span className={`badge badge-${course?.tier}`}>{course?.tier==='basic'?'🎓 初階':'🏆 進階'}</span>
+              <span className={`badge badge-${course?.tier}`}>{course?.tier==='basic'?'初階':'進階'}</span>
               <span className={`badge ${course?.published?'badge-published':'badge-draft'}`}>{course?.published?'上架':'草稿'}</span>
             </div>
             <h2 style={{ fontWeight:800, fontSize:20, marginBottom:4 }}>{course?.title}</h2>
@@ -508,7 +508,7 @@ export default function CoursesAdmin() {
 
           {lessons.length === 0 ? (
             <div style={{ textAlign:'center', padding:'48px 0', color:'var(--gray-400)' }}>
-              <div style={{ fontSize:36, marginBottom:12 }}>📚</div>
+              <div style={{ fontSize:36, marginBottom:12 }}>課程</div>
               <p>還沒有課堂，點「新增課堂」開始建立</p>
             </div>
           ) : (
@@ -539,9 +539,9 @@ export default function CoursesAdmin() {
                       <td>
                         <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                           <button className="btn btn-primary btn-sm" onClick={() => setUploadForLesson(l)}>
-                            🎬 {videoStatus(l.id)==='none' ? '上傳影片' : '重新上傳'}
+                            {videoStatus(l.id)==='none' ? '上傳影片' : '重新上傳'}
                           </button>
-                          <button className="btn btn-secondary btn-sm" onClick={() => setHomeworkForLesson(l)}>📝 作業</button>
+                          <button className="btn btn-secondary btn-sm" onClick={() => setHomeworkForLesson(l)}>作業</button>
                           <button className="btn btn-ghost btn-sm" onClick={() => openEditLesson(l)}>編輯</button>
                           <button className="btn btn-danger btn-sm" onClick={() => deleteLesson(l.id)}>刪</button>
                         </div>
@@ -561,7 +561,7 @@ export default function CoursesAdmin() {
           <div className="modal" style={{ maxWidth:480 }} onClick={e=>e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">{editLessonId ? '編輯課堂' : '新增課堂'}</h2>
-              <button className="modal-close" onClick={() => setShowLessonModal(false)}>✕</button>
+              <button className="modal-close" onClick={() => setShowLessonModal(false)}>×</button>
             </div>
             <div className="modal-body">
               <div className="form-group">
@@ -576,7 +576,7 @@ export default function CoursesAdmin() {
                 <div className="form-group">
                   <label className="form-label">免費試看</label>
                   <select className="form-select" value={String(lessonForm.free)} onChange={e=>setLessonForm(f=>({...f,free:e.target.value==='true'}))}>
-                    <option value="false">🔒 需要解鎖</option>
+                    <option value="false">需要解鎖</option>
                     <option value="true">🆓 免費試看</option>
                   </select>
                 </div>
@@ -618,7 +618,7 @@ export default function CoursesAdmin() {
           <div className="modal" style={{ maxWidth:560 }} onClick={e=>e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">編輯課程</h2>
-              <button className="modal-close" onClick={() => setShowCourseModal(false)}>✕</button>
+              <button className="modal-close" onClick={() => setShowCourseModal(false)}>×</button>
             </div>
             <div className="modal-body">
               <div className="form-group">
@@ -633,8 +633,8 @@ export default function CoursesAdmin() {
                 <div className="form-group">
                   <label className="form-label">會員等級</label>
                   <select className="form-select" value={courseForm.tier} onChange={e=>setCourseForm(f=>({...f,tier:e.target.value}))}>
-                    <option value="basic">🎓 初階</option>
-                    <option value="advanced">🏆 進階</option>
+                    <option value="basic">初階</option>
+                    <option value="advanced">進階</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -654,8 +654,8 @@ export default function CoursesAdmin() {
                 <div className="form-group">
                   <label className="form-label">發布狀態</label>
                   <select className="form-select" value={String(courseForm.published)} onChange={e=>setCourseForm(f=>({...f,published:e.target.value==='true'}))}>
-                    <option value="true">✅ 上架</option>
-                    <option value="false">📝 草稿</option>
+                    <option value="true">上架</option>
+                    <option value="false">草稿</option>
                   </select>
                 </div>
               </div>

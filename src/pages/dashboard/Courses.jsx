@@ -23,8 +23,8 @@ export default function CoursesPage() {
   const accessible = (c) => canAccessCourse(currentUser.tier, c.accessLevel)
 
   const LOCK_LABEL = {
-    standard: '需達人班或以上',
-    advanced: '需高階陪跑',
+    standard: '需頂流達人或以上',
+    advanced: '需頂流私塾',
   }
 
   return (

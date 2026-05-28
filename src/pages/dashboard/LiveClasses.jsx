@@ -68,7 +68,7 @@ export default function LiveClasses() {
     <div className="page-content">
       <div className="page-heading">
         <h1>📺 模擬直播課</h1>
-        <p>同步直播體驗，即時互動聊天室，專屬初階試聽學員</p>
+        <p>同步直播體驗，即時互動聊天室，專屬初階體驗學員</p>
       </div>
 
       {/* ── Fixed sessions ── */}

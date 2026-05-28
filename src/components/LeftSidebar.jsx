@@ -5,7 +5,7 @@ import { IconHome, IconBook, IconPlay, IconChart, IconCalendar, IconUser } from 
 const STUDENT_NAV = [
   { Icon: IconHome,     to: '/dashboard',         label: '首頁', end: true },
   { Icon: IconBook,     to: '/dashboard/courses',  label: '課程' },
-  { Icon: IconPlay,     to: '/dashboard/trial',    label: '試聽' },
+  { Icon: IconPlay,     to: '/dashboard/trial',    label: '體驗' },
   { Icon: IconChart,    to: '/dashboard/ai-tools', label: 'AI'  },
   { Icon: IconCalendar, to: '/dashboard/booking',  label: '預約' },
   { Icon: IconUser,     to: '/dashboard/profile',  label: '個人' },

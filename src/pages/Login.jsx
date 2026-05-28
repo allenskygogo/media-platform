@@ -4,11 +4,11 @@ import { useAuth } from '../context/AuthContext'
 
 const DEMO_ACCOUNTS = [
   { label: '管理員',        email: 'admin@media.com',    password: 'admin123', color: 'var(--admin)' },
-  { label: '試聽未完成',    email: 'trial@media.com',    password: 'user123',  color: 'var(--danger)' },
-  { label: '初階（已試聽）', email: 'basic@media.com',    password: 'user123',  color: 'var(--basic)' },
-  { label: '達人班',        email: 'standard@media.com', password: 'user123',  color: 'var(--standard)' },
-  { label: '高階陪跑',      email: 'advanced@media.com', password: 'user123',  color: 'var(--advanced)' },
-  { label: '代操會員',      email: 'managed1@media.com', password: 'user123',  color: 'var(--managed)' },
+  { label: '體驗未完成',    email: 'trial@media.com',    password: 'user123',  color: 'var(--danger)' },
+  { label: '初階（已體驗）', email: 'basic@media.com',    password: 'user123',  color: 'var(--basic)' },
+  { label: '頂流達人',      email: 'standard@media.com', password: 'user123',  color: 'var(--standard)' },
+  { label: '頂流私塾',      email: 'advanced@media.com', password: 'user123',  color: 'var(--advanced)' },
+  { label: '頂流代操',      email: 'managed1@media.com', password: 'user123',  color: 'var(--managed)' },
 ]
 
 export default function Login() {
@@ -37,8 +37,11 @@ export default function Login() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-logo">🎬 自媒體學院</div>
+        <div className="auth-logo">TOP LEVEL TRAFFIC</div>
         <p className="auth-subtitle">歡迎回來！請登入繼續學習</p>
+        <p className="auth-divider" style={{ marginBottom: 18 }}>
+          <Link to="/" className="auth-link">回到首頁</Link>
+        </p>
 
         {error && <div className="auth-alert error" style={{ marginBottom: 16 }}>{error}</div>}
 

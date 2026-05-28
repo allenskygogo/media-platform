@@ -42,8 +42,8 @@ export default function Header() {
   )
 
   return (
-    <header className="header">
-      <span className="header-logo">
+    <header className={`header ${isAdmin ? 'admin-topbar' : ''}`}>
+      <NavLink to="/" className="header-logo" title="回到首頁">
         {logoUrl ? (
           <img src={logoUrl} alt={siteName} style={{ height: 32, width: 'auto', display: 'block', objectFit: 'contain' }} />
         ) : (
@@ -55,10 +55,11 @@ export default function Header() {
             </span>
           </>
         )}
-      </span>
+      </NavLink>
 
       {!isAdmin && !isManaged && (
         <nav className="header-nav">
+          {nl('/', '回到首頁', true)}
           {nl('/dashboard', '首頁', true)}
           {nl('/dashboard/courses', '課程')}
           {nl('/dashboard/ai-tools', '✨ AI 工具')}
@@ -69,6 +70,7 @@ export default function Header() {
 
       {isManaged && (
         <nav className="header-nav">
+          {nl('/', '回到首頁', true)}
           {nl('/managed', '帳號總覽', true)}
           {nl('/managed/videos', '影片進度')}
           {nl('/managed/booking', '預約拍攝')}
@@ -77,16 +79,8 @@ export default function Header() {
 
       {isAdmin && (
         <nav className="header-nav">
+          {nl('/', '回到首頁', true)}
           {nl('/admin', '控制台', true)}
-          {nl('/admin/users', '學員管理')}
-          {nl('/admin/courses', '課程&影片')}
-          {nl('/admin/trial', '試聽管理')}
-          {nl('/admin/homework', '作業審核')}
-          {nl('/admin/managed', '頂流代操')}
-          {nl('/admin/bookings', '預約管理')}
-          {nl('/admin/pricing', '定價管理')}
-          {nl('/admin/page-builder', '頁面編輯')}
-          {nl('/admin/settings', '系統設定')}
         </nav>
       )}
 
@@ -100,6 +94,7 @@ export default function Header() {
           {currentUser?.avatar || currentUser?.name?.charAt(0)}
         </div>
         <span className="header-user-name">{currentUser?.name}</span>
+        {isAdmin && <span className="header-tier-badge">平台管理員</span>}
         {meta && <span className="header-tier-badge">{meta.label}</span>}
         <span className="header-caret">▾</span>
         <button className="btn btn-ghost btn-sm" onClick={handleLogout}>登出</button>

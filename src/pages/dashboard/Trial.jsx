@@ -52,7 +52,7 @@ function BookingForm({ userId, onBooked }) {
   }
 
   return (
-    <div className="card">
+    <div className="card trial-booking-card">
       <div className="card-header">
         <h2 className="card-title">
           {step === 1 ? '選擇日期' : step === 2 ? '選擇開始時間' : '確認預約'}
@@ -63,34 +63,57 @@ function BookingForm({ userId, onBooked }) {
       </div>
       <div className="card-body">
         {/* Step 1 — Date */}
-        {step === 1 && (
-          <Calendar
-            selected={date}
-            onChange={d => { setDate(d); setStep(2) }}
-            minDate={minDate}
-          />
+        {(step === 1 || step === 2) && (
+          <div className="trial-date-panel">
+            <Calendar
+              selected={date}
+              onChange={d => { setDate(d); setHour(null); setStep(2) }}
+              minDate={minDate}
+            />
+          </div>
         )}
 
         {/* Step 2 — Hour */}
-        {step === 2 && (
-          <div>
-            <p style={{ fontSize: 14, color: 'var(--gray-600)', marginBottom: 14 }}>
-              {date} — 選擇開始時間
-            </p>
-            <div className="time-grid">
-              {HOURS.map(h => (
-                <button
-                  key={h}
-                  className={`time-grid-btn ${hour === h ? 'sel' : ''}`}
-                  onClick={() => { setHour(h); setStep(3) }}
-                >
-                  {String(h).padStart(2,'0')}:00
-                </button>
-              ))}
-            </div>
-            <button className="btn btn-ghost btn-sm" style={{ marginTop: 14 }} onClick={() => setStep(1)}>
-              ← 返回選日期
+        {(step === 1 || step === 2) && (
+          <div className="trial-time-panel">
+            {!date ? (
+              <div className="trial-empty-time">請先選擇日期，系統會顯示可預約時段</div>
+            ) : (
+              <>
+                <p className="trial-time-title">{date} — 選擇開始時間</p>
+                <div className="time-grid">
+                  {HOURS.map(h => (
+                    <button
+                      key={h}
+                      className={`time-grid-btn ${hour === h ? 'sel' : ''}`}
+                      onClick={() => { setHour(h); setStep(3) }}
+                    >
+                      {String(h).padStart(2,'0')}:00
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {step === 2 && date && (
+          <div className="trial-action-row">
+            <button className="btn btn-ghost btn-sm" onClick={() => setStep(1)}>
+              ← 重新選擇日期
             </button>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="trial-time-panel">
+            <div className="trial-date-panel compact">
+              <Calendar
+                selected={date}
+                onChange={d => { setDate(d); setHour(null); setConfirmed(false); setStep(2) }}
+                minDate={minDate}
+              />
+            </div>
           </div>
         )}
 
@@ -130,7 +153,7 @@ function BookingForm({ userId, onBooked }) {
                 disabled={!confirmed}
                 onClick={handleBook}
               >
-                確認預約
+                確認預約體驗課
               </button>
             </div>
           </div>
@@ -154,13 +177,13 @@ function CountdownCard({ session, onStart }) {
           <>
             <div style={{ fontSize: 52, marginBottom: 16 }}>🎬</div>
             <p style={{ fontSize: 20, fontWeight: 800, color: 'var(--gray-900)', marginBottom: 8 }}>
-              試聽課現在可以開始了！
+              體驗課現在可以開始了！
             </p>
             <p style={{ fontSize: 14, color: 'var(--gray-500)', marginBottom: 28 }}>
               確認你已準備好完整的三小時，點擊下方按鈕開始課程
             </p>
             <button className="btn btn-primary btn-lg" onClick={onStart}>
-              ▶ 開始試聽課
+              ▶ 開始體驗課
             </button>
           </>
         ) : (
@@ -207,7 +230,7 @@ export default function Trial() {
       <div className="page-content">
         <div className="trial-complete-card" style={{ maxWidth: 560, margin: '0 auto' }}>
           <div className="trial-complete-emoji">🎉</div>
-          <div className="trial-complete-title">試聽課已完成！</div>
+          <div className="trial-complete-title">體驗課已完成！</div>
           <div className="trial-complete-sub">
             你的三個月使用期限已啟用，可以開始學習所有初階課程。
           </div>
@@ -220,31 +243,47 @@ export default function Trial() {
   }
 
   return (
-    <div className="page-content">
-      <div className="page-heading">
-        <h1>📺 預約你的試聽時段</h1>
-        <p>這堂課約 3 小時，請選擇你有完整時間的時段</p>
+    <div className="page-content trial-booking-page">
+      <div className="page-heading trial-booking-hero">
+        <h1>預約你的體驗課輔導時段</h1>
+        <p>請選擇你方便的日期與時間，我們會依照預約時段安排第一次課程輔導。</p>
       </div>
 
       {/* Info strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, marginBottom: 32, maxWidth: 400 }}>
+      <div className="trial-info-grid">
         {[
-          { icon: '⏱', title: '課程時長', val: '3 小時（180 分鐘）' },
-          { icon: '📅', title: '期限起算', val: '完成當天起 90 天' },
+          { icon: '⏱', title: '課程時長', val: '3 小時' },
+          { icon: '📅', title: '使用期限', val: '完成當天起 90 天' },
+          { icon: '◎', title: '預約狀態', val: session ? '已預約' : '尚未預約' },
         ].map(({ icon, title, val }) => (
-          <div key={title} className="card">
-            <div className="card-body" style={{ textAlign: 'center', padding: '20px 16px' }}>
-              <div style={{ fontSize: 28, marginBottom: 8 }}>{icon}</div>
-              <p style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 4 }}>{title}</p>
-              <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--gray-900)' }}>{val}</p>
+          <div key={title} className="card trial-info-card">
+            <div className="card-body">
+              <div className="trial-info-icon">{icon}</div>
+              <div>
+                <p className="trial-info-title">{title}</p>
+                <p className="trial-info-value">{val}</p>
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div style={{ maxWidth: 560, margin: '0 auto' }}>
+      <div className="trial-booking-grid">
         {!session && (
-          <BookingForm userId={currentUser.id} onBooked={load} />
+          <>
+            <BookingForm userId={currentUser.id} onBooked={load} />
+            <aside className="card trial-note-card">
+              <div className="card-body">
+                <h2>預約前請注意</h2>
+                <ul className="trial-note-list">
+                  <li>體驗課輔導時間約 1～4 小時</li>
+                  <li>請選擇你可以完整參與的時段</li>
+                  <li>預約完成後，系統會保留你的課程觀看期限</li>
+                  <li>若需要改期，請提前聯繫客服</li>
+                </ul>
+              </div>
+            </aside>
+          </>
         )}
         {session && (
           <CountdownCard

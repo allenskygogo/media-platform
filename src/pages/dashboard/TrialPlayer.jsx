@@ -11,7 +11,7 @@ import StreamPlayer from '../../components/StreamPlayer'
 
 // ── Lesson scenes over 3 hours ──────────────────────────────────────────────
 const SCENES = [
-  { at: 0,     bg: '#0f172a', text: '🎬 開場歡迎：自媒體入門完整試聽課' },
+  { at: 0,     bg: '#0f172a', text: '🎬 開場歡迎：自媒體入門完整體驗課' },
   { at: 600,   bg: '#1e3a5f', text: '📱 第一章：自媒體平台生態與選擇策略' },
   { at: 2400,  bg: '#14291f', text: '🎯 第二章：頻道定位與個人品牌建立' },
   { at: 4200,  bg: '#3d1515', text: '📝 第三章：內容企劃與腳本撰寫實戰' },
@@ -57,7 +57,7 @@ export default function TrialPlayer() {
     // Must have a booked session
     const session = getTrialSession(currentUser.id)
     if (!session) {
-      setError('你尚未預約試聽時段，請先完成預約。')
+      setError('你尚未預約體驗時段，請先完成預約。')
       setReady(true)
       return
     }
@@ -136,7 +136,7 @@ export default function TrialPlayer() {
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
         <div className="trial-complete-card">
           <div className="trial-complete-emoji">🎉</div>
-          <div className="trial-complete-title">恭喜完成試聽課！</div>
+          <div className="trial-complete-title">恭喜完成體驗課！</div>
           <div className="trial-complete-sub">
             你的<strong>三個月使用期限今天正式開始</strong>。<br />
             立即解鎖 YouTube 頻道與短影音爆紅公式兩門基礎課程，<br />
@@ -153,10 +153,10 @@ export default function TrialPlayer() {
             <div style={{ fontSize: 40, flexShrink: 0 }}>⭐</div>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 800, fontSize: 16, color: 'var(--gray-900)', marginBottom: 4 }}>
-                升級達人班，解鎖更多基礎課程
+                查看頂流達人，解鎖完整系統課程
               </p>
               <p style={{ fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.6 }}>
-                達人班包含全部 3 門基礎課程（含 Podcast 製作），有效期 1 年。
+                頂流達人包含完整自媒體獲客系統課程，有效期 1 年。
               </p>
             </div>
             <button className="btn btn-primary btn-sm" onClick={() => navigate('/pricing')}>
@@ -187,7 +187,7 @@ export default function TrialPlayer() {
           isForced={true}
           expiresInSeconds={TRIAL_DURATION_SEC}
           onComplete={handleCFComplete}
-          title="自媒體入門完整試聽課"
+          title="自媒體入門完整體驗課"
         />
       </div>
     )
@@ -221,7 +221,7 @@ export default function TrialPlayer() {
 
         {/* Title bar */}
         <div className="trial-title-bar">
-          <h3>自媒體入門完整試聽課</h3>
+          <h3>自媒體入門完整體驗課</h3>
           <p>完整三小時課程 · 看完即解鎖初階課程</p>
         </div>
 

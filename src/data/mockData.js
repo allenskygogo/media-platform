@@ -8,10 +8,10 @@ export const CF_VIDEOS_KEY      = 'mp_cf_videos'
 export const VIDEO_ASSIGN_KEY   = 'mp_video_assignments' // { lessonId|'trial': cfVideoUid }
 
 export const DEFAULT_PRICING = {
-  trialPrice:            399,
-  advancedPrice:         39800,
-  advancedDiscountPrice: 29800,
-  managedPrice:          128000,
+  trialPrice:            980,
+  advancedPrice:         0,
+  advancedDiscountPrice: 0,
+  managedPrice:          0,
   trialOfferHours:       24,
   completionOfferHours:  24,
   tokenExpiryHours:      3,    // Cloudflare Stream signed token TTL (hours)
@@ -126,12 +126,12 @@ const defaultUsers = [
   {
     id: 2, name: '張小明', email: 'basic@media.com', password: 'user123',
     role: 'student', tier: 'basic', avatar: '張', createdAt: '2026-02-21', status: 'active',
-    expiresAt: '2026-08-20', // 已完成試聽，使用期限進行中
+    expiresAt: '2026-08-20', // 已完成體驗，使用期限進行中
   },
   {
     id: 7, name: '陳大文', email: 'trial@media.com', password: 'user123',
     role: 'student', tier: 'basic', avatar: '陳', createdAt: '2026-05-22', status: 'active',
-    expiresAt: null, // 尚未完成試聽，期限未起算
+    expiresAt: null, // 尚未完成體驗，期限未起算
   },
   {
     id: 3, name: '李雅婷', email: 'standard@media.com', password: 'user123',
@@ -141,7 +141,7 @@ const defaultUsers = [
   {
     id: 4, name: '陳美玲', email: 'advanced@media.com', password: 'user123',
     role: 'student', tier: 'advanced', avatar: '陳', createdAt: '2025-05-21', status: 'active',
-    expiresAt: '2026-05-21', advancedPaidAmount: 29800,
+    expiresAt: '2026-05-21', advancedPaidAmount: 0,
   },
   {
     id: 5, name: '王建偉', email: 'managed1@media.com', password: 'user123',
@@ -187,23 +187,35 @@ export function initMockData() {
   for (const def of defaultUsers) {
     if (!mergedUsers.find(u => u.email === def.email)) mergedUsers.push(def)
   }
-  // Migration: strip any legacy "(未試聽)" suffix from user names
+  // Migration: strip any legacy trial suffix from user names
   const cleanedUsers = mergedUsers.map(u => ({
     ...u,
-    name: u.name.replace(/（未試聽）$/, '').trim(),
+    name: u.name.replace(/（未體驗）$/, '').trim(),
   }))
   localStorage.setItem(USERS_KEY, JSON.stringify(cleanedUsers))
   // Also patch mp_current_user if it contains the old suffix
   const cur = JSON.parse(localStorage.getItem('mp_current_user') || 'null')
   if (cur?.name) {
-    cur.name = cur.name.replace(/（未試聽）$/, '').trim()
+    cur.name = cur.name.replace(/（未體驗）$/, '').trim()
     localStorage.setItem('mp_current_user', JSON.stringify(cur))
   }
 
   if (!localStorage.getItem(COURSES_KEY))  localStorage.setItem(COURSES_KEY,  JSON.stringify(defaultCourses))
   if (!localStorage.getItem(PROJECTS_KEY)) localStorage.setItem(PROJECTS_KEY, JSON.stringify(defaultProjects))
   if (!localStorage.getItem(BOOKINGS_KEY)) localStorage.setItem(BOOKINGS_KEY, JSON.stringify(defaultBookings))
-  if (!localStorage.getItem(PRICING_KEY))  localStorage.setItem(PRICING_KEY,  JSON.stringify(DEFAULT_PRICING))
+  const storedPricing = JSON.parse(localStorage.getItem(PRICING_KEY) || 'null')
+  if (!storedPricing) {
+    localStorage.setItem(PRICING_KEY, JSON.stringify(DEFAULT_PRICING))
+  } else {
+    const migratedPricing = {
+      ...storedPricing,
+      trialPrice: storedPricing.trialPrice && storedPricing.trialPrice !== DEFAULT_PRICING.trialPrice ? DEFAULT_PRICING.trialPrice : storedPricing.trialPrice,
+      advancedPrice: DEFAULT_PRICING.advancedPrice,
+      advancedDiscountPrice: DEFAULT_PRICING.advancedDiscountPrice,
+      managedPrice: DEFAULT_PRICING.managedPrice,
+    }
+    localStorage.setItem(PRICING_KEY, JSON.stringify(migratedPricing))
+  }
   if (!localStorage.getItem(HOMEWORK_SPEC_KEY)) {
     localStorage.setItem(HOMEWORK_SPEC_KEY, JSON.stringify(DEFAULT_HOMEWORK_SPECS))
   }
@@ -238,10 +250,10 @@ export function addDays(dateStr, days) {
 }
 
 export const TIER_META = {
-  basic:    { label: '試聽課',    emoji: '🎓', color: 'basic',    duration: '3 個月',  days: 90  },
-  standard: { label: '達人班',    emoji: '⭐', color: 'standard', duration: '1 年',    days: 365 },
-  advanced: { label: '頂流私塾',  emoji: '🏆', color: 'advanced', duration: '1 年',    days: 365 },
-  managed:  { label: '頂流代操',  emoji: '🤝', color: 'managed',  duration: '依合約',  days: null },
+  basic:    { label: '體驗課',    emoji: '', color: 'basic',    duration: '3 個月',  days: 90  },
+  standard: { label: '頂流達人',  emoji: '', color: 'standard', duration: '1 年',    days: 365 },
+  advanced: { label: '頂流私塾',  emoji: '', color: 'advanced', duration: '1 年',    days: 365 },
+  managed:  { label: '頂流代操',  emoji: '', color: 'managed',  duration: '依合約',  days: null },
 }
 
 // ── Live Class System ──────────────────────────────────────────────────────
@@ -409,7 +421,7 @@ export const REMINDER_TEMPLATES = {
     subject: '{{姓名}}，你的自媒體之路從這裡開始 🎬',
     body: `嗨 {{姓名}}，
 
-你已經踏出了第一步，購買了試聽課。
+你已經踏出了第一步，購買了體驗課。
 
 很多人就卡在這裡——買了，但還沒開始。
 
@@ -427,11 +439,11 @@ export const REMINDER_TEMPLATES = {
     subject: '{{姓名}}，三小時可以改變什麼？',
     body: `嗨 {{姓名}}，
 
-你知道嗎，很多達人班的同學，看完試聽課的當天就決定要認真做自媒體了。
+你知道嗎，很多頂流達人的同學，看完體驗課的當天就決定要認真做自媒體了。
 
 不是因為課程有多神奇，而是因為他們終於搞清楚「方向」在哪裡。
 
-你的試聽課還在等你，現在選個時間吧 👇
+你的體驗課還在等你，現在選個時間吧 👇
 
 {{按鈕：立即預約觀看時段}}
 
@@ -444,7 +456,7 @@ export const REMINDER_TEMPLATES = {
 
 沒關係，每個人開始的時間點都不一樣。
 
-我只是想讓你知道，這堂試聽課一直在這裡等你，隨時都可以開始。
+我只是想讓你知道，這堂體驗課一直在這裡等你，隨時都可以開始。
 
 找一個你真的有三小時的時間，泡杯咖啡，把手機放旁邊，認真看一次。
 
@@ -824,8 +836,8 @@ export const DEFAULT_SYSTEM_SETTINGS = {
   fbPixelId:     '',           // Facebook Pixel ID
   logoUrl:       '',           // base64 or URL; empty = use TT SVG mark
   bgImages: {
-    trial:    '',              // 試聽課 hero background image URL
-    standard: '',              // 達人班 hero background image URL
+    trial:    '',              // 體驗課 hero background image URL
+    standard: '',              // 頂流達人 hero background image URL
     advanced: '',              // 頂流私塾 hero background image URL
     managed:  '',              // 頂流代操 hero background image URL
   },
@@ -844,8 +856,8 @@ export const DEFAULT_SALES_BLOCKS = [
   {
     id: 'hero', type: 'hero', visible: true,
     title: '頂級流量，沒有套路',
-    subtitle: '從試聽課開始，學真正能爆的自媒體方法論',
-    buttonText: '立即預約試聽課 $399', buttonLink: '#schedule',
+    subtitle: '從體驗課開始，學真正能爆的自媒體方法論',
+    buttonText: '立即預約體驗課 $980', buttonLink: '#schedule',
     imageUrl: '',
   },
   {
@@ -859,8 +871,8 @@ export const DEFAULT_SALES_BLOCKS = [
   },
   {
     id: 'trial-intro', type: 'trial-intro', visible: true,
-    title: '三小時試聽課，改變你對自媒體的認知',
-    content: '自選時段、看完才開始計時。$399 看完 24 小時內升級達人班只要 $29,800。',
+    title: '三小時體驗課，改變你對自媒體的認知',
+    content: '自選時段、看完才開始計時。體驗後可再評估是否升級頂流達人。',
     imageUrl: '',
   },
   {
@@ -869,16 +881,16 @@ export const DEFAULT_SALES_BLOCKS = [
   },
   {
     id: 'schedule', type: 'schedule', visible: true, fixed: true,
-    title: '選擇你的試聽時段',
+    title: '選擇你的體驗時段',
   },
   {
     id: 'faq', type: 'faq', visible: true,
     title: '常見問題',
     faqs: [
-      { q: '試聽課可以重複看嗎？', a: '不行，試聽課只能完整觀看一次，看完後才會開始計算三個月使用期限。' },
-      { q: '期限什麼時候開始算？', a: '試聽課完整看完後，三個月使用期限才正式開始，不是從購買當下。' },
+      { q: '體驗課可以重複看嗎？', a: '不行，體驗課只能完整觀看一次，看完後才會開始計算三個月使用期限。' },
+      { q: '期限什麼時候開始算？', a: '體驗課完整看完後，三個月使用期限才正式開始，不是從購買當下。' },
       { q: '看到一半可以暫停嗎？', a: '可以關閉並保留進度，下次從斷點繼續。但播放中無法暫停或快轉。' },
-      { q: '看完之後可以升級嗎？', a: '可以！看完 24 小時內升級達人班享 $29,800 優惠價，之後恢復原價 $39,800。' },
+      { q: '看完之後可以升級嗎？', a: '可以。體驗完成後，可以再評估是否升級頂流達人，正式升級流程會在後續開放。' },
     ],
   },
 ]

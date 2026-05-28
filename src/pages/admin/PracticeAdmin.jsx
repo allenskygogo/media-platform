@@ -40,7 +40,7 @@ export default function PracticeAdmin() {
   return (
     <div className="admin-page">
       <div className="admin-page-header">
-        <h1 className="admin-page-title">✍️ 練習作業審核</h1>
+        <h1 className="admin-page-title">練習作業審核</h1>
         <div className="ai-range-tabs">
           <button
             className={`ai-range-tab ${filterFeature === 'all' ? 'active' : ''}`}
@@ -103,7 +103,7 @@ export default function PracticeAdmin() {
                     >
                       {FEATURE_LABELS[sub.feature] || sub.feature}
                     </span>
-                    <span className="practice-user">👤 {sub.user_name || sub.user_id || '訪客'}</span>
+                    <span className="practice-user">{sub.user_name || sub.user_id || '訪客'}</span>
                     <span className="practice-date">
                       {new Date(sub.submitted_at).toLocaleString('zh-TW', {
                         month: 'numeric', day: 'numeric',
@@ -112,17 +112,17 @@ export default function PracticeAdmin() {
                     </span>
                   </div>
                   {sub.unlocked && (
-                    <span className="practice-unlocked">✅ 已解鎖</span>
+                    <span className="practice-unlocked">已解鎖</span>
                   )}
                 </div>
 
                 <div className="practice-compare">
                   <div className="practice-ai-output">
-                    <div className="practice-section-label">🤖 AI 生成內容</div>
+                    <div className="practice-section-label">AI 生成內容</div>
                     <pre className="practice-content">{sub.ai_output || '（無內容）'}</pre>
                   </div>
                   <div className="practice-user-output">
-                    <div className="practice-section-label">✍️ 學員練習</div>
+                    <div className="practice-section-label">學員練習</div>
                     <pre className="practice-content">{practiceText}</pre>
                   </div>
                 </div>

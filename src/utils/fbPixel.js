@@ -41,7 +41,7 @@ function track(event, params = {}) {
 export const fbq = {
   pageView:        ()              => track('PageView'),
   viewContent:     ()              => track('ViewContent', { content_name: '銷售頁' }),
-  addToCart:       ()              => track('AddToCart',   { value: 399, currency: 'TWD', content_name: '試聽課時段選擇' }),
-  initiateCheckout:()              => track('InitiateCheckout', { value: 399, currency: 'TWD' }),
+  addToCart:       ()              => track('AddToCart',   { value: 980, currency: 'TWD', content_name: '體驗課時段選擇' }),
+  initiateCheckout:()              => track('InitiateCheckout', { value: 980, currency: 'TWD' }),
   purchase:        (amount, name)  => track('Purchase', { value: amount, currency: 'TWD', content_name: name }),
 }

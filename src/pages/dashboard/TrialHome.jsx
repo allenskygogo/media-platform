@@ -15,8 +15,8 @@ function diffToSession(scheduledAt) {
   const diff = new Date(scheduledAt).getTime() - Date.now()
   if (diff <= 0) return '已開始'
   const days=Math.floor(diff/86400000), hours=Math.floor((diff%86400000)/3600000)
-  if (days > 0) return `距離試聽課 ${days} 天 ${hours} 小時`
-  return `距離試聽課 ${hours} 小時 ${Math.floor((diff%3600000)/60000)} 分`
+  if (days > 0) return `距離體驗課 ${days} 天 ${hours} 小時`
+  return `距離體驗課 ${hours} 小時 ${Math.floor((diff%3600000)/60000)} 分`
 }
 
 const HIGHLIGHTS = [
@@ -62,8 +62,8 @@ export default function TrialHome() {
   const isCompleted = !!currentUser.trialCompletedAt
   const isBooked    = !!myBooking && !isCompleted
 
-  let sessionLabel = '尚未預約', sessionSub = '選擇時段，開始你的試聽課'
-  if (isCompleted) { sessionLabel = '試聽已完成'; sessionSub = `完成日期：${fmtDate(currentUser.trialCompletedAt)}` }
+  let sessionLabel = '尚未預約', sessionSub = '選擇時段，開始你的體驗課'
+  if (isCompleted) { sessionLabel = '體驗已完成'; sessionSub = `完成日期：${fmtDate(currentUser.trialCompletedAt)}` }
   else if (isBooked && mySession) { sessionLabel = fmtSessionTime(mySession.scheduledAt); sessionSub = diffToSession(mySession.scheduledAt) }
 
   return (
@@ -72,7 +72,7 @@ export default function TrialHome() {
       {/* Hero */}
       <div className="th2-hero">
         <div className="th2-hero-left">
-          <span className="th2-badge">試聽課會員</span>
+          <span className="th2-badge">體驗課會員</span>
           <h1 className="th2-name">你好，{currentUser.name}！</h1>
 
           <div className="th2-session-row">
@@ -84,7 +84,7 @@ export default function TrialHome() {
 
           <div className="th2-progress-wrap">
             <div className="th2-progress-header">
-              <span>試聽課觀看進度</span><span>{watchPct}%</span>
+              <span>體驗課觀看進度</span><span>{watchPct}%</span>
             </div>
             <div className="th2-progress-bar">
               <div className="th2-progress-fill" style={{ width:`${watchPct}%` }}/>
@@ -98,7 +98,7 @@ export default function TrialHome() {
               </button>
             )}
             <button className="th2-outline-btn" onClick={() => navigate('/dashboard/profile')}>
-              升級達人班 <IconArrow size={12}/>
+              查看頂流達人 <IconArrow size={12}/>
             </button>
           </div>
         </div>
@@ -109,7 +109,7 @@ export default function TrialHome() {
       <div className="th2-stats">
         <div className="th2-stat-card">
           <div className="th2-stat-icon"><IconClock size={16} strokeWidth={1.5}/></div>
-          <p className="th2-stat-title">試聽課狀態</p>
+          <p className="th2-stat-title">體驗課狀態</p>
           <p className="th2-stat-val">{isCompleted?'已完成':isBooked?'已預約':'尚未預約'}</p>
           <p className="th2-stat-sub">{sessionSub}</p>
           {!isCompleted && !isBooked && (
@@ -127,15 +127,15 @@ export default function TrialHome() {
             </>
           ) : (
             <>
-              <p className="th2-stat-val">完成試聽解鎖</p>
-              <p className="th2-stat-sub">完成試聽課後享升級優惠</p>
+              <p className="th2-stat-val">完成體驗解鎖</p>
+              <p className="th2-stat-sub">完成體驗課後享升級優惠</p>
             </>
           )}
         </div>
         <div className="th2-stat-card">
           <div className="th2-stat-icon"><IconBook size={16} strokeWidth={1.5}/></div>
-          <p className="th2-stat-title">達人班方案</p>
-          <p className="th2-stat-val">完成試聽後查看</p>
+          <p className="th2-stat-title">頂流達人方案</p>
+          <p className="th2-stat-val">完成體驗後查看</p>
           <p className="th2-stat-sub">含所有基礎課程 + 社群成長工具</p>
           <button className="th2-stat-btn" onClick={() => navigate('/dashboard/profile')}>查看方案 <IconArrow size={11}/></button>
         </div>

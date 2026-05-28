@@ -260,7 +260,7 @@ export default function SimulatedPlayer({ session }) {
                     style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.08)' }}
                     onClick={() => navigate('/pricing')}
                   >
-                    升級達人班 →
+                    查看頂流達人 →
                   </button>
                 </div>
               </div>
@@ -328,7 +328,7 @@ export default function SimulatedPlayer({ session }) {
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
             <button className="btn btn-primary" onClick={startReplay}>▶ 回放課程</button>
             <button className="btn btn-secondary" onClick={() => navigate('/pricing')}>
-              升級達人班
+              查看頂流達人
             </button>
           </div>
         )}

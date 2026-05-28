@@ -2,15 +2,15 @@ import { useState, useRef } from 'react'
 import { getSalesBlocks, saveSalesBlocks, DEFAULT_SALES_BLOCKS } from '../../data/mockData'
 
 const BLOCK_LABELS = {
-  'hero':           '🖼  Hero 大圖橫幅',
-  'pain-points':    '😔 三大痛點',
-  'trial-intro':    '🎬 試聽課介紹',
-  'plan-comparison':'💰 方案比較表',
-  'schedule':       '📅 選時段購買（固定）',
-  'faq':            '❓ FAQ 常見問題',
-  'left-image-right-text': '🖼⬅ 左圖右文',
-  'right-image-left-text': '➡🖼 右圖左文',
-  'text':           '📝 純文字區塊',
+  'hero':           'Hero 大圖橫幅',
+  'pain-points':    '三大痛點',
+  'trial-intro':    '體驗課介紹',
+  'plan-comparison':'方案比較表',
+  'schedule':       '選時段購買（固定）',
+  'faq':            'FAQ 常見問題',
+  'left-image-right-text': ' 左圖右文',
+  'right-image-left-text': ' 右圖左文',
+  'text':           '純文字區塊',
 }
 
 // ── Image upload helper (compress → base64) ───────────────────────────────────
@@ -104,7 +104,7 @@ function BlockEditor({ block, onChange }) {
         <>
           <div className="form-group">
             <label className="form-label">按鈕文字</label>
-            <input className="form-input" value={block.buttonText||''} onChange={e=>set('buttonText',e.target.value)} placeholder="例：立即預約試聽課 $399" />
+            <input className="form-input" value={block.buttonText||''} onChange={e=>set('buttonText',e.target.value)} placeholder="例：立即預約體驗課 $980" />
           </div>
           <div className="form-group">
             <label className="form-label">按鈕連結</label>
@@ -147,7 +147,7 @@ function BlockEditor({ block, onChange }) {
           {(block.points||[]).map((p, i) => (
             <div key={i} style={{ display:'flex', gap:8, marginBottom:8 }}>
               <input className="form-input" value={p} onChange={e=>updatePoint(i,e.target.value)} placeholder={`痛點 ${i+1}`} style={{ flex:1 }} />
-              <button className="btn btn-ghost btn-sm" onClick={() => removePoint(i)}>✕</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => removePoint(i)}>×</button>
             </div>
           ))}
           <button className="btn btn-secondary btn-sm" onClick={addPoint}>＋ 新增痛點</button>
@@ -228,7 +228,7 @@ export default function PageBuilder() {
         <div style={{ display:'flex', gap:8 }}>
           <button className="btn btn-ghost btn-sm" onClick={handleReset}>重設預設</button>
           <a href="/" target="_blank" className="btn btn-secondary btn-sm">預覽銷售頁 ↗</a>
-          <button className="btn btn-primary" onClick={handleSave}>💾 儲存變更</button>
+          <button className="btn btn-primary" onClick={handleSave}>儲存變更</button>
         </div>
       </div>
 
@@ -270,14 +270,14 @@ export default function PageBuilder() {
                         style={{ padding:'2px 6px', fontSize:11 }}
                         onClick={e=>{e.stopPropagation();toggleVisible(b.id)}}
                         title={b.visible ? '隱藏' : '顯示'}
-                      >{b.visible ? '👁' : '🚫'}</button>
+                      >{b.visible ? '顯示' : '隱藏'}</button>
                       {!b.fixed && (
                         <button
                           className="btn btn-ghost btn-sm"
                           style={{ padding:'2px 6px', fontSize:11, color:'var(--danger)' }}
                           onClick={e=>{e.stopPropagation();removeBlock(b.id)}}
                           title="刪除"
-                        >✕</button>
+                        >×</button>
                       )}
                     </div>
                   </div>
@@ -312,7 +312,7 @@ export default function PageBuilder() {
 
                 {selectedBlock.fixed ? (
                   <div style={{ background:'var(--gray-50)', borderRadius:'var(--radius)', padding:'24px', textAlign:'center', color:'var(--gray-500)' }}>
-                    <div style={{ fontSize:24, marginBottom:8 }}>🔒</div>
+                    <div style={{ fontSize:24, marginBottom:8 }}>鎖定 </div>
                     <p>此為固定區塊（選時段購買），內容不可編輯</p>
                     <p style={{ fontSize:12, marginTop:4 }}>定價設定請至「定價管理」頁面調整</p>
                   </div>
@@ -321,14 +321,14 @@ export default function PageBuilder() {
                 )}
 
                 <div style={{ marginTop:24, paddingTop:16, borderTop:'1px solid var(--gray-100)', display:'flex', justifyContent:'flex-end', gap:8 }}>
-                  <button className="btn btn-primary" onClick={handleSave}>💾 儲存變更</button>
+                  <button className="btn btn-primary" onClick={handleSave}>儲存變更</button>
                 </div>
               </div>
             </div>
           ) : (
             <div className="card">
               <div className="card-body" style={{ textAlign:'center', padding:'64px 32px', color:'var(--gray-400)' }}>
-                <div style={{ fontSize:40, marginBottom:12 }}>🖱</div>
+                <div style={{ fontSize:40, marginBottom:12 }}></div>
                 <p>點選左側區塊開始編輯</p>
                 <p style={{ fontSize:12, marginTop:8 }}>或新增新的區塊</p>
               </div>
@@ -343,7 +343,7 @@ export default function PageBuilder() {
           <div className="modal" style={{ maxWidth:520 }} onClick={e=>e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">新增區塊</h2>
-              <button className="modal-close" onClick={() => setShowAdd(false)}>✕</button>
+              <button className="modal-close" onClick={() => setShowAdd(false)}>×</button>
             </div>
             <div className="modal-body">
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>

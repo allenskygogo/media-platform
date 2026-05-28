@@ -50,7 +50,7 @@ function describeAssignment(videoUid, assignments, courses) {
   const entries = Object.entries(assignments).filter(([, uid]) => uid === videoUid)
   if (!entries.length) return null
   return entries.map(([key]) => {
-    if (key === 'trial') return '試聽課'
+    if (key === 'trial') return '體驗課'
     const lessonId = Number(key)
     for (const c of courses) {
       const l = c.lessons.find(l => l.id === lessonId)
@@ -134,12 +134,12 @@ function UploadModal({ courses, onUploaded, onClose }) {
       <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">上傳影片到 Cloudflare Stream</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           {phase === 'done' ? (
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>已</div>
               <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>上傳完成！</p>
               <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>
                 影片正在 Cloudflare Stream 處理中，通常需要 1–5 分鐘。
@@ -147,7 +147,7 @@ function UploadModal({ courses, onUploaded, onClose }) {
             </div>
           ) : phase === 'error' ? (
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <div style={{ fontSize: 48, marginBottom: 12 }}>❌</div>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>錯誤</div>
               <p style={{ color: 'var(--danger)', fontWeight: 600 }}>{errorMsg}</p>
             </div>
           ) : (
@@ -178,7 +178,7 @@ function UploadModal({ courses, onUploaded, onClose }) {
                   onChange={e => setAssignTo(e.target.value)}
                   disabled={phase === 'uploading'}>
                   <option value="">— 不指定 —</option>
-                  <option value="trial">🎓 試聽課（3 小時試聽影片）</option>
+                  <option value="trial">體驗課（3 小時體驗影片）</option>
                   {lessonOptions.map(o => (
                     <option key={o.value} value={o.value}>{o.label}</option>
                   ))}
@@ -242,7 +242,7 @@ function AssignModal({ video, courses, assignments, onSave, onClose }) {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">指定影片到課節</h2>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         <div className="modal-body">
           <p style={{ fontSize: 14, color: 'var(--gray-600)', marginBottom: 16 }}>
@@ -253,7 +253,7 @@ function AssignModal({ video, courses, assignments, onSave, onClose }) {
             <select className="form-input" value={selected}
               onChange={e => setSelected(e.target.value)}>
               <option value="">— 不指定（影片庫中閒置）—</option>
-              <option value="trial">🎓 試聽課（3 小時試聽影片）</option>
+              <option value="trial">體驗課（3 小時體驗影片）</option>
               {lessonOptions.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
@@ -311,7 +311,7 @@ export default function VideoAdmin() {
         })
       }
       refreshLocal()
-      flash('✅ 已與 Cloudflare Stream 同步')
+      flash('已與 Cloudflare Stream 同步')
     } catch (e) {
       flash(`同步失敗：${e.message}`)
     } finally {
@@ -352,7 +352,7 @@ export default function VideoAdmin() {
       assignVideoToLesson(target, videoUid)
     }
     refreshLocal()
-    flash('✅ 影片指定已更新')
+    flash('影片指定已更新')
   }
 
   return (
@@ -365,7 +365,7 @@ export default function VideoAdmin() {
         <div style={{ display: 'flex', gap: 10 }}>
           {isConfigured() && (
             <button className="btn btn-secondary" onClick={syncWithCF} disabled={syncing}>
-              {syncing ? '同步中…' : '🔄 與 CF 同步'}
+              {syncing ? '同步中…' : '與 CF 同步'}
             </button>
           )}
           <button className="btn btn-primary" onClick={() => setShowUpload(true)}
@@ -382,7 +382,7 @@ export default function VideoAdmin() {
           borderRadius: 'var(--radius-lg)', padding: '16px 20px', marginBottom: 24,
           display: 'flex', gap: 12, alignItems: 'flex-start',
         }}>
-          <span style={{ fontSize: 24, flexShrink: 0 }}>⚙️</span>
+          <span style={{ fontSize: 24, flexShrink: 0 }}>設定 </span>
           <div>
             <p style={{ fontWeight: 700, color: 'var(--advanced-text)', marginBottom: 4 }}>
               Cloudflare Stream 尚未設定
@@ -437,7 +437,7 @@ export default function VideoAdmin() {
                       ) : (
                         <div style={{ width: 72, height: 40, background: 'var(--gray-100)',
                           borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 20 }}>🎬</div>
+                          fontSize: 20 }}>影片 </div>
                       )}
                     </td>
 
