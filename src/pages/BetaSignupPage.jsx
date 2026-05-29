@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { supabase, hasSupabase, allowLocalBetaFallback } from '../lib/supabase'
 
 const LS_KEY = 'beta_applications'
@@ -89,18 +88,6 @@ function BetaNav() {
           <span style={{ fontFamily: "'Rajdhani',sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: '0.10em', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase' }}>只有頂級，沒有套路</span>
         </div>
       </div>
-      <Link to="/"
-        style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '7px 16px', borderRadius: 8,
-          border: '0.5px solid rgba(255,255,255,0.12)',
-          background: 'rgba(255,255,255,0.04)',
-          color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 500,
-          textDecoration: 'none', transition: '0.2s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(80,96,255,0.5)'; e.currentTarget.style.color = '#fff' }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)' }}
-      >← 回到首頁</Link>
     </nav>
   )
 }
@@ -502,12 +489,6 @@ function SuccessView() {
           我們會在 3 個工作天內審核<br />
           並以 Email 通知你結果，請留意收件匣。
         </p>
-        <Link to="/" style={{
-          marginTop: 40, display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '12px 26px', borderRadius: 12,
-          background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.12)',
-          color: 'rgba(255,255,255,0.65)', fontSize: 14, textDecoration: 'none', transition: '0.2s',
-        }}>← 回到首頁</Link>
       </div>
     </div>
   )
