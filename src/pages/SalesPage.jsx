@@ -168,13 +168,13 @@ function SalesLoginModal({ onClose }) {
   const [registerNotice, setRegisterNotice] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setRegisterNotice('')
     setLoading(true)
     try {
-      const user = login(form.email.trim(), form.password)
+      const user = await login(form.email.trim(), form.password)
       if (user.role === 'admin') navigate('/admin', { replace: true })
       else if (user.tier === 'managed') navigate('/managed', { replace: true })
       else navigate('/dashboard', { replace: true })

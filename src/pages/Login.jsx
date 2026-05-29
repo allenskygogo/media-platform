@@ -23,7 +23,7 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      const user = login(form.email.trim(), form.password)
+      const user = await login(form.email.trim(), form.password)
       if (user.role === 'admin') navigate('/admin', { replace: true })
       else if (user.tier === 'managed') navigate('/managed', { replace: true })
       else navigate('/dashboard', { replace: true })

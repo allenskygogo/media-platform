@@ -10,27 +10,34 @@ export default function TrialAutoLogin() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    const uid   = searchParams.get('uid')
-    const token = searchParams.get('t')
+    let cancelled = false
 
-    if (!uid || !token) {
-      setError('無效的連結，請聯絡客服。')
-      return
+    const run = async () => {
+      const uid   = searchParams.get('uid')
+      const token = searchParams.get('t')
+
+      if (!uid || !token) {
+        if (!cancelled) setError('無效的連結，請聯絡客服。')
+        return
+      }
+
+      const user = verifyAutoLoginToken(uid, token)
+      if (!user) {
+        if (!cancelled) setError('連結已失效或不正確，請聯絡客服。')
+        return
+      }
+
+      // Log the user in then redirect to trial booking page
+      try {
+        await login(user.email, user.password)
+        if (!cancelled) navigate('/dashboard/trial', { replace: true })
+      } catch {
+        if (!cancelled) setError('自動登入失敗，請手動登入。')
+      }
     }
 
-    const user = verifyAutoLoginToken(uid, token)
-    if (!user) {
-      setError('連結已失效或不正確，請聯絡客服。')
-      return
-    }
-
-    // Log the user in then redirect to trial booking page
-    try {
-      login(user.email, user.password)
-      navigate('/dashboard/trial', { replace: true })
-    } catch {
-      setError('自動登入失敗，請手動登入。')
-    }
+    run()
+    return () => { cancelled = true }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) {

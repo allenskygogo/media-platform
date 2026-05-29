@@ -3,8 +3,52 @@ import {
   initMockData, getUsers, saveUsers, addDays, TIER_META,
   checkAndSendTrialReminders, checkAndSendExpiryReminders,
 } from '../data/mockData'
+import { supabase, hasSupabase, allowLocalFallback } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+
+const PLAN_TO_TIER = {
+  trial: 'basic',
+  creator: 'standard',
+  master: 'advanced',
+  managed: 'managed',
+}
+
+const LEGACY_TO_TIER = {
+  basic: 'basic',
+  standard: 'standard',
+  advanced: 'advanced',
+  managed: 'managed',
+}
+
+const toDateString = (value) => {
+  if (!value) return null
+  return String(value).split('T')[0]
+}
+
+const buildUserFromSupabase = (profile, membership) => {
+  const planId = membership?.plan_id || null
+  const legacyTier = membership?.legacy_tier || null
+  const tier = PLAN_TO_TIER[planId] || LEGACY_TO_TIER[legacyTier] || null
+  const name = profile.display_name || profile.email?.split('@')[0] || '學員'
+
+  return {
+    id: profile.id,
+    name,
+    email: profile.email,
+    role: profile.role,
+    tier,
+    avatar: name.charAt(0),
+    createdAt: toDateString(profile.created_at) || '',
+    status: profile.status,
+    expiresAt: toDateString(membership?.expires_at),
+    trialCompletedAt: toDateString(membership?.trial_completed_at),
+    courseCompletedAt: null,
+    source: 'supabase',
+    planId,
+    legacyTier,
+  }
+}
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null)
@@ -14,9 +58,41 @@ export function AuthProvider({ children }) {
     initMockData()
     checkAndSendTrialReminders()
     checkAndSendExpiryReminders()
-    const stored = localStorage.getItem('mp_current_user')
-    if (stored) setCurrentUser(JSON.parse(stored))
-    setLoading(false)
+
+    let mounted = true
+
+    const load = async () => {
+      if (hasSupabase && supabase) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) {
+            const user = await fetchSupabaseUser(session.user.id)
+            if (mounted) persist(user)
+          } else if (mounted) {
+            setCurrentUser(null)
+            localStorage.removeItem('mp_current_user')
+          }
+        } catch (err) {
+          console.error('Supabase auth bootstrap failed:', err)
+          if (mounted) setCurrentUser(null)
+        } finally {
+          if (mounted) setLoading(false)
+        }
+        return
+      }
+
+      if (allowLocalFallback) {
+        const stored = localStorage.getItem('mp_current_user')
+        if (stored && mounted) setCurrentUser(JSON.parse(stored))
+      } else {
+        localStorage.removeItem('mp_current_user')
+      }
+      if (mounted) setLoading(false)
+    }
+
+    load()
+
+    return () => { mounted = false }
   }, [])
 
   const persist = (user) => {
@@ -26,7 +102,42 @@ export function AuthProvider({ children }) {
     return safe
   }
 
-  const login = (email, password) => {
+  const fetchSupabaseUser = async (userId) => {
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, display_name, email, role, status, created_at')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (profileError) throw profileError
+    if (!profile) throw new Error('找不到會員資料，請聯絡管理員')
+    if (profile.status === 'inactive') throw new Error('帳號已停用，請聯絡管理員')
+
+    const { data: membership, error: membershipError } = await supabase
+      .from('memberships')
+      .select('plan_id, legacy_tier, status, starts_at, expires_at, trial_completed_at')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .order('starts_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (membershipError) throw membershipError
+    return buildUserFromSupabase(profile, membership)
+  }
+
+  const login = async (email, password) => {
+    if (hasSupabase && supabase) {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw new Error('帳號或密碼錯誤')
+      const user = await fetchSupabaseUser(data.user.id)
+      return persist(user)
+    }
+
+    if (!allowLocalFallback) {
+      throw new Error('登入服務尚未設定，請聯絡管理員')
+    }
+
     const users = getUsers()
     const user = users.find(u => u.email === email && u.password === password)
     if (!user) throw new Error('帳號或密碼錯誤')
@@ -34,7 +145,10 @@ export function AuthProvider({ children }) {
     return persist(user)
   }
 
-  const logout = () => {
+  const logout = async () => {
+    if (hasSupabase && supabase) {
+      await supabase.auth.signOut()
+    }
     setCurrentUser(null)
     localStorage.removeItem('mp_current_user')
   }
@@ -57,6 +171,21 @@ export function AuthProvider({ children }) {
   }
 
   const updateCurrentUser = (updates) => {
+    if (hasSupabase && supabase && currentUser?.source === 'supabase') {
+      const nextName = updates.name || currentUser.name
+      const nextUser = { ...currentUser, ...updates, name: nextName }
+      setCurrentUser(nextUser)
+      localStorage.setItem('mp_current_user', JSON.stringify(nextUser))
+      supabase
+        .from('profiles')
+        .update({ display_name: nextName })
+        .eq('id', currentUser.id)
+        .then(({ error }) => {
+          if (error) console.error('Profile update failed:', error)
+        })
+      return
+    }
+
     const users = getUsers()
     const idx = users.findIndex(u => u.id === currentUser.id)
     if (idx === -1) return
