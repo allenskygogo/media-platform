@@ -5,6 +5,7 @@ import {
   getTrialSession, saveTrialSession,
   getTrialProgress, TRIAL_DURATION_SEC,
 } from '../../data/mockData'
+import { supabase, hasSupabase, allowLocalFallback } from '../../lib/supabase'
 import Calendar from '../../components/Calendar'
 
 const HOURS = Array.from({ length: 15 }, (_, i) => i + 8) // 08:00–22:00
@@ -35,20 +36,78 @@ function useCountdown(targetIso) {
   return { str, ready }
 }
 
+function toTrialSession(row) {
+  if (!row) return null
+  return {
+    userId: row.user_id,
+    scheduledAt: row.scheduled_at,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+async function loadTrialSession(userId) {
+  if (hasSupabase && supabase) {
+    const { data, error } = await supabase
+      .from('trial_sessions')
+      .select('user_id, scheduled_at, status, created_at, updated_at')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (error) throw error
+    return toTrialSession(data)
+  }
+
+  if (allowLocalFallback) return getTrialSession(userId)
+  throw new Error('體驗課預約資料服務尚未設定')
+}
+
+async function bookTrialSession(userId, scheduledAt) {
+  if (hasSupabase && supabase) {
+    const { data, error } = await supabase
+      .from('trial_sessions')
+      .upsert(
+        { user_id: userId, scheduled_at: scheduledAt, status: 'booked' },
+        { onConflict: 'user_id' },
+      )
+      .select('user_id, scheduled_at, status, created_at, updated_at')
+      .single()
+
+    if (error) throw error
+    return toTrialSession(data)
+  }
+
+  if (allowLocalFallback) {
+    saveTrialSession(userId, scheduledAt)
+    return getTrialSession(userId)
+  }
+
+  throw new Error('體驗課預約資料服務尚未設定')
+}
+
 // ── Booking form (3 steps) ──────────────────────────────────────────────────
-function BookingForm({ userId, onBooked }) {
+function BookingForm({ userId, onBooked, onError }) {
   const [step, setStep]           = useState(1)
   const [date, setDate]           = useState('')
   const [hour, setHour]           = useState(null)
   const [confirmed, setConfirmed] = useState(false)
+  const [saving, setSaving]       = useState(false)
 
   const minDate = new Date(Date.now() + 3600 * 1000).toISOString().split('T')[0]
   const endHour = hour !== null ? hour + 3 : null
 
-  const handleBook = () => {
+  const handleBook = async () => {
     const scheduledAt = new Date(`${date}T${String(hour).padStart(2,'0')}:00:00`).toISOString()
-    saveTrialSession(userId, scheduledAt)
-    onBooked()
+    setSaving(true)
+    try {
+      const nextSession = await bookTrialSession(userId, scheduledAt)
+      onBooked(nextSession)
+    } catch (err) {
+      onError(err.message || '預約失敗，請稍後再試')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -150,10 +209,10 @@ function BookingForm({ userId, onBooked }) {
               <button className="btn btn-secondary" onClick={() => setStep(2)}>返回修改</button>
               <button
                 className="btn btn-primary"
-                disabled={!confirmed}
+                disabled={!confirmed || saving}
                 onClick={handleBook}
               >
-                確認預約體驗課
+                {saving ? '預約中…' : '確認預約體驗課'}
               </button>
             </div>
           </div>
@@ -209,17 +268,29 @@ export default function Trial() {
   const [session, setSession]   = useState(null)
   const [progress, setProgress] = useState(null)
   const [loaded, setLoaded]     = useState(false)
-
-  const load = () => {
-    setSession(getTrialSession(currentUser.id))
-    setProgress(getTrialProgress(currentUser.id))
-  }
+  const [error, setError]       = useState('')
 
   useEffect(() => {
+    let cancelled = false
+
+    const run = async () => {
     // Only for basic tier
     if (currentUser.tier !== 'basic') { navigate('/dashboard', { replace: true }); return }
-    load()
-    setLoaded(true)
+      try {
+        setError('')
+        const nextSession = await loadTrialSession(currentUser.id)
+        if (cancelled) return
+        setSession(nextSession)
+        setProgress(getTrialProgress(currentUser.id))
+      } catch (err) {
+        if (!cancelled) setError(err.message || '讀取體驗課預約資料失敗')
+      } finally {
+        if (!cancelled) setLoaded(true)
+      }
+    }
+
+    run()
+    return () => { cancelled = true }
   }, [currentUser])
 
   if (!loaded) return null
@@ -249,6 +320,12 @@ export default function Trial() {
         <p>請選擇你方便的日期與時間，我們會依照預約時段安排第一次課程輔導。</p>
       </div>
 
+      {error && (
+        <div className="auth-alert error" style={{ marginBottom: 20 }}>
+          {error}
+        </div>
+      )}
+
       {/* Info strip */}
       <div className="trial-info-grid">
         {[
@@ -271,7 +348,15 @@ export default function Trial() {
       <div className="trial-booking-grid">
         {!session && (
           <>
-            <BookingForm userId={currentUser.id} onBooked={load} />
+            <BookingForm
+              userId={currentUser.id}
+              onBooked={(nextSession) => {
+                setError('')
+                setSession(nextSession)
+                setProgress(getTrialProgress(currentUser.id))
+              }}
+              onError={setError}
+            />
             <aside className="card trial-note-card">
               <div className="card-body">
                 <h2>預約前請注意</h2>
