@@ -213,7 +213,13 @@ async function getGoogleBusyRanges(date, token, env) {
 
   const data = await response.json()
   if (!response.ok) throw new Error(data.error?.message || 'Google Calendar freeBusy failed')
-  return data.calendars?.[env.GOOGLE_CALENDAR_ID]?.busy || []
+  const calendar = data.calendars?.[env.GOOGLE_CALENDAR_ID]
+  if (!calendar) throw new Error('Google Calendar result missing')
+  if (Array.isArray(calendar.errors) && calendar.errors.length) {
+    const message = calendar.errors.map(item => item.reason || item.message).filter(Boolean).join(', ')
+    throw new Error(message || 'Google Calendar access failed')
+  }
+  return calendar.busy || []
 }
 
 function getRequestedDurationMinutes(value) {

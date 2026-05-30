@@ -121,10 +121,7 @@ export async function updateBookingStatusRecord(id, status) {
 
 export async function updateBookingDetailsRecord(id, { type, date, timeSlot, topic, notes }) {
   const conflictSlots = await getBookingConflictSlots({ type, date, ignoreBookingId: id })
-  const calendarSlots = await getCalendarUnavailableSlots(type, date).catch(err => {
-    console.error('Calendar availability load failed:', err)
-    return []
-  })
+  const calendarSlots = await getCalendarUnavailableSlots(type, date)
 
   if ([...conflictSlots, ...calendarSlots].includes(timeSlot)) {
     throw new Error('這個時段已被預約或行事曆已有安排，請選擇其他時間')
@@ -247,7 +244,10 @@ async function getSupabaseUnavailableSlots(type, date) {
 }
 
 async function getCalendarUnavailableSlots(type, date) {
-  if (!WORKER_URL) return []
+  if (!WORKER_URL) {
+    if (import.meta.env.DEV) return []
+    throw new Error('Google 行事曆防撞期尚未設定')
+  }
 
   const url = new URL(`${WORKER_URL.replace(/\/$/, '')}/api/calendar/availability`)
   url.searchParams.set('type', type)
@@ -257,6 +257,8 @@ async function getCalendarUnavailableSlots(type, date) {
   const response = await fetch(url.toString())
   if (!response.ok) throw new Error('Google 行事曆可用時段讀取失敗')
   const data = await response.json()
+  if (data.success === false) throw new Error(data.error || 'Google 行事曆可用時段讀取失敗')
+  if (data.calendarConfigured === false) throw new Error('Google 行事曆防撞期尚未設定')
   return Array.isArray(data.unavailableSlots) ? data.unavailableSlots : []
 }
 
@@ -265,10 +267,7 @@ export async function getUnavailableBookingSlots(type, date) {
 
   const [bookingSlots, calendarSlots] = await Promise.all([
     getSupabaseUnavailableSlots(type, date),
-    getCalendarUnavailableSlots(type, date).catch(err => {
-      console.error('Calendar availability load failed:', err)
-      return []
-    }),
+    getCalendarUnavailableSlots(type, date),
   ])
 
   const allowed = new Set(BOOKING_TIME_SLOTS.map(slot => slot.key))
