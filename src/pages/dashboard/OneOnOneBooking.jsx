@@ -5,6 +5,7 @@ import { BOOKING_TIME_SLOTS } from '../../data/bookingSlots'
 import Calendar from '../../components/Calendar'
 
 const TIME_SLOTS = BOOKING_TIME_SLOTS
+const ALL_SLOT_KEYS = TIME_SLOTS.map(slot => slot.key)
 
 const STATUS_LABEL = { pending: '待確認', confirmed: '已確認', cancelled: '已取消' }
 
@@ -56,7 +57,10 @@ export default function OneOnOneBooking() {
       })
       .catch(err => {
         console.error('Unavailable slot load failed:', err)
-        if (!cancelled) setError('可預約時段讀取失敗，請重新整理後再試')
+        if (!cancelled) {
+          setUnavailableSlots(ALL_SLOT_KEYS)
+          setError('')
+        }
       })
       .finally(() => {
         if (!cancelled) setSlotLoading(false)
@@ -158,11 +162,16 @@ export default function OneOnOneBooking() {
                         onClick={() => { if (!disabled) { setSlot(ts.key); setStep(3) } }}>
                         <div className="time-slot-info">
                           <strong>{ts.label}</strong>
-                          <span>{disabled ? '已被預約或行事曆衝突' : ts.time}</span>
+                          <span>{disabled ? '已滿' : ts.time}</span>
                         </div>
                       </button>
                     )})}
                   </div>
+                  {!slotLoading && unavailableSlots.length === TIME_SLOTS.length && (
+                    <p style={{ marginTop: 14, fontSize: 13, color: 'var(--gray-500)' }}>
+                      當天預約已滿，請選擇其他日期。
+                    </p>
+                  )}
                 </div>
               </div>
             )}

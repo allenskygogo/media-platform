@@ -50,7 +50,7 @@ export async function getBookingsRecords({ userId, type } = {}) {
 export async function createBookingRecord({ userId, type, date, timeSlot, topic, notes }) {
   const unavailableSlots = await getUnavailableBookingSlots(type, date)
   if (unavailableSlots.includes(timeSlot)) {
-    throw new Error('這個時段已被預約或行事曆已有安排，請選擇其他時間')
+    throw new Error('這個時段已滿，請選擇其他時間')
   }
 
   if (hasSupabase && supabase) {
@@ -124,7 +124,7 @@ export async function updateBookingDetailsRecord(id, { type, date, timeSlot, top
   const calendarSlots = await getCalendarUnavailableSlots(type, date)
 
   if ([...conflictSlots, ...calendarSlots].includes(timeSlot)) {
-    throw new Error('這個時段已被預約或行事曆已有安排，請選擇其他時間')
+    throw new Error('這個時段已滿，請選擇其他時間')
   }
 
   const updates = {
