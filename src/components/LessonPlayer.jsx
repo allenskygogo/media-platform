@@ -45,6 +45,7 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
   const cfVideo    = cfVideoUid ? getCFVideos().find(v => v.uid === cfVideoUid) : null
   const savedProg  = getLessonProgress(userId, courseId, lesson.id)
   const isFirstWatch = !savedProg?.completed
+  const startSecond = savedProg?.completed ? 0 : (savedProg?.currentSecond || 0)
 
   if (cfVideo) {
     const pricing = getPricing()
@@ -65,13 +66,13 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
   // ── Fallback: simulated player (no CF video assigned) ──────────────────
   const totalSec = parseDurationToSec(lesson.duration)
 
-  const [currentSec, setCurrentSec] = useState(savedProg?.currentSecond || 0)
+  const [currentSec, setCurrentSec] = useState(startSecond)
   const [playing, setPlaying]       = useState(true)   // for free mode
   const [done, setDone]             = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
 
-  const latestSec  = useRef(savedProg?.currentSecond || 0)
+  const latestSec  = useRef(startSecond)
   const intervalRef = useRef(null)
   const playerWrapRef = useRef(null)
   const playerOuterRef = useRef(null)
@@ -86,9 +87,9 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
       clearInterval(intervalRef.current)
       saveLessonProgress(userId, courseId, lesson.id, totalSec, true)
       setDone(true)
-      onComplete()
+      if (isFirstWatch) onComplete()
     }
-  }, [courseId, lesson.id, onComplete, totalSec, userId])
+  }, [courseId, isFirstWatch, lesson.id, onComplete, totalSec, userId])
 
   // Start / pause / stop interval
   useEffect(() => {

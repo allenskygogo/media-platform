@@ -581,7 +581,7 @@ export function saveLessonProgress(userId, courseId, lessonId, currentSecond, co
   const existing = idx >= 0 ? all[idx] : null
   const wasCompleted = existing?.completed || false
   const record = {
-    userId, courseId, lessonId, currentSecond, completed,
+    userId, courseId, lessonId, currentSecond, completed: completed || wasCompleted,
     watchCount: (existing?.watchCount || 0) + (completed && !wasCompleted ? 1 : 0),
     completedAt: completed && !wasCompleted ? new Date().toISOString() : (existing?.completedAt || null),
     updatedAt: new Date().toISOString(),

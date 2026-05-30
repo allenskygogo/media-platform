@@ -100,8 +100,11 @@ export default function StreamPlayer({
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
 
   const video = getCFVideos().find(v => v.uid === videoUid)
+  const savedProgress = userId && courseId && lessonId
+    ? getLessonProgress(userId, courseId, lessonId)
+    : null
   const savedSec = userId && courseId && lessonId
-    ? (getLessonProgress(userId, courseId, lessonId)?.currentSecond || 0)
+    ? (savedProgress?.completed ? 0 : (savedProgress?.currentSecond || 0))
     : 0
 
   // ── Fetch signed token and build iframe URL ─────────────────────────────
@@ -157,7 +160,7 @@ export default function StreamPlayer({
         if (userId && courseId && lessonId) {
           saveLessonProgress(userId, courseId, lessonId, player.duration || 99999, true)
         }
-        onComplete?.()
+        if (isForced) onComplete?.()
       })
 
       // Forced-mode controls
