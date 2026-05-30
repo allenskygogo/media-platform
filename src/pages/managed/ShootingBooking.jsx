@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { getBookings, saveBookings } from '../../data/mockData'
+import { createBookingRecord, getBookingsRecords } from '../../services/bookings'
 import Calendar from '../../components/Calendar'
 
 const TIME_SLOTS = [
@@ -18,20 +18,54 @@ export default function ShootingBooking() {
   const [slot, setSlot]  = useState('')
   const [form, setForm]  = useState({ topic: '', notes: '' })
   const [done, setDone]  = useState(false)
+  const [bookings, setBookings] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
-  const allBookings  = getBookings()
-  const myBookings   = allBookings.filter(b => b.userId === currentUser.id && b.type === 'shooting')
-  const bookedDates  = allBookings.filter(b => b.type === 'shooting' && b.status !== 'cancelled').map(b => b.date)
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    getBookingsRecords({ userId: currentUser.id, type: 'shooting' })
+      .then(records => {
+        if (!cancelled) setBookings(records)
+      })
+      .catch(err => {
+        console.error('Shooting booking load failed:', err)
+        if (!cancelled) setError('預約資料讀取失敗，請重新整理後再試')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
-  const submit = () => {
+    return () => { cancelled = true }
+  }, [currentUser.id])
+
+  const myBookings   = bookings.filter(b => b.userId === currentUser.id && b.type === 'shooting')
+  const bookedDates  = bookings.filter(b => b.type === 'shooting' && b.status !== 'cancelled').map(b => b.date)
+
+  const submit = async () => {
     if (!date || !slot || !form.topic.trim()) return
-    const newB = {
-      id: Date.now(), userId: currentUser.id, type: 'shooting',
-      date, timeSlot: slot, topic: form.topic.trim(), notes: form.notes.trim(),
-      status: 'pending', createdAt: new Date().toISOString().split('T')[0],
+    setSaving(true)
+    setError('')
+    try {
+      const record = await createBookingRecord({
+        userId: currentUser.id,
+        type: 'shooting',
+        date,
+        timeSlot: slot,
+        topic: form.topic.trim(),
+        notes: form.notes.trim(),
+      })
+      setBookings(prev => [record, ...prev])
+      setDone(true)
+    } catch (err) {
+      console.error('Shooting booking submit failed:', err)
+      setError(err.message || '預約送出失敗，請稍後再試')
+    } finally {
+      setSaving(false)
     }
-    saveBookings([...allBookings, newB])
-    setDone(true)
   }
 
   const reset = () => { setStep(1); setDate(''); setSlot(''); setForm({ topic: '', notes: '' }); setDone(false) }
@@ -57,6 +91,7 @@ export default function ShootingBooking() {
   return (
     <div>
       <div className="page-heading"><h1>預約拍攝</h1><p>選擇拍攝日期、時段與主題，管理員確認後即完成預約</p></div>
+      {error && <div className="auth-alert danger" style={{ marginBottom: 16 }}>{error}</div>}
 
       <div className="booking-layout">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -118,8 +153,8 @@ export default function ShootingBooking() {
                   <label className="form-label">備註說明</label>
                   <textarea className="form-textarea" placeholder="場地需求、服裝準備、特殊要求…" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ minHeight: 80 }} />
                 </div>
-                <button className="btn btn-primary btn-lg btn-block" onClick={submit} disabled={!form.topic.trim()}>
-                  送出拍攝預約
+                <button className="btn btn-primary btn-lg btn-block" onClick={submit} disabled={!form.topic.trim() || saving}>
+                  {saving ? '送出中…' : '送出拍攝預約'}
                 </button>
               </div>
             </div>
@@ -130,7 +165,9 @@ export default function ShootingBooking() {
         <div>
           <div className="card" style={{ position: 'sticky', top: 80 }}>
             <div className="card-header"><h2 className="card-title">預約記錄</h2></div>
-            {myBookings.length === 0 ? (
+            {loading ? (
+              <div className="card-body" style={{ textAlign: 'center', color: 'var(--gray-400)', fontSize: 14 }}>讀取中…</div>
+            ) : myBookings.length === 0 ? (
               <div className="card-body" style={{ textAlign: 'center', color: 'var(--gray-400)', fontSize: 14 }}>尚無預約記錄</div>
             ) : (
               <div style={{ padding: '8px 0' }}>

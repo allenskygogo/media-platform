@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { getBookings, saveBookings } from '../../data/mockData'
+import { createBookingRecord, getBookingsRecords } from '../../services/bookings'
 import Calendar from '../../components/Calendar'
 
 const TIME_SLOTS = [
@@ -19,21 +19,55 @@ export default function OneOnOneBooking() {
   const [form, setForm] = useState({ topic: '', notes: '' })
   const [done, setDone] = useState(false)
   const [msg, setMsg] = useState('')
+  const [bookings, setBookings] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
-  const allBookings = getBookings()
-  const myBookings  = allBookings.filter(b => b.userId === currentUser.id && b.type === 'oneonone')
-  const bookedDates = allBookings.filter(b => b.type === 'oneonone' && b.status !== 'cancelled').map(b => b.date)
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    getBookingsRecords({ userId: currentUser.id, type: 'oneonone' })
+      .then(records => {
+        if (!cancelled) setBookings(records)
+      })
+      .catch(err => {
+        console.error('Booking load failed:', err)
+        if (!cancelled) setError('預約資料讀取失敗，請重新整理後再試')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
-  const submit = () => {
+    return () => { cancelled = true }
+  }, [currentUser.id])
+
+  const myBookings  = bookings.filter(b => b.userId === currentUser.id && b.type === 'oneonone')
+  const bookedDates = bookings.filter(b => b.type === 'oneonone' && b.status !== 'cancelled').map(b => b.date)
+
+  const submit = async () => {
     if (!date || !slot || !form.topic.trim()) return
-    const newB = {
-      id: Date.now(), userId: currentUser.id, type: 'oneonone',
-      date, timeSlot: slot, topic: form.topic.trim(), notes: form.notes.trim(),
-      status: 'pending', createdAt: new Date().toISOString().split('T')[0],
+    setSaving(true)
+    setError('')
+    try {
+      const record = await createBookingRecord({
+        userId: currentUser.id,
+        type: 'oneonone',
+        date,
+        timeSlot: slot,
+        topic: form.topic.trim(),
+        notes: form.notes.trim(),
+      })
+      setBookings(prev => [record, ...prev])
+      setDone(true)
+      setMsg(`預約成功！${date} ${TIME_SLOTS.find(s => s.key === slot)?.label}，管理員確認後會通知你。`)
+    } catch (err) {
+      console.error('Booking submit failed:', err)
+      setError(err.message || '預約送出失敗，請稍後再試')
+    } finally {
+      setSaving(false)
     }
-    saveBookings([...allBookings, newB])
-    setDone(true)
-    setMsg(`預約成功！${date} ${TIME_SLOTS.find(s => s.key === slot)?.label}，管理員確認後會通知你。`)
   }
 
   const reset = () => { setStep(1); setDate(''); setSlot(''); setForm({ topic: '', notes: '' }); setDone(false); setMsg('') }
@@ -44,6 +78,7 @@ export default function OneOnOneBooking() {
         <h1>🗓️ 預約實體一對一</h1>
         <p>選擇日期與時段，預約與講師的實體輔導課程</p>
       </div>
+      {error && <div className="auth-alert danger" style={{ marginBottom: 16 }}>{error}</div>}
 
       {done ? (
         <div className="card" style={{ maxWidth: 560, margin: '0 auto', textAlign: 'center' }}>
@@ -121,8 +156,8 @@ export default function OneOnOneBooking() {
                     <label className="form-label">備註說明</label>
                     <textarea className="form-textarea" placeholder="有什麼想特別準備或提前說明的？" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ minHeight: 80 }} />
                   </div>
-                  <button className="btn btn-primary btn-lg btn-block" onClick={submit} disabled={!form.topic.trim()}>
-                    確認送出預約
+                  <button className="btn btn-primary btn-lg btn-block" onClick={submit} disabled={!form.topic.trim() || saving}>
+                    {saving ? '送出中…' : '確認送出預約'}
                   </button>
                 </div>
               </div>
@@ -133,7 +168,9 @@ export default function OneOnOneBooking() {
           <div>
             <div className="card" style={{ position: 'sticky', top: 80 }}>
               <div className="card-header"><h2 className="card-title">我的預約記錄</h2></div>
-              {myBookings.length === 0 ? (
+              {loading ? (
+                <div className="card-body" style={{ textAlign: 'center', color: 'var(--gray-400)', fontSize: 14, padding: 24 }}>讀取中…</div>
+              ) : myBookings.length === 0 ? (
                 <div className="card-body" style={{ textAlign: 'center', color: 'var(--gray-400)', fontSize: 14, padding: 24 }}>尚無預約記錄</div>
               ) : (
                 <div style={{ padding: '8px 0' }}>

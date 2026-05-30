@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getUsers, getCourses, getBookings, getProjects, getAllHomework } from '../../data/mockData'
 import { getAIUsageLogs, getPracticeSubmissions } from '../../services/aiService'
+import { getBookingSubmitterProfiles, getBookingsRecords } from '../../services/bookings'
 
 const TIER_LABELS = {
   basic: '體驗課',
@@ -88,12 +90,14 @@ function topValue(items, fallback = '尚無資料') {
 }
 
 export default function AdminDashboard() {
+  const [cloudBookings, setCloudBookings] = useState(null)
+  const [bookingProfilesById, setBookingProfilesById] = useState({})
   const users = getUsers()
   const memberUsers = users.filter(user => user.role !== 'admin')
   const students = memberUsers.filter(user => user.tier !== 'managed')
   const managedUsers = memberUsers.filter(user => user.tier === 'managed')
   const courses = getCourses()
-  const bookings = getBookings()
+  const bookings = cloudBookings || getBookings()
   const projects = getProjects()
   const homework = getAllHomework()
   const practiceSubmissions = getPracticeSubmissions()
@@ -130,7 +134,20 @@ export default function AdminDashboard() {
     .sort((a, b) => `${b.date || ''}${b.timeSlot || ''}`.localeCompare(`${a.date || ''}${a.timeSlot || ''}`))
     .slice(0, 5)
 
-  const getName = (id) => users.find(user => user.id === id)?.name || '—'
+  useEffect(() => {
+    let cancelled = false
+    getBookingsRecords()
+      .then(async records => {
+        if (cancelled) return
+        setCloudBookings(records)
+        const profiles = await getBookingSubmitterProfiles(records.map(item => item.userId))
+        if (!cancelled) setBookingProfilesById(Object.fromEntries(profiles.map(profile => [profile.id, profile])))
+      })
+      .catch(err => console.error('Dashboard bookings load failed:', err))
+    return () => { cancelled = true }
+  }, [])
+
+  const getName = (id) => bookingProfilesById[id]?.name || users.find(user => user.id === id)?.name || '—'
 
   const statCards = [
     { label: '總學員數', value: students.length, sub: `啟用 ${activeLearners} 位`, icon: 'users', to: '/admin/users' },

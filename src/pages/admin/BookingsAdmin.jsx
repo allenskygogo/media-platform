@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { getBookings, saveBookings, getUsers } from '../../data/mockData'
+import { useEffect, useState } from 'react'
+import { getUsers } from '../../data/mockData'
+import { getBookingSubmitterProfiles, getBookingsRecords, updateBookingStatusRecord } from '../../services/bookings'
 
 const TIME_SLOTS = { morning: '上午場', afternoon: '下午場', evening: '晚上場' }
 const STATUS_META = {
@@ -11,14 +12,33 @@ const TYPE_LABEL = { oneonone: '一對一輔導', shooting: '拍攝預約' }
 
 export default function BookingsAdmin() {
   const users = getUsers()
-  const [bookings, setBookings] = useState(getBookings)
+  const [bookings, setBookings] = useState([])
   const [filterType, setFilterType]   = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [msg, setMsg] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [submittersById, setSubmittersById] = useState({})
 
   const flash = (t) => { setMsg(t); setTimeout(() => setMsg(''), 3000) }
 
-  const getName = (id) => users.find(u => u.id === id)?.name || `用戶 ${id}`
+  const refresh = () => {
+    setLoading(true)
+    return getBookingsRecords()
+      .then(async records => {
+        setBookings(records)
+        const profiles = await getBookingSubmitterProfiles(records.map(item => item.userId))
+        setSubmittersById(Object.fromEntries(profiles.map(profile => [profile.id, profile])))
+      })
+      .catch(err => {
+        console.error('Bookings admin load failed:', err)
+        flash('預約資料讀取失敗，請重新整理後再試')
+      })
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  const getName = (id) => submittersById[id]?.name || users.find(u => u.id === id)?.name || `用戶 ${id}`
 
   const visible = bookings.filter(b => {
     const matchType   = filterType   === 'all' || b.type   === filterType
@@ -26,11 +46,15 @@ export default function BookingsAdmin() {
     return matchType && matchStatus
   }).sort((a, b) => b.date.localeCompare(a.date))
 
-  const changeStatus = (id, status) => {
-    const updated = bookings.map(b => b.id === id ? { ...b, status } : b)
-    saveBookings(updated)
-    setBookings(updated)
-    flash(`預約狀態已更新為「${STATUS_META[status]?.label}」`)
+  const changeStatus = async (id, status) => {
+    try {
+      const updatedBooking = await updateBookingStatusRecord(id, status)
+      setBookings(prev => prev.map(b => b.id === id ? updatedBooking : b))
+      flash(`預約狀態已更新為「${STATUS_META[status]?.label}」`)
+    } catch (err) {
+      console.error('Booking status update failed:', err)
+      flash('預約狀態更新失敗，請稍後再試')
+    }
   }
 
   const counts = { all: bookings.length, pending: bookings.filter(b => b.status === 'pending').length, confirmed: bookings.filter(b => b.status === 'confirmed').length, cancelled: bookings.filter(b => b.status === 'cancelled').length }
@@ -76,7 +100,9 @@ export default function BookingsAdmin() {
               </tr>
             </thead>
             <tbody>
-              {visible.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>讀取預約資料中…</td></tr>
+              ) : visible.length === 0 ? (
                 <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>沒有符合的預約</td></tr>
               ) : visible.map(b => {
                 const sm = STATUS_META[b.status]
