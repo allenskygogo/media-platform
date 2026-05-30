@@ -6,9 +6,15 @@
  *   CLOUDFLARE_API_TOKEN        — API token with Stream:Edit permission
  *   CLOUDFLARE_STREAM_KEY_ID    — signing key ID from Stream dashboard
  *   CLOUDFLARE_STREAM_SIGNING_KEY — PEM private key (PKCS#8, BEGIN PRIVATE KEY)
+ *   GOOGLE_SERVICE_ACCOUNT_EMAIL  — Google service account email for Calendar
+ *   GOOGLE_PRIVATE_KEY            — Google service account private key
+ *   GOOGLE_CALENDAR_ID            — Google Calendar ID to check availability
  */
 
 const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
+const BOOKING_TIME_SLOTS = ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00']
+const DEFAULT_BOOKING_DURATION_MINUTES = 180
+const TAIPEI_OFFSET = '+08:00'
 
 // ── CORS ──────────────────────────────────────────────────────────────────
 const CORS = {
@@ -67,6 +73,11 @@ export default {
         return handleToken(request, uid, env)
       }
 
+      // GET /api/calendar/availability?date=YYYY-MM-DD&type=oneonone
+      if (path === '/api/calendar/availability' && request.method === 'GET') {
+        return handleCalendarAvailability(url, env)
+      }
+
       return err('Not found', 404)
     } catch (e) {
       console.error(e)
@@ -123,6 +134,27 @@ async function handleToken(request, videoUid, env) {
   return json({ success: true, token })
 }
 
+async function handleCalendarAvailability(url, env) {
+  const date = url.searchParams.get('date')
+  const durationMinutes = getRequestedDurationMinutes(url.searchParams.get('durationMinutes'))
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
+    return err('Invalid date', 400)
+  }
+
+  if (!env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !env.GOOGLE_PRIVATE_KEY || !env.GOOGLE_CALENDAR_ID) {
+    return json({ success: true, calendarConfigured: false, unavailableSlots: [] })
+  }
+
+  const token = await getGoogleAccessToken(env)
+  const busy = await getGoogleBusyRanges(date, token, env)
+  const unavailableSlots = BOOKING_TIME_SLOTS.filter(slot => {
+    const range = getSlotRange(date, slot, durationMinutes)
+    return busy.some(item => rangesOverlap(range.start, range.end, new Date(item.start), new Date(item.end)))
+  })
+
+  return json({ success: true, calendarConfigured: true, unavailableSlots })
+}
+
 // ── Cloudflare API helper ─────────────────────────────────────────────────
 
 async function cfFetch(path, method, env, body) {
@@ -136,6 +168,72 @@ async function cfFetch(path, method, env, body) {
     body: body ? JSON.stringify(body) : undefined,
   })
   return res.json()
+}
+
+async function getGoogleAccessToken(env) {
+  const now = Math.floor(Date.now() / 1000)
+  const header = { alg: 'RS256', typ: 'JWT' }
+  const payload = {
+    iss: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+  }
+  const assertion = await signJwt(header, payload, normalizePem(env.GOOGLE_PRIVATE_KEY))
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion,
+    }).toString(),
+  })
+
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.error_description || data.error || 'Google auth failed')
+  return data.access_token
+}
+
+async function getGoogleBusyRanges(date, token, env) {
+  const response = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      timeMin: `${date}T00:00:00${TAIPEI_OFFSET}`,
+      timeMax: `${date}T23:59:59${TAIPEI_OFFSET}`,
+      timeZone: 'Asia/Taipei',
+      items: [{ id: env.GOOGLE_CALENDAR_ID }],
+    }),
+  })
+
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.error?.message || 'Google Calendar freeBusy failed')
+  return data.calendars?.[env.GOOGLE_CALENDAR_ID]?.busy || []
+}
+
+function getRequestedDurationMinutes(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_BOOKING_DURATION_MINUTES
+  return Math.min(parsed, 480)
+}
+
+function getSlotRange(date, slot, durationMinutes) {
+  const start = new Date(`${date}T${slot}:00${TAIPEI_OFFSET}`)
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000)
+  return { start, end }
+}
+
+function rangesOverlap(startA, endA, startB, endB) {
+  return startA < endB && endA > startB
+}
+
+function normalizePem(value) {
+  return String(value || '').replace(/\\n/g, '\n')
 }
 
 // ── Signed Token (RS256 JWT) ───────────────────────────────────────────────
@@ -160,6 +258,10 @@ async function generateSignedToken(videoUid, expiresInSeconds, env) {
     nbf: now,
   }
 
+  return signJwt(header, payload, env.CLOUDFLARE_STREAM_SIGNING_KEY)
+}
+
+async function signJwt(header, payload, pem) {
   const b64  = s => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
   const b64u = s => b64(unescape(encodeURIComponent(s)))
   const b64b = buf => {
@@ -169,9 +271,8 @@ async function generateSignedToken(videoUid, expiresInSeconds, env) {
   }
 
   const signingInput = `${b64u(JSON.stringify(header))}.${b64u(JSON.stringify(payload))}`
-
-  const privateKey = await importPrivateKey(env.CLOUDFLARE_STREAM_SIGNING_KEY)
-  const signature  = await crypto.subtle.sign(
+  const privateKey = await importPrivateKey(pem)
+  const signature = await crypto.subtle.sign(
     'RSASSA-PKCS1-v1_5',
     privateKey,
     new TextEncoder().encode(signingInput)

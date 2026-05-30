@@ -13,9 +13,15 @@ account_id         = "a7690c8b61158776e62541438f0ebda2"
 #   npx wrangler secret put CLOUDFLARE_API_TOKEN
 #   npx wrangler secret put CLOUDFLARE_STREAM_KEY_ID
 #   npx wrangler secret put CLOUDFLARE_STREAM_SIGNING_KEY
+#   npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL
+#   npx wrangler secret put GOOGLE_PRIVATE_KEY
+#   npx wrangler secret put GOOGLE_CALENDAR_ID
 #
 # Or create a .dev.vars file (gitignored) for local dev:
 #   CLOUDFLARE_ACCOUNT_ID=your_account_id
 #   CLOUDFLARE_API_TOKEN=your_api_token
 #   CLOUDFLARE_STREAM_KEY_ID=your_key_id
 #   CLOUDFLARE_STREAM_SIGNING_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
+#   GOOGLE_SERVICE_ACCOUNT_EMAIL=your_service_account@project.iam.gserviceaccount.com
+#   GOOGLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
+#   GOOGLE_CALENDAR_ID=your_calendar_id

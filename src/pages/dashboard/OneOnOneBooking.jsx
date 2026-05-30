@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { createBookingRecord, getBookingsRecords } from '../../services/bookings'
+import { createBookingRecord, getBookingsRecords, getUnavailableBookingSlots } from '../../services/bookings'
+import { BOOKING_TIME_SLOTS } from '../../data/bookingSlots'
 import Calendar from '../../components/Calendar'
 
-const TIME_SLOTS = [
-  { key: 'morning',   label: '上午場',  time: '09:00 – 11:00', icon: '🌅' },
-  { key: 'afternoon', label: '下午場',  time: '14:00 – 16:00', icon: '☀️' },
-  { key: 'evening',   label: '晚上場',  time: '19:00 – 21:00', icon: '🌙' },
-]
+const TIME_SLOTS = BOOKING_TIME_SLOTS
 
 const STATUS_LABEL = { pending: '待確認', confirmed: '已確認', cancelled: '已取消' }
 
@@ -23,6 +20,8 @@ export default function OneOnOneBooking() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [unavailableSlots, setUnavailableSlots] = useState([])
+  const [slotLoading, setSlotLoading] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -43,8 +42,31 @@ export default function OneOnOneBooking() {
     return () => { cancelled = true }
   }, [currentUser.id])
 
+  useEffect(() => {
+    if (!date) {
+      setUnavailableSlots([])
+      return
+    }
+
+    let cancelled = false
+    setSlotLoading(true)
+    getUnavailableBookingSlots('oneonone', date)
+      .then(slots => {
+        if (!cancelled) setUnavailableSlots(slots)
+      })
+      .catch(err => {
+        console.error('Unavailable slot load failed:', err)
+        if (!cancelled) setError('可預約時段讀取失敗，請重新整理後再試')
+      })
+      .finally(() => {
+        if (!cancelled) setSlotLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [date])
+
   const myBookings  = bookings.filter(b => b.userId === currentUser.id && b.type === 'oneonone')
-  const bookedDates = bookings.filter(b => b.type === 'oneonone' && b.status !== 'cancelled').map(b => b.date)
+  const bookedDates = []
 
   const submit = async () => {
     if (!date || !slot || !form.topic.trim()) return
@@ -124,18 +146,22 @@ export default function OneOnOneBooking() {
                   <button className="btn btn-ghost btn-sm" onClick={() => setStep(1)}>修改日期</button>
                 </div>
                 <div className="card-body">
-                  <p style={{ fontSize: 14, color: 'var(--gray-600)', marginBottom: 16 }}>已選擇：<strong>{date}</strong></p>
+                  <p style={{ fontSize: 14, color: 'var(--gray-600)', marginBottom: 16 }}>
+                    已選擇：<strong>{date}</strong>{slotLoading ? '，讀取可預約時段中…' : ''}
+                  </p>
                   <div className="time-slots">
-                    {TIME_SLOTS.map(ts => (
+                    {TIME_SLOTS.map(ts => {
+                      const disabled = unavailableSlots.includes(ts.key)
+                      return (
                       <button key={ts.key} className={`time-slot-btn ${slot === ts.key ? 'selected' : ''}`}
-                        onClick={() => { setSlot(ts.key); setStep(3) }}>
-                        <span className="time-slot-icon">{ts.icon}</span>
+                        disabled={disabled}
+                        onClick={() => { if (!disabled) { setSlot(ts.key); setStep(3) } }}>
                         <div className="time-slot-info">
                           <strong>{ts.label}</strong>
-                          <span>{ts.time}</span>
+                          <span>{disabled ? '已被預約或行事曆衝突' : ts.time}</span>
                         </div>
                       </button>
-                    ))}
+                    )})}
                   </div>
                 </div>
               </div>

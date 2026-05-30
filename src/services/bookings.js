@@ -1,5 +1,9 @@
 import { supabase, hasSupabase, allowLocalFallback } from '../lib/supabase'
 import { getBookings, saveBookings } from '../data/mockData'
+import { BOOKING_TIME_SLOTS } from '../data/bookingSlots'
+
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || ''
+const BOOKING_DURATION_MINUTES = 180
 
 function normalizeBooking(row) {
   if (!row) return null
@@ -44,6 +48,11 @@ export async function getBookingsRecords({ userId, type } = {}) {
 }
 
 export async function createBookingRecord({ userId, type, date, timeSlot, topic, notes }) {
+  const unavailableSlots = await getUnavailableBookingSlots(type, date)
+  if (unavailableSlots.includes(timeSlot)) {
+    throw new Error('這個時段已被預約或行事曆已有安排，請選擇其他時間')
+  }
+
   if (hasSupabase && supabase) {
     const { data, error } = await supabase
       .from('bookings')
@@ -129,4 +138,51 @@ export async function getBookingSubmitterProfiles(userIds) {
   }
 
   return []
+}
+
+async function getSupabaseUnavailableSlots(type, date) {
+  if (hasSupabase && supabase) {
+    const { data, error } = await supabase.rpc('get_unavailable_booking_slots', {
+      p_type: type,
+      p_date: date,
+    })
+
+    if (error) throw error
+    return (data || []).map(row => row.time_slot).filter(Boolean)
+  }
+
+  if (!allowLocalFallback) return []
+  return getBookings()
+    .filter(item => item.type === type && item.date === date && item.status !== 'cancelled')
+    .map(item => item.timeSlot)
+}
+
+async function getCalendarUnavailableSlots(type, date) {
+  if (!WORKER_URL) return []
+
+  const url = new URL(`${WORKER_URL.replace(/\/$/, '')}/api/calendar/availability`)
+  url.searchParams.set('type', type)
+  url.searchParams.set('date', date)
+  url.searchParams.set('durationMinutes', String(BOOKING_DURATION_MINUTES))
+
+  const response = await fetch(url.toString())
+  if (!response.ok) throw new Error('Google 行事曆可用時段讀取失敗')
+  const data = await response.json()
+  return Array.isArray(data.unavailableSlots) ? data.unavailableSlots : []
+}
+
+export async function getUnavailableBookingSlots(type, date) {
+  if (!type || !date) return []
+
+  const [bookingSlots, calendarSlots] = await Promise.all([
+    getSupabaseUnavailableSlots(type, date),
+    getCalendarUnavailableSlots(type, date).catch(err => {
+      console.error('Calendar availability load failed:', err)
+      return []
+    }),
+  ])
+
+  const allowed = new Set(BOOKING_TIME_SLOTS.map(slot => slot.key))
+  return Array.from(new Set([...bookingSlots, ...calendarSlots]))
+    .filter(slot => allowed.has(slot))
 }

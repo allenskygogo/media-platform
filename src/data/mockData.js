@@ -173,11 +173,11 @@ const defaultProjects = [
 ]
 
 const defaultBookings = [
-  { id: 1, userId: 4, type: 'oneonone', date: '2026-06-05', timeSlot: 'afternoon', topic: 'YouTube 成長策略討論', notes: '想聊頻道優化和變現計劃', status: 'confirmed', createdAt: '2026-05-20' },
-  { id: 2, userId: 4, type: 'oneonone', date: '2026-07-10', timeSlot: 'morning', topic: 'IG 互動率提升策略', notes: '', status: 'pending', createdAt: '2026-05-21' },
-  { id: 3, userId: 5, type: 'shooting', date: '2026-06-03', timeSlot: 'morning', topic: '產品開箱拍攝', notes: '需要準備 3 個產品，白色背景', status: 'confirmed', createdAt: '2026-05-15' },
-  { id: 4, userId: 5, type: 'shooting', date: '2026-07-15', timeSlot: 'afternoon', topic: 'IG Reels 拍攝 x3', notes: '戶外場景為主', status: 'pending', createdAt: '2026-05-20' },
-  { id: 5, userId: 6, type: 'shooting', date: '2026-06-20', timeSlot: 'evening', topic: '美妝教學影片', notes: '需要專業打光設備', status: 'pending', createdAt: '2026-05-21' },
+  { id: 1, userId: 4, type: 'oneonone', date: '2026-06-05', timeSlot: '14:00', topic: 'YouTube 成長策略討論', notes: '想聊頻道優化和變現計劃', status: 'confirmed', createdAt: '2026-05-20' },
+  { id: 2, userId: 4, type: 'oneonone', date: '2026-07-10', timeSlot: '12:00', topic: 'IG 互動率提升策略', notes: '', status: 'pending', createdAt: '2026-05-21' },
+  { id: 3, userId: 5, type: 'shooting', date: '2026-06-03', timeSlot: '13:00', topic: '產品開箱拍攝', notes: '需要準備 3 個產品，白色背景', status: 'confirmed', createdAt: '2026-05-15' },
+  { id: 4, userId: 5, type: 'shooting', date: '2026-07-15', timeSlot: '15:00', topic: 'IG Reels 拍攝 x3', notes: '戶外場景為主', status: 'pending', createdAt: '2026-05-20' },
+  { id: 5, userId: 6, type: 'shooting', date: '2026-06-20', timeSlot: '18:00', topic: '美妝教學影片', notes: '需要專業打光設備', status: 'pending', createdAt: '2026-05-21' },
 ]
 
 export function initMockData() {

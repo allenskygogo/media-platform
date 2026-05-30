@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { getUsers } from '../../data/mockData'
 import { getBookingSubmitterProfiles, getBookingsRecords, updateBookingStatusRecord } from '../../services/bookings'
+import { BOOKING_TIME_SLOT_LABELS } from '../../data/bookingSlots'
 
-const TIME_SLOTS = { morning: '上午場', afternoon: '下午場', evening: '晚上場' }
+const TIME_SLOTS = BOOKING_TIME_SLOT_LABELS
 const STATUS_META = {
   pending:   { label: '待確認', next: 'confirmed', nextLabel: '確認預約', btnCls: 'btn-success' },
   confirmed: { label: '已確認', next: 'cancelled', nextLabel: '取消預約', btnCls: 'btn-danger' },
