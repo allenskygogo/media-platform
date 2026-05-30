@@ -5,6 +5,7 @@ import {
 } from '../../data/mockData'
 import {
   getHomeworkSubmissionsRecords,
+  getHomeworkSubmitterProfiles,
   approveHomeworkRecord,
   rejectHomeworkRecord,
   saveHomeworkSpecRecord,
@@ -130,6 +131,7 @@ export default function HomeworkAdmin() {
   const [specTarget, setSpecTarget]     = useState(null)
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(true)
+  const [submittersById, setSubmittersById] = useState({})
 
   const users   = getUsers()
   const courses = getCourses()
@@ -137,7 +139,11 @@ export default function HomeworkAdmin() {
   const refresh = () => {
     setLoading(true)
     return getHomeworkSubmissionsRecords()
-      .then(records => setHomeworks(records))
+      .then(async records => {
+        setHomeworks(records)
+        const profiles = await getHomeworkSubmitterProfiles(records.map(item => item.userId))
+        setSubmittersById(Object.fromEntries(profiles.map(profile => [profile.id, profile])))
+      })
       .catch(err => {
         console.error('Homework admin load failed:', err)
         flash('作業資料讀取失敗，請重新整理後再試')
@@ -185,7 +191,11 @@ export default function HomeworkAdmin() {
   const enriched = homeworks
     .filter(h => filter === 'all' || h.status === filter)
     .map(h => {
-      const user   = users.find(u => u.id === h.userId)
+      const user   = submittersById[h.userId] || users.find(u => u.id === h.userId) || {
+        name: '未知學員',
+        email: h.userId,
+        avatar: '學',
+      }
       const course = courses.find(c => c.id === h.courseId)
       const lesson = course?.lessons.find(l => l.id === h.lessonId)
       const spec   = getHomeworkSpec(h.lessonId)

@@ -1,5 +1,6 @@
 import { supabase, hasSupabase, allowLocalFallback } from '../lib/supabase'
 import {
+  DEFAULT_HOMEWORK_SPECS,
   getHomeworkSpecs,
   getHomeworkSpec,
   saveHomeworkSpec,
@@ -36,6 +37,18 @@ function normalizeSubmission(row) {
   }
 }
 
+function defaultSpecForLesson(lessonId) {
+  return DEFAULT_HOMEWORK_SPECS.find(item => item.lessonId === Number(lessonId)) || null
+}
+
+function mergeSpecsWithDefaults(records) {
+  const byLesson = new Map(DEFAULT_HOMEWORK_SPECS.map(item => [item.lessonId, item]))
+  records.forEach(item => {
+    if (item?.lessonId) byLesson.set(item.lessonId, item)
+  })
+  return Array.from(byLesson.values()).sort((a, b) => a.lessonId - b.lessonId)
+}
+
 export async function getHomeworkSpecsRecords() {
   if (hasSupabase && supabase) {
     const { data, error } = await supabase
@@ -43,7 +56,7 @@ export async function getHomeworkSpecsRecords() {
       .select('lesson_id, spec, updated_at')
 
     if (error) throw error
-    return (data || []).map(normalizeSpec)
+    return mergeSpecsWithDefaults((data || []).map(normalizeSpec))
   }
 
   if (!allowLocalFallback) throw new Error('Homework specs storage is not configured')
@@ -59,7 +72,7 @@ export async function getHomeworkSpecRecord(lessonId) {
       .maybeSingle()
 
     if (error) throw error
-    return normalizeSpec(data)
+    return normalizeSpec(data) || defaultSpecForLesson(lessonId)
   }
 
   if (!allowLocalFallback) throw new Error('Homework specs storage is not configured')
@@ -96,6 +109,28 @@ export async function getHomeworkSubmissionsRecords() {
 
   if (!allowLocalFallback) throw new Error('Homework submissions storage is not configured')
   return getAllHomework()
+}
+
+export async function getHomeworkSubmitterProfiles(userIds) {
+  const ids = Array.from(new Set((userIds || []).filter(Boolean)))
+  if (!ids.length) return []
+
+  if (hasSupabase && supabase) {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, display_name, email')
+      .in('id', ids)
+
+    if (error) throw error
+    return (data || []).map(row => ({
+      id: row.id,
+      name: row.display_name || row.email?.split('@')[0] || '學員',
+      email: row.email || '',
+      avatar: (row.display_name || row.email || '學').slice(0, 1),
+    }))
+  }
+
+  return []
 }
 
 export async function getLatestHomeworkRecord(userId, courseId, lessonId) {
