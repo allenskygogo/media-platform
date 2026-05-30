@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  getLessonProgress, saveLessonProgress,
+  getLessonProgress,
   parseDurationToSec, LESSON_DEMO_SPEED,
   getVideoForLesson, getCFVideos,
 } from '../data/mockData'
 import { getPricing } from '../data/mockData'
+import { saveCourseProgressRecord } from '../services/courseProgress'
 import StreamPlayer from './StreamPlayer'
 
 function fmt(sec) {
@@ -39,11 +40,11 @@ function exitFullscreen() {
   if (document.webkitExitFullscreen) return document.webkitExitFullscreen()
 }
 
-export default function LessonPlayer({ lesson, courseId, userId, onComplete, onClose }) {
+export default function LessonPlayer({ lesson, courseId, userId, initialProgress, onProgressChange, onComplete, onClose }) {
   // ── If a real Cloudflare video is assigned, delegate to StreamPlayer ────
   const cfVideoUid = getVideoForLesson(lesson.id)
   const cfVideo    = cfVideoUid ? getCFVideos().find(v => v.uid === cfVideoUid) : null
-  const savedProg  = getLessonProgress(userId, courseId, lesson.id)
+  const savedProg  = initialProgress || getLessonProgress(userId, courseId, lesson.id)
   const isFirstWatch = !savedProg?.completed
   const startSecond = savedProg?.completed ? 0 : (savedProg?.currentSecond || 0)
 
@@ -57,6 +58,8 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
         userId={userId}
         courseId={courseId}
         lessonId={lesson.id}
+        initialProgress={savedProg}
+        onProgressChange={onProgressChange}
         onComplete={onComplete}
         onClose={onClose}
         title={lesson.title}
@@ -71,25 +74,43 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
   const [done, setDone]             = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
+  const [progressError, setProgressError] = useState('')
 
   const latestSec  = useRef(startSecond)
   const intervalRef = useRef(null)
   const playerWrapRef = useRef(null)
   const playerOuterRef = useRef(null)
 
+  const persistProgress = useCallback((nextSecond, completed = false) => {
+    return saveCourseProgressRecord(userId, courseId, lesson.id, nextSecond, completed)
+      .then(record => {
+        setProgressError('')
+        onProgressChange?.(record)
+        return record
+      })
+      .catch(err => {
+        console.error('Course progress save failed:', err)
+        if (completed) setProgressError('進度儲存失敗，請重新整理後再試')
+        throw err
+      })
+  }, [courseId, lesson.id, onProgressChange, userId])
+
   const advance = useCallback(() => {
     latestSec.current = Math.min(latestSec.current + LESSON_DEMO_SPEED, totalSec)
     setCurrentSec(latestSec.current)
-    if (latestSec.current % (10 * LESSON_DEMO_SPEED) === 0) {
-      saveLessonProgress(userId, courseId, lesson.id, latestSec.current, false)
+    if (isFirstWatch && latestSec.current % (10 * LESSON_DEMO_SPEED) === 0) {
+      persistProgress(latestSec.current, false).catch(() => {})
     }
     if (latestSec.current >= totalSec) {
       clearInterval(intervalRef.current)
-      saveLessonProgress(userId, courseId, lesson.id, totalSec, true)
-      setDone(true)
-      if (isFirstWatch) onComplete()
+      persistProgress(totalSec, true)
+        .then(() => {
+          setDone(true)
+          if (isFirstWatch) onComplete()
+        })
+        .catch(() => {})
     }
-  }, [courseId, isFirstWatch, lesson.id, onComplete, totalSec, userId])
+  }, [isFirstWatch, onComplete, persistProgress, totalSec])
 
   // Start / pause / stop interval
   useEffect(() => {
@@ -164,7 +185,6 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
     const newSec = Math.floor(ratio * totalSec)
     latestSec.current = newSec
     setCurrentSec(newSec)
-    saveLessonProgress(userId, courseId, lesson.id, newSec, false)
   }
 
   return (
@@ -232,6 +252,11 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
       <p style={{ fontSize:12, color:'var(--gray-400)', marginTop:8, textAlign:'right' }}>
         進度每 10 秒自動儲存，重新整理後可從斷點繼續
       </p>
+      {progressError && (
+        <p style={{ fontSize:12, color:'var(--danger)', marginTop:8, textAlign:'right' }}>
+          {progressError}
+        </p>
+      )}
     </div>
   )
 }

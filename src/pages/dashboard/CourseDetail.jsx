@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   getCourses, canAccessCourse, TIER_META,
-  getLessonProgress, isLessonUnlocked, getLatestHomework, getHomeworkSpec,
+  getLessonProgress, getLatestHomework, getHomeworkSpec,
 } from '../../data/mockData'
+import { getCourseProgressRecords } from '../../services/courseProgress'
 import LessonPlayer  from '../../components/LessonPlayer'
 import HomeworkPanel from '../../components/HomeworkPanel'
 
@@ -13,11 +14,34 @@ const CAT_EMOJI = { '影音創作':'🎬', '社群媒體':'📱', '音頻創作'
 // Only standard/advanced tier students get the forced-watch + homework system
 const NEEDS_HOMEWORK = ['standard', 'advanced']
 
-function lessonStatusIcon(userId, courseId, lessons, idx, needsHomework) {
+function mapProgress(records) {
+  return records.reduce((acc, record) => {
+    acc[record.lessonId] = record
+    return acc
+  }, {})
+}
+
+function lessonProgress(userId, courseId, lessonId, progressByLesson) {
+  return progressByLesson[lessonId] || getLessonProgress(userId, courseId, lessonId)
+}
+
+function isLessonUnlockedByProgress(userId, courseId, lessons, idx, needsHomework, progressByLesson) {
+  if (!needsHomework) return true
+  if (idx === 0) return true
+  const prev = lessons[idx - 1]
+  const prog = lessonProgress(userId, courseId, prev.id, progressByLesson)
+  if (!prog?.completed) return false
+  const spec = getHomeworkSpec(prev.id)
+  if (!spec) return true
+  const hw = getLatestHomework(userId, courseId, prev.id)
+  return hw?.status === 'approved'
+}
+
+function lessonStatusIcon(userId, courseId, lessons, idx, needsHomework, progressByLesson) {
   if (!needsHomework) return null
-  if (!isLessonUnlocked(userId, courseId, lessons, idx)) return { icon:'🔒', color:'var(--gray-300)', label:'尚未解鎖' }
+  if (!isLessonUnlockedByProgress(userId, courseId, lessons, idx, needsHomework, progressByLesson)) return { icon:'🔒', color:'var(--gray-300)', label:'尚未解鎖' }
   const lesson = lessons[idx]
-  const prog = getLessonProgress(userId, courseId, lesson.id)
+  const prog = lessonProgress(userId, courseId, lesson.id, progressByLesson)
   if (!prog?.completed) return { icon:'▶', color:'var(--primary)', label:'可觀看' }
   const spec = getHomeworkSpec(lesson.id)
   if (!spec) return { icon:'✅', color:'var(--success)', label:'已完成' }
@@ -37,9 +61,29 @@ export default function CourseDetail() {
   // view: 'info' | 'player' | 'homework'
   const [view, setView]               = useState('info')
   const [activeLessonId, setActiveLessonId] = useState(null)
+  const [progressByLesson, setProgressByLesson] = useState({})
+  const [progressLoadError, setProgressLoadError] = useState('')
   const [, forceRender] = useState(0) // trigger re-render after homework submit
 
   const course = getCourses().find(c => c.id === Number(id))
+
+  useEffect(() => {
+    if (!course || !currentUser?.id) return
+    let cancelled = false
+
+    getCourseProgressRecords(currentUser.id, course.id, course.lessons.map(lesson => lesson.id))
+      .then(records => {
+        if (cancelled) return
+        setProgressByLesson(mapProgress(records))
+        setProgressLoadError('')
+      })
+      .catch(err => {
+        console.error('Course progress load failed:', err)
+        if (!cancelled) setProgressLoadError('課程進度讀取失敗，請重新整理後再試')
+      })
+
+    return () => { cancelled = true }
+  }, [course?.id, currentUser?.id])
 
   if (!course) return (
     <div className="page-content">
@@ -76,11 +120,16 @@ export default function CourseDetail() {
   const activeLesson  = course.lessons.find(l => l.id === activeLessonId) || null
 
   const handleLessonClick = (lesson, lessonIdx) => {
-    if (needsHomework && !isLessonUnlocked(currentUser.id, course.id, course.lessons, lessonIdx)) return
+    if (needsHomework && !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, lessonIdx, needsHomework, progressByLesson)) return
     setActiveLessonId(lesson.id)
     // If already completed and replaying, go straight to player in free mode
     setView('player')
   }
+
+  const handleProgressChange = useCallback((record) => {
+    if (!record?.lessonId) return
+    setProgressByLesson(prev => ({ ...prev, [record.lessonId]: record }))
+  }, [])
 
   const handlePlayerComplete = useCallback(() => {
     // After forced-watch done → show homework panel (if spec exists)
@@ -101,6 +150,11 @@ export default function CourseDetail() {
       <button className="btn btn-ghost btn-sm" style={{ marginBottom:20 }} onClick={() => navigate(-1)}>
         ← 返回課程列表
       </button>
+      {progressLoadError && (
+        <div className="alert alert-error" style={{ marginBottom: 16 }}>
+          {progressLoadError}
+        </div>
+      )}
 
       <div className={`course-detail-layout${activeLesson ? ' has-active-lesson' : ''}`}>
         {/* ── Left column ── */}
@@ -138,6 +192,8 @@ export default function CourseDetail() {
                 lesson={activeLesson}
                 courseId={course.id}
                 userId={currentUser.id}
+                initialProgress={progressByLesson[activeLesson.id]}
+                onProgressChange={handleProgressChange}
                 onComplete={handlePlayerComplete}
                 onClose={handleClose}
               />
@@ -172,8 +228,8 @@ export default function CourseDetail() {
               <div className="lesson-list" style={{ padding:'8px 0' }}>
                 {course.lessons.map((lesson, idx) => {
                   const isActive  = activeLessonId === lesson.id
-                  const statusCfg = lessonStatusIcon(currentUser.id, course.id, course.lessons, idx, needsHomework)
-                  const locked    = needsHomework && !isLessonUnlocked(currentUser.id, course.id, course.lessons, idx)
+                  const statusCfg = lessonStatusIcon(currentUser.id, course.id, course.lessons, idx, needsHomework, progressByLesson)
+                  const locked    = needsHomework && !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, idx, needsHomework, progressByLesson)
 
                   return (
                     <div
@@ -238,9 +294,9 @@ export default function CourseDetail() {
               </div>
               <div className="lesson-list" style={{ padding:'8px 0' }}>
                 {course.lessons.map((lesson, idx) => {
-                  const statusCfg = lessonStatusIcon(currentUser.id, course.id, course.lessons, idx, needsHomework)
-                  const locked    = needsHomework && !isLessonUnlocked(currentUser.id, course.id, course.lessons, idx)
-                  const prog      = getLessonProgress(currentUser.id, course.id, lesson.id)
+                  const statusCfg = lessonStatusIcon(currentUser.id, course.id, course.lessons, idx, needsHomework, progressByLesson)
+                  const locked    = needsHomework && !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, idx, needsHomework, progressByLesson)
+                  const prog      = lessonProgress(currentUser.id, course.id, lesson.id, progressByLesson)
 
                   return (
                     <div

@@ -15,7 +15,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { getSignedToken, buildSignedEmbedUrl } from '../services/streamApi'
-import { getCFVideos, saveLessonProgress, getLessonProgress } from '../data/mockData'
+import { getCFVideos, getLessonProgress } from '../data/mockData'
+import { saveCourseProgressRecord } from '../services/courseProgress'
 
 const STREAM_SDK_URL = 'https://embed.cloudflarestream.com/embed/sdk.latest.js'
 
@@ -81,6 +82,8 @@ export default function StreamPlayer({
   userId,
   courseId,
   lessonId,
+  initialProgress,
+  onProgressChange,
   onComplete,
   onClose,
   // display
@@ -92,16 +95,18 @@ export default function StreamPlayer({
   const playerRef  = useRef(null)  // CF Stream player object
   const maxRef     = useRef(0)     // max time reached (for seek-block)
   const doneRef    = useRef(false) // video ended
+  const lastSavedSecondRef = useRef(0)
 
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
   const [errMsg, setErrMsg] = useState('')
   const [signedUrl, setSignedUrl] = useState(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
+  const [progressError, setProgressError] = useState('')
 
   const video = getCFVideos().find(v => v.uid === videoUid)
   const savedProgress = userId && courseId && lessonId
-    ? getLessonProgress(userId, courseId, lessonId)
+    ? (initialProgress || getLessonProgress(userId, courseId, lessonId))
     : null
   const savedSec = userId && courseId && lessonId
     ? (savedProgress?.completed ? 0 : (savedProgress?.currentSecond || 0))
@@ -143,13 +148,29 @@ export default function StreamPlayer({
       const player = window.Stream(iframeRef.current)
       playerRef.current = player
 
+      const persistProgress = (nextSecond, completed = false) => {
+        return saveCourseProgressRecord(userId, courseId, lessonId, nextSecond, completed)
+          .then(record => {
+            setProgressError('')
+            onProgressChange?.(record)
+            return record
+          })
+          .catch(err => {
+            console.error('Course progress save failed:', err)
+            if (completed) setProgressError('進度儲存失敗，請重新整理後再試')
+            throw err
+          })
+      }
+
       // Progress tracking & auto-save
       player.addEventListener('timeupdate', () => {
         const ct = player.currentTime || 0
+        const second = Math.floor(ct)
         if (ct > maxRef.current) maxRef.current = ct
         // Auto-save every 10 real seconds
-        if (Math.floor(ct) % 10 === 0 && ct > 0 && userId && courseId && lessonId) {
-          saveLessonProgress(userId, courseId, lessonId, ct, false)
+        if (isForced && second > 0 && second >= lastSavedSecondRef.current + 10 && userId && courseId && lessonId) {
+          lastSavedSecondRef.current = second
+          persistProgress(second, false).catch(() => {})
         }
       })
 
@@ -158,7 +179,12 @@ export default function StreamPlayer({
         if (doneRef.current) return
         doneRef.current = true
         if (userId && courseId && lessonId) {
-          saveLessonProgress(userId, courseId, lessonId, player.duration || 99999, true)
+          persistProgress(player.duration || 99999, true)
+            .then(() => {
+              if (isForced) onComplete?.()
+            })
+            .catch(() => {})
+          return
         }
         if (isForced) onComplete?.()
       })
@@ -322,6 +348,11 @@ export default function StreamPlayer({
       <p style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 8, textAlign: 'right' }}>
         影片播放由 Cloudflare Stream 安全託管 · 進度每 10 秒自動儲存
       </p>
+      {progressError && (
+        <p style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8, textAlign: 'right' }}>
+          {progressError}
+        </p>
+      )}
     </div>
   )
 }
