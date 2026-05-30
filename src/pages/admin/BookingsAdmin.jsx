@@ -57,7 +57,7 @@ export default function BookingsAdmin() {
       flash(`預約狀態已更新為「${STATUS_META[status]?.label}」`)
     } catch (err) {
       console.error('Booking status update failed:', err)
-      flash('預約狀態更新失敗，請稍後再試')
+      flash(err.message || '預約狀態更新失敗，請稍後再試')
     }
   }
 

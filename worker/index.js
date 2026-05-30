@@ -9,6 +9,8 @@
  *   GOOGLE_SERVICE_ACCOUNT_EMAIL  — Google service account email for Calendar
  *   GOOGLE_PRIVATE_KEY            — Google service account private key
  *   GOOGLE_CALENDAR_ID            — Google Calendar ID to check availability
+ *   SUPABASE_URL                  — Supabase project URL for admin verification
+ *   SUPABASE_ANON_KEY             — Supabase anon key for admin verification
  */
 
 const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
@@ -19,7 +21,7 @@ const TAIPEI_OFFSET = '+08:00'
 // ── CORS ──────────────────────────────────────────────────────────────────
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type,Authorization',
 }
 
@@ -47,35 +49,52 @@ export default {
     try {
       // POST /api/upload/start  → get a direct-upload URL from CF Stream
       if (path === '/api/upload/start' && request.method === 'POST') {
-        return handleUploadStart(request, env)
+        return await handleUploadStart(request, env)
       }
 
       // GET /api/videos  → list all videos in the account
       if (path === '/api/videos' && request.method === 'GET') {
-        return handleListVideos(env)
+        return await handleListVideos(env)
       }
 
       // GET /api/videos/:uid  → single video details
       if (path.startsWith('/api/videos/') && request.method === 'GET') {
         const uid = path.slice('/api/videos/'.length)
-        return handleGetVideo(uid, env)
+        return await handleGetVideo(uid, env)
       }
 
       // DELETE /api/videos/:uid  → delete video
       if (path.startsWith('/api/videos/') && request.method === 'DELETE') {
         const uid = path.slice('/api/videos/'.length)
-        return handleDeleteVideo(uid, env)
+        return await handleDeleteVideo(uid, env)
       }
 
       // POST /api/token/:uid  → generate signed playback token
       if (path.startsWith('/api/token/') && request.method === 'POST') {
         const uid = path.slice('/api/token/'.length)
-        return handleToken(request, uid, env)
+        return await handleToken(request, uid, env)
       }
 
       // GET /api/calendar/availability?date=YYYY-MM-DD&type=oneonone
       if (path === '/api/calendar/availability' && request.method === 'GET') {
-        return handleCalendarAvailability(url, env)
+        return await handleCalendarAvailability(url, env)
+      }
+
+      // POST /api/calendar/events → create a confirmed booking event
+      if (path === '/api/calendar/events' && request.method === 'POST') {
+        return await handleCreateCalendarEvent(request, env)
+      }
+
+      // PATCH /api/calendar/events/:eventId → update a booking event
+      if (path.startsWith('/api/calendar/events/') && request.method === 'PATCH') {
+        const eventId = decodeURIComponent(path.slice('/api/calendar/events/'.length))
+        return await handleUpdateCalendarEvent(request, eventId, env)
+      }
+
+      // DELETE /api/calendar/events/:eventId → delete a booking event
+      if (path.startsWith('/api/calendar/events/') && request.method === 'DELETE') {
+        const eventId = decodeURIComponent(path.slice('/api/calendar/events/'.length))
+        return await handleDeleteCalendarEvent(request, eventId, env)
       }
 
       return err('Not found', 404)
@@ -137,6 +156,7 @@ async function handleToken(request, videoUid, env) {
 async function handleCalendarAvailability(url, env) {
   const date = url.searchParams.get('date')
   const durationMinutes = getRequestedDurationMinutes(url.searchParams.get('durationMinutes'))
+  const excludeEventId = url.searchParams.get('excludeEventId') || ''
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) {
     return err('Invalid date', 400)
   }
@@ -146,13 +166,52 @@ async function handleCalendarAvailability(url, env) {
   }
 
   const token = await getGoogleAccessToken(env)
-  const busy = await getGoogleBusyRanges(date, token, env)
+  const busy = await getGoogleBusyRanges(date, token, env, excludeEventId)
   const unavailableSlots = BOOKING_TIME_SLOTS.filter(slot => {
     const range = getSlotRange(date, slot, durationMinutes)
     return busy.some(item => rangesOverlap(range.start, range.end, new Date(item.start), new Date(item.end)))
   })
 
   return json({ success: true, calendarConfigured: true, unavailableSlots })
+}
+
+async function handleCreateCalendarEvent(request, env) {
+  await requireAdmin(request, env)
+  const body = await request.json().catch(() => ({}))
+  validateCalendarEventBody(body)
+
+  const token = await getGoogleAccessToken(env)
+  const event = buildBookingCalendarEvent(body)
+  const created = await googleCalendarFetch(env, token, '', 'POST', event)
+
+  return json({
+    success: true,
+    eventId: created.id,
+    htmlLink: created.htmlLink || null,
+  })
+}
+
+async function handleUpdateCalendarEvent(request, eventId, env) {
+  await requireAdmin(request, env)
+  const body = await request.json().catch(() => ({}))
+  validateCalendarEventBody(body)
+
+  const token = await getGoogleAccessToken(env)
+  const event = buildBookingCalendarEvent(body)
+  const updated = await googleCalendarFetch(env, token, `/${encodeURIComponent(eventId)}`, 'PATCH', event)
+
+  return json({
+    success: true,
+    eventId: updated.id,
+    htmlLink: updated.htmlLink || null,
+  })
+}
+
+async function handleDeleteCalendarEvent(request, eventId, env) {
+  await requireAdmin(request, env)
+  const token = await getGoogleAccessToken(env)
+  await googleCalendarFetch(env, token, `/${encodeURIComponent(eventId)}`, 'DELETE')
+  return json({ success: true })
 }
 
 // ── Cloudflare API helper ─────────────────────────────────────────────────
@@ -175,7 +234,7 @@ async function getGoogleAccessToken(env) {
   const header = { alg: 'RS256', typ: 'JWT' }
   const payload = {
     iss: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+    scope: 'https://www.googleapis.com/auth/calendar',
     aud: 'https://oauth2.googleapis.com/token',
     iat: now,
     exp: now + 3600,
@@ -196,7 +255,101 @@ async function getGoogleAccessToken(env) {
   return data.access_token
 }
 
-async function getGoogleBusyRanges(date, token, env) {
+async function requireAdmin(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
+    throw new Error('Supabase admin verification is not configured')
+  }
+
+  const authHeader = request.headers.get('Authorization') || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  if (!token) throw new Error('Missing authorization token')
+
+  const userResponse = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/user`, {
+    headers: {
+      apikey: env.SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  const userData = await userResponse.json()
+  if (!userResponse.ok || !userData?.id) throw new Error('Invalid authorization token')
+
+  const profileUrl = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
+  profileUrl.searchParams.set('id', `eq.${userData.id}`)
+  profileUrl.searchParams.set('select', 'role,status')
+
+  const profileResponse = await fetch(profileUrl.toString(), {
+    headers: {
+      apikey: env.SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+    },
+  })
+  const profiles = await profileResponse.json()
+  if (!profileResponse.ok) throw new Error('Admin profile verification failed')
+
+  const profile = Array.isArray(profiles) ? profiles[0] : null
+  if (profile?.role !== 'admin' || profile?.status !== 'active') {
+    throw new Error('Admin permission required')
+  }
+
+  return userData
+}
+
+function validateCalendarEventBody(body) {
+  if (!body || typeof body !== 'object') throw new Error('Invalid event payload')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(body.date || '')) throw new Error('Invalid event date')
+  if (!BOOKING_TIME_SLOTS.includes(body.timeSlot)) throw new Error('Invalid event time')
+  if (!body.topic || typeof body.topic !== 'string') throw new Error('Invalid event topic')
+}
+
+function buildBookingCalendarEvent(body) {
+  const durationMinutes = getRequestedDurationMinutes(body.durationMinutes)
+  const { start, end } = getSlotRange(body.date, body.timeSlot, durationMinutes)
+  const typeLabel = body.type === 'shooting' ? '拍攝預約' : '一對一輔導'
+  const studentName = body.studentName || '學員'
+  const studentEmail = body.studentEmail || ''
+  const title = `${typeLabel}｜${studentName}｜${body.topic.trim()}`
+  const descriptionLines = [
+    `預約類型：${typeLabel}`,
+    `學員：${studentName}`,
+    studentEmail ? `Email：${studentEmail}` : null,
+    body.bookingId ? `Booking ID：${body.bookingId}` : null,
+    body.notes ? `備註：${body.notes}` : null,
+  ].filter(Boolean)
+
+  return {
+    summary: title,
+    description: descriptionLines.join('\n'),
+    start: { dateTime: start.toISOString(), timeZone: 'Asia/Taipei' },
+    end: { dateTime: end.toISOString(), timeZone: 'Asia/Taipei' },
+    transparency: 'opaque',
+  }
+}
+
+async function googleCalendarFetch(env, token, path, method, body) {
+  const calendarId = encodeURIComponent(env.GOOGLE_CALENDAR_ID)
+  const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+
+  if (method === 'DELETE' && response.status === 404) return {}
+  if (method === 'DELETE' && response.status === 204) return {}
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error?.message || 'Google Calendar event sync failed')
+  return data
+}
+
+async function getGoogleBusyRanges(date, token, env, excludeEventId = '') {
+  if (excludeEventId) {
+    return getGoogleEventRanges(date, token, env, excludeEventId)
+  }
+
   const [freeBusyRanges, eventRanges] = await Promise.all([
     getGoogleFreeBusyRanges(date, token, env),
     getGoogleEventRanges(date, token, env),
@@ -231,7 +384,7 @@ async function getGoogleFreeBusyRanges(date, token, env) {
   return calendar.busy || []
 }
 
-async function getGoogleEventRanges(date, token, env) {
+async function getGoogleEventRanges(date, token, env, excludeEventId = '') {
   const calendarId = encodeURIComponent(env.GOOGLE_CALENDAR_ID)
   const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`)
   url.searchParams.set('timeMin', `${date}T00:00:00${TAIPEI_OFFSET}`)
@@ -249,6 +402,7 @@ async function getGoogleEventRanges(date, token, env) {
 
   return (data.items || [])
     .filter(event => event.status !== 'cancelled')
+    .filter(event => event.id !== excludeEventId)
     .map(event => {
       const start = parseGoogleEventDate(event.start, 'start')
       const end = parseGoogleEventDate(event.end, 'end')

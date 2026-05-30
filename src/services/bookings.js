@@ -4,6 +4,7 @@ import { BOOKING_TIME_SLOTS } from '../data/bookingSlots'
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 const BOOKING_DURATION_MINUTES = 180
+const BOOKING_SELECT = 'id, user_id, type, date, time_slot, topic, notes, status, confirmed_at, cancelled_at, google_event_id, google_event_link, calendar_synced_at, created_at, updated_at'
 
 function normalizeBooking(row) {
   if (!row) return null
@@ -20,6 +21,9 @@ function normalizeBooking(row) {
     updatedAt: row.updated_at,
     confirmedAt: row.confirmed_at,
     cancelledAt: row.cancelled_at,
+    googleEventId: row.google_event_id,
+    googleEventLink: row.google_event_link,
+    calendarSyncedAt: row.calendar_synced_at,
   }
 }
 
@@ -27,7 +31,7 @@ export async function getBookingsRecords({ userId, type } = {}) {
   if (hasSupabase && supabase) {
     let query = supabase
       .from('bookings')
-      .select('id, user_id, type, date, time_slot, topic, notes, status, confirmed_at, cancelled_at, created_at, updated_at')
+      .select(BOOKING_SELECT)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
 
@@ -65,7 +69,7 @@ export async function createBookingRecord({ userId, type, date, timeSlot, topic,
         notes: notes?.trim() || null,
         status: 'pending',
       })
-      .select('id, user_id, type, date, time_slot, topic, notes, status, confirmed_at, cancelled_at, created_at, updated_at')
+      .select(BOOKING_SELECT)
       .single()
 
     if (error) {
@@ -96,17 +100,40 @@ export async function createBookingRecord({ userId, type, date, timeSlot, topic,
 
 export async function updateBookingStatusRecord(id, status) {
   if (hasSupabase && supabase) {
+    const current = await getBookingRecordById(id)
+    const profile = current?.user_id ? (await getBookingSubmitterProfiles([current.user_id]))[0] : null
+
     const updates = {
       status,
       confirmed_at: status === 'confirmed' ? new Date().toISOString() : null,
       cancelled_at: status === 'cancelled' ? new Date().toISOString() : null,
     }
 
+    if (status === 'confirmed') {
+      const calendarResult = await syncBookingCalendarEvent({
+        booking: normalizeBooking(current),
+        profile,
+        mode: current.google_event_id ? 'update' : 'create',
+      })
+      updates.google_event_id = calendarResult.eventId
+      updates.google_event_link = calendarResult.htmlLink
+      updates.calendar_synced_at = new Date().toISOString()
+    }
+
+    if (status === 'cancelled') {
+      if (current.google_event_id) {
+        await deleteBookingCalendarEvent(current.google_event_id)
+      }
+      updates.google_event_id = null
+      updates.google_event_link = null
+      updates.calendar_synced_at = null
+    }
+
     const { data, error } = await supabase
       .from('bookings')
       .update(updates)
       .eq('id', id)
-      .select('id, user_id, type, date, time_slot, topic, notes, status, confirmed_at, cancelled_at, created_at, updated_at')
+      .select(BOOKING_SELECT)
       .single()
 
     if (error) throw error
@@ -120,8 +147,9 @@ export async function updateBookingStatusRecord(id, status) {
 }
 
 export async function updateBookingDetailsRecord(id, { type, date, timeSlot, topic, notes }) {
+  const current = hasSupabase && supabase ? await getBookingRecordById(id) : null
   const conflictSlots = await getBookingConflictSlots({ type, date, ignoreBookingId: id })
-  const calendarSlots = await getCalendarUnavailableSlots(type, date)
+  const calendarSlots = await getCalendarUnavailableSlots(type, date, { excludeEventId: current?.google_event_id })
 
   if ([...conflictSlots, ...calendarSlots].includes(timeSlot)) {
     throw new Error('這個時段已滿，請選擇其他時間')
@@ -134,12 +162,24 @@ export async function updateBookingDetailsRecord(id, { type, date, timeSlot, top
     notes: notes?.trim() || null,
   }
 
+  if (current?.status === 'confirmed' && current.google_event_id) {
+    const profile = current.user_id ? (await getBookingSubmitterProfiles([current.user_id]))[0] : null
+    const calendarResult = await syncBookingCalendarEvent({
+      booking: normalizeBooking({ ...current, date, time_slot: timeSlot, topic: topic.trim(), notes: notes?.trim() || null }),
+      profile,
+      mode: 'update',
+    })
+    updates.google_event_id = calendarResult.eventId
+    updates.google_event_link = calendarResult.htmlLink
+    updates.calendar_synced_at = new Date().toISOString()
+  }
+
   if (hasSupabase && supabase) {
     const { data, error } = await supabase
       .from('bookings')
       .update(updates)
       .eq('id', id)
-      .select('id, user_id, type, date, time_slot, topic, notes, status, confirmed_at, cancelled_at, created_at, updated_at')
+      .select(BOOKING_SELECT)
       .single()
 
     if (error) {
@@ -161,6 +201,17 @@ export async function updateBookingDetailsRecord(id, { type, date, timeSlot, top
   } : item)
   saveBookings(updated)
   return updated.find(item => item.id === id)
+}
+
+async function getBookingRecordById(id) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select(BOOKING_SELECT)
+    .eq('id', id)
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 export async function getBookingSubmitterProfiles(userIds) {
@@ -243,7 +294,7 @@ async function getSupabaseUnavailableSlots(type, date) {
     .map(item => item.timeSlot)
 }
 
-async function getCalendarUnavailableSlots(type, date) {
+async function getCalendarUnavailableSlots(type, date, { excludeEventId } = {}) {
   if (!WORKER_URL) {
     if (import.meta.env.DEV) return []
     throw new Error('Google 行事曆防撞期尚未設定')
@@ -253,6 +304,7 @@ async function getCalendarUnavailableSlots(type, date) {
   url.searchParams.set('type', type)
   url.searchParams.set('date', date)
   url.searchParams.set('durationMinutes', String(BOOKING_DURATION_MINUTES))
+  if (excludeEventId) url.searchParams.set('excludeEventId', excludeEventId)
 
   const response = await fetch(url.toString())
   if (!response.ok) throw new Error('Google 行事曆可用時段讀取失敗')
@@ -260,6 +312,64 @@ async function getCalendarUnavailableSlots(type, date) {
   if (data.success === false) throw new Error(data.error || 'Google 行事曆可用時段讀取失敗')
   if (data.calendarConfigured === false) throw new Error('Google 行事曆防撞期尚未設定')
   return Array.isArray(data.unavailableSlots) ? data.unavailableSlots : []
+}
+
+async function getSupabaseAccessToken() {
+  if (!supabase) throw new Error('Supabase is not configured')
+  const { data, error } = await supabase.auth.getSession()
+  if (error || !data.session?.access_token) throw new Error('請重新登入後再操作')
+  return data.session.access_token
+}
+
+function buildCalendarPayload({ booking, profile }) {
+  return {
+    bookingId: booking.id,
+    type: booking.type,
+    date: booking.date,
+    timeSlot: booking.timeSlot,
+    topic: booking.topic,
+    notes: booking.notes,
+    durationMinutes: BOOKING_DURATION_MINUTES,
+    studentName: profile?.name || '學員',
+    studentEmail: profile?.email || '',
+  }
+}
+
+async function syncBookingCalendarEvent({ booking, profile, mode }) {
+  if (!WORKER_URL) throw new Error('Google Calendar Worker is not configured')
+  const token = await getSupabaseAccessToken()
+  const eventId = booking.googleEventId
+  const endpoint = mode === 'update' && eventId
+    ? `${WORKER_URL.replace(/\/$/, '')}/api/calendar/events/${encodeURIComponent(eventId)}`
+    : `${WORKER_URL.replace(/\/$/, '')}/api/calendar/events`
+
+  const response = await fetch(endpoint, {
+    method: mode === 'update' && eventId ? 'PATCH' : 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(buildCalendarPayload({ booking, profile })),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || data.success === false) {
+    throw new Error(data.error || 'Google Calendar 同步失敗')
+  }
+  return data
+}
+
+async function deleteBookingCalendarEvent(eventId) {
+  if (!eventId) return
+  if (!WORKER_URL) throw new Error('Google Calendar Worker is not configured')
+  const token = await getSupabaseAccessToken()
+  const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/calendar/events/${encodeURIComponent(eventId)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || data.success === false) {
+    throw new Error(data.error || 'Google Calendar 刪除失敗')
+  }
 }
 
 export async function getUnavailableBookingSlots(type, date) {
