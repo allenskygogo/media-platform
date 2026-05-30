@@ -119,6 +119,53 @@ export async function updateBookingStatusRecord(id, status) {
   return updated.find(item => item.id === id)
 }
 
+export async function updateBookingDetailsRecord(id, { type, date, timeSlot, topic, notes }) {
+  const conflictSlots = await getBookingConflictSlots({ type, date, ignoreBookingId: id })
+  const calendarSlots = await getCalendarUnavailableSlots(type, date).catch(err => {
+    console.error('Calendar availability load failed:', err)
+    return []
+  })
+
+  if ([...conflictSlots, ...calendarSlots].includes(timeSlot)) {
+    throw new Error('這個時段已被預約或行事曆已有安排，請選擇其他時間')
+  }
+
+  const updates = {
+    date,
+    time_slot: timeSlot,
+    topic: topic.trim(),
+    notes: notes?.trim() || null,
+  }
+
+  if (hasSupabase && supabase) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update(updates)
+      .eq('id', id)
+      .select('id, user_id, type, date, time_slot, topic, notes, status, confirmed_at, cancelled_at, created_at, updated_at')
+      .single()
+
+    if (error) {
+      if (error.code === '23505') {
+        throw new Error('這個時段已被預約，請選擇其他日期或時段')
+      }
+      throw error
+    }
+    return normalizeBooking(data)
+  }
+
+  if (!allowLocalFallback) throw new Error('Booking storage is not configured')
+  const updated = getBookings().map(item => item.id === id ? {
+    ...item,
+    date,
+    timeSlot,
+    topic: topic.trim(),
+    notes: notes?.trim() || '',
+  } : item)
+  saveBookings(updated)
+  return updated.find(item => item.id === id)
+}
+
 export async function getBookingSubmitterProfiles(userIds) {
   const ids = Array.from(new Set((userIds || []).filter(Boolean)))
   if (!ids.length) return []
@@ -138,6 +185,48 @@ export async function getBookingSubmitterProfiles(userIds) {
   }
 
   return []
+}
+
+function rangesOverlap(startA, endA, startB, endB) {
+  return startA < endB && endA > startB
+}
+
+function getBookingSlotRange(date, slot) {
+  const start = new Date(`${date}T${slot}:00+08:00`)
+  const end = new Date(start.getTime() + BOOKING_DURATION_MINUTES * 60 * 1000)
+  return { start, end }
+}
+
+async function getBookingConflictSlots({ type, date, ignoreBookingId }) {
+  const allowedSlots = BOOKING_TIME_SLOTS.map(slot => slot.key)
+  let records = []
+
+  if (hasSupabase && supabase) {
+    let query = supabase
+      .from('bookings')
+      .select('id, type, date, time_slot, status')
+      .eq('type', type)
+      .eq('date', date)
+      .neq('status', 'cancelled')
+
+    if (ignoreBookingId) query = query.neq('id', ignoreBookingId)
+
+    const { data, error } = await query
+    if (error) throw error
+    records = data || []
+  } else if (allowLocalFallback) {
+    records = getBookings()
+      .filter(item => item.type === type && item.date === date && item.status !== 'cancelled' && item.id !== ignoreBookingId)
+      .map(item => ({ id: item.id, time_slot: item.timeSlot }))
+  }
+
+  return allowedSlots.filter(slot => {
+    const candidateRange = getBookingSlotRange(date, slot)
+    return records.some(record => {
+      const bookedRange = getBookingSlotRange(date, record.time_slot)
+      return rangesOverlap(candidateRange.start, candidateRange.end, bookedRange.start, bookedRange.end)
+    })
+  })
 }
 
 async function getSupabaseUnavailableSlots(type, date) {
