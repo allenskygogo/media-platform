@@ -6506,6 +6506,8 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   }
   .lesson-player-topbar {
     align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
   }
   .lesson-player-actions {
     width: 100%;
@@ -6513,11 +6515,16 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
     flex-wrap: wrap;
   }
   .lesson-player-status-row {
+    width: 100%;
     gap: 8px;
   }
   .lesson-player-status {
     border-radius: 10px;
-    width: 100%;
+    width: auto;
+    max-width: 100%;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: normal;
   }
   .lesson-video-text {
     font-size: 16px;
