@@ -1,7 +1,5 @@
-import { useState } from 'react'
-import {
-  getHomeworkSpec, getLatestHomework, submitHomework,
-} from '../data/mockData'
+import { useEffect, useState } from 'react'
+import { getHomeworkSpecRecord, getLatestHomeworkRecord, submitHomeworkRecord } from '../services/homework'
 
 const STATUS_CFG = {
   pending:  { label: '等待審核', color: 'var(--advanced-text)', bg: 'var(--advanced-light)', icon: '⏳' },
@@ -10,25 +8,68 @@ const STATUS_CFG = {
 }
 
 export default function HomeworkPanel({ lesson, courseId, userId, onSubmitted }) {
-  const spec = getHomeworkSpec(lesson.id)
-  const hw   = getLatestHomework(userId, courseId, lesson.id)
-
+  const [spec, setSpec] = useState(null)
+  const [hw, setHw] = useState(null)
   const [videoUrl, setVideoUrl] = useState('')
   const [note, setNote]         = useState('')
   const [submitting, setSub]    = useState(false)
   const [msg, setMsg]           = useState('')
+  const [loading, setLoading]   = useState(true)
 
   const statusCfg = hw ? STATUS_CFG[hw.status] : null
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setMsg('')
+
+    Promise.all([
+      getHomeworkSpecRecord(lesson.id),
+      getLatestHomeworkRecord(userId, courseId, lesson.id),
+    ])
+      .then(([nextSpec, nextHomework]) => {
+        if (cancelled) return
+        setSpec(nextSpec)
+        setHw(nextHomework)
+      })
+      .catch(err => {
+        console.error('Homework load failed:', err)
+        if (!cancelled) setMsg('作業資料讀取失敗，請重新整理後再試')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [courseId, lesson.id, userId])
+
+  const handleSubmit = async () => {
     if (!videoUrl.trim()) { setMsg('請填寫影片連結'); return }
     setSub(true)
-    submitHomework(userId, courseId, lesson.id, videoUrl.trim(), note.trim())
-    setMsg('✅ 作業已送出，等待老師審核')
-    setSub(false)
-    setVideoUrl('')
-    setNote('')
-    onSubmitted?.()
+    setMsg('')
+    try {
+      const record = await submitHomeworkRecord(userId, courseId, lesson.id, videoUrl.trim(), note.trim())
+      setHw(record)
+      setMsg('✅ 作業已送出，等待老師審核')
+      setVideoUrl('')
+      setNote('')
+      onSubmitted?.(record)
+    } catch (err) {
+      console.error('Homework submit failed:', err)
+      setMsg('作業送出失敗，請稍後再試')
+    } finally {
+      setSub(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="hw-panel">
+        <div style={{ textAlign:'center', padding:'32px 0', color:'var(--gray-400)' }}>
+          讀取作業資料中…
+        </div>
+      </div>
+    )
   }
 
   if (!spec) {

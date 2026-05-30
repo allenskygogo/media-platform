@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react'
 import {
-  getAllHomework, getUsers, getCourses,
-  approveHomework, rejectHomework,
-  getHomeworkSpec, saveHomeworkSpec,
+  getUsers, getCourses,
+  getHomeworkSpec,
 } from '../../data/mockData'
+import {
+  getHomeworkSubmissionsRecords,
+  approveHomeworkRecord,
+  rejectHomeworkRecord,
+  saveHomeworkSpecRecord,
+} from '../../services/homework'
+import { useAuth } from '../../context/AuthContext'
 
 const REJECTION_TEMPLATES = [
   '影片長度不符合規範（需 60–90 秒）',
@@ -117,36 +123,62 @@ function SpecModal({ lessonId, lessonTitle, currentSpec, onSave, onClose }) {
 }
 
 export default function HomeworkAdmin() {
+  const { currentUser } = useAuth()
   const [homeworks, setHomeworks] = useState([])
   const [filter, setFilter]       = useState('pending')
   const [rejectTarget, setRejectTarget] = useState(null)
   const [specTarget, setSpecTarget]     = useState(null)
   const [msg, setMsg] = useState('')
+  const [loading, setLoading] = useState(true)
 
   const users   = getUsers()
   const courses = getCourses()
 
-  const refresh = () => setHomeworks(getAllHomework())
+  const refresh = () => {
+    setLoading(true)
+    return getHomeworkSubmissionsRecords()
+      .then(records => setHomeworks(records))
+      .catch(err => {
+        console.error('Homework admin load failed:', err)
+        flash('作業資料讀取失敗，請重新整理後再試')
+      })
+      .finally(() => setLoading(false))
+  }
 
   useEffect(() => { refresh() }, [])
 
   const flash = t => { setMsg(t); setTimeout(() => setMsg(''), 3000) }
 
-  const handleApprove = (id) => {
-    approveHomework(id)
-    refresh()
-    flash('已批准作業，學員下一堂課解鎖')
+  const handleApprove = async (id) => {
+    try {
+      await approveHomeworkRecord(id, currentUser?.id)
+      await refresh()
+      flash('已批准作業，學員下一堂課解鎖')
+    } catch (err) {
+      console.error('Homework approve failed:', err)
+      flash('批准失敗，請稍後再試')
+    }
   }
 
-  const handleReject = (id, reason) => {
-    rejectHomework(id, reason)
-    refresh()
-    flash('已退回作業，學員將收到退回原因')
+  const handleReject = async (id, reason) => {
+    try {
+      await rejectHomeworkRecord(id, reason, currentUser?.id)
+      await refresh()
+      flash('已退回作業，學員將收到退回原因')
+    } catch (err) {
+      console.error('Homework reject failed:', err)
+      flash('退回失敗，請稍後再試')
+    }
   }
 
-  const handleSaveSpec = (lessonId, spec) => {
-    saveHomeworkSpec(lessonId, spec)
-    flash('作業規範已儲存')
+  const handleSaveSpec = async (lessonId, spec) => {
+    try {
+      await saveHomeworkSpecRecord(lessonId, spec)
+      flash('作業規範已儲存')
+    } catch (err) {
+      console.error('Homework spec save failed:', err)
+      flash('作業規範儲存失敗，請稍後再試')
+    }
   }
 
   // Enrich homework with user/course/lesson info
@@ -206,14 +238,21 @@ export default function HomeworkAdmin() {
               </tr>
             </thead>
             <tbody>
-              {enriched.length === 0 && (
+              {loading && (
+                <tr>
+                  <td colSpan={7} style={{ textAlign:'center', padding:40, color:'var(--gray-400)' }}>
+                    讀取作業資料中…
+                  </td>
+                </tr>
+              )}
+              {!loading && enriched.length === 0 && (
                 <tr>
                   <td colSpan={7} style={{ textAlign:'center', padding:40, color:'var(--gray-400)' }}>
                     無作業記錄
                   </td>
                 </tr>
               )}
-              {enriched.map(hw => {
+              {!loading && enriched.map(hw => {
                 const st = STATUS_LABEL[hw.status] || STATUS_LABEL.pending
                 return (
                   <tr key={hw.id}>
