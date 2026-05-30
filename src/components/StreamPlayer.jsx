@@ -57,6 +57,21 @@ function StatusPill({ forced }) {
   )
 }
 
+function getFullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null
+}
+
+function requestElementFullscreen(el) {
+  if (!el) return
+  if (el.requestFullscreen) return el.requestFullscreen()
+  if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen()
+}
+
+function exitFullscreen() {
+  if (document.exitFullscreen) return document.exitFullscreen()
+  if (document.webkitExitFullscreen) return document.webkitExitFullscreen()
+}
+
 export default function StreamPlayer({
   videoUid,          // Cloudflare Stream video UID
   isForced = false,  // true = first-watch (no seek, no pause)
@@ -72,6 +87,7 @@ export default function StreamPlayer({
 }) {
   const iframeRef  = useRef(null)
   const wrapRef    = useRef(null)
+  const outerRef   = useRef(null)
   const playerRef  = useRef(null)  // CF Stream player object
   const maxRef     = useRef(0)     // max time reached (for seek-block)
   const doneRef    = useRef(false) // video ended
@@ -79,6 +95,7 @@ export default function StreamPlayer({
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
   const [errMsg, setErrMsg] = useState('')
   const [signedUrl, setSignedUrl] = useState(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const video = getCFVideos().find(v => v.uid === videoUid)
   const savedSec = userId && courseId && lessonId
@@ -192,6 +209,22 @@ export default function StreamPlayer({
     return () => el.removeEventListener('contextmenu', block)
   }, [status])
 
+  // ── Fullscreen state ────────────────────────────────────────────────────
+  useEffect(() => {
+    const sync = () => setIsFullscreen(getFullscreenElement() === outerRef.current)
+    document.addEventListener('fullscreenchange', sync)
+    document.addEventListener('webkitfullscreenchange', sync)
+    return () => {
+      document.removeEventListener('fullscreenchange', sync)
+      document.removeEventListener('webkitfullscreenchange', sync)
+    }
+  }, [])
+
+  const toggleFullscreen = () => {
+    if (getFullscreenElement() === outerRef.current) exitFullscreen()
+    else requestElementFullscreen(outerRef.current)
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────
   if (status === 'error') return (
     <div className="stream-error">
@@ -212,6 +245,14 @@ export default function StreamPlayer({
           {status === 'loading' && (
             <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>取得播放權限中…</span>
           )}
+          <button
+            type="button"
+            className="player-fullscreen-btn"
+            onClick={toggleFullscreen}
+            disabled={status !== 'ready'}
+          >
+            {isFullscreen ? '離開全螢幕' : '全螢幕'}
+          </button>
           {onClose && (
             <button className="btn btn-ghost btn-sm" onClick={onClose}>✕ 關閉</button>
           )}
@@ -219,7 +260,7 @@ export default function StreamPlayer({
       </div>
 
       {/* Player wrapper — overlays prevent interaction in forced mode */}
-      <div className="stream-player-outer" style={{ position: 'relative' }}>
+      <div className="stream-player-outer" ref={outerRef} style={{ position: 'relative' }}>
         {status === 'loading' && (
           <div className="stream-loading-overlay">
             <div style={{ fontSize: 32, marginBottom: 12 }}>🎬</div>
@@ -233,7 +274,7 @@ export default function StreamPlayer({
             src={signedUrl}
             title={title || videoUid}
             className="stream-iframe"
-            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen"
             allowFullScreen
           />
         )}

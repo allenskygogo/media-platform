@@ -23,6 +23,21 @@ const BG_COLORS = [
   '#1a1a2e','#2d1f00','#1a2e1a','#0f172a',
 ]
 
+function getFullscreenElement() {
+  return document.fullscreenElement || document.webkitFullscreenElement || null
+}
+
+function requestElementFullscreen(el) {
+  if (!el) return
+  if (el.requestFullscreen) return el.requestFullscreen()
+  if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen()
+}
+
+function exitFullscreen() {
+  if (document.exitFullscreen) return document.exitFullscreen()
+  if (document.webkitExitFullscreen) return document.webkitExitFullscreen()
+}
+
 export default function LessonPlayer({ lesson, courseId, userId, onComplete, onClose }) {
   // ── If a real Cloudflare video is assigned, delegate to StreamPlayer ────
   const cfVideoUid = getVideoForLesson(lesson.id)
@@ -52,9 +67,11 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
   const [currentSec, setCurrentSec] = useState(savedProg?.currentSecond || 0)
   const [playing, setPlaying]       = useState(true)   // for free mode
   const [done, setDone]             = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   const latestSec  = useRef(savedProg?.currentSecond || 0)
   const intervalRef = useRef(null)
+  const playerOuterRef = useRef(null)
 
   const advance = useCallback(() => {
     latestSec.current = Math.min(latestSec.current + LESSON_DEMO_SPEED, totalSec)
@@ -89,6 +106,21 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
     return () => document.removeEventListener('contextmenu', block)
   }, [isFirstWatch])
 
+  useEffect(() => {
+    const sync = () => setIsFullscreen(getFullscreenElement() === playerOuterRef.current)
+    document.addEventListener('fullscreenchange', sync)
+    document.addEventListener('webkitfullscreenchange', sync)
+    return () => {
+      document.removeEventListener('fullscreenchange', sync)
+      document.removeEventListener('webkitfullscreenchange', sync)
+    }
+  }, [])
+
+  const toggleFullscreen = () => {
+    if (getFullscreenElement() === playerOuterRef.current) exitFullscreen()
+    else requestElementFullscreen(playerOuterRef.current)
+  }
+
   const progress = totalSec > 0 ? Math.min(100, (currentSec / totalSec) * 100) : 0
   const bgColor  = BG_COLORS[lesson.id % BG_COLORS.length]
 
@@ -119,12 +151,17 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
           )}
           <span style={{ fontSize:11, color:'var(--gray-400)' }}>（示範速度 {LESSON_DEMO_SPEED}×）</span>
         </div>
-        {onClose && (
-          <button className="btn btn-ghost btn-sm" onClick={onClose}>✕ 關閉</button>
-        )}
+        <div className="lesson-player-actions">
+          <button type="button" className="player-fullscreen-btn" onClick={toggleFullscreen}>
+            {isFullscreen ? '離開全螢幕' : '全螢幕'}
+          </button>
+          {onClose && (
+            <button className="btn btn-ghost btn-sm" onClick={onClose}>✕ 關閉</button>
+          )}
+        </div>
       </div>
 
-      <div className="lesson-player-outer">
+      <div className="lesson-player-outer" ref={playerOuterRef}>
         {/* Video area */}
         <div className="lesson-video-area" style={{ background: bgColor }}
           onContextMenu={isFirstWatch ? e => e.preventDefault() : undefined}>
