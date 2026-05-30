@@ -5,7 +5,6 @@ import { BOOKING_TIME_SLOTS } from '../../data/bookingSlots'
 import Calendar from '../../components/Calendar'
 
 const TIME_SLOTS = BOOKING_TIME_SLOTS
-const ALL_SLOT_KEYS = TIME_SLOTS.map(slot => slot.key)
 
 const STATUS_LABEL = { pending: '待確認', confirmed: '已確認', cancelled: '已取消' }
 
@@ -22,6 +21,7 @@ export default function ShootingBooking() {
   const [error, setError] = useState('')
   const [unavailableSlots, setUnavailableSlots] = useState([])
   const [slotLoading, setSlotLoading] = useState(false)
+  const [slotError, setSlotError] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -50,6 +50,7 @@ export default function ShootingBooking() {
 
     let cancelled = false
     setSlotLoading(true)
+    setSlotError('')
     getUnavailableBookingSlots('shooting', date)
       .then(slots => {
         if (!cancelled) setUnavailableSlots(slots)
@@ -57,8 +58,8 @@ export default function ShootingBooking() {
       .catch(err => {
         console.error('Unavailable shooting slot load failed:', err)
         if (!cancelled) {
-          setUnavailableSlots(ALL_SLOT_KEYS)
-          setError('')
+          setUnavailableSlots([])
+          setSlotError('目前無法確認可預約時段，請稍後再試。')
         }
       })
       .finally(() => {
@@ -153,21 +154,27 @@ export default function ShootingBooking() {
                 <p style={{ fontSize: 14, color: 'var(--gray-600)', marginBottom: 16 }}>
                   拍攝日期：<strong>{date}</strong>{slotLoading ? '，讀取可預約時段中…' : ''}
                 </p>
+                {slotError && (
+                  <p style={{ fontSize: 13, color: 'var(--danger)', marginBottom: 12 }}>
+                    {slotError}
+                  </p>
+                )}
                 <div className="time-slots">
                   {TIME_SLOTS.map(ts => {
                     const disabled = unavailableSlots.includes(ts.key)
+                    const blocked = disabled || Boolean(slotError)
                     return (
                     <button key={ts.key} className={`time-slot-btn ${slot === ts.key ? 'selected' : ''}`}
-                      disabled={disabled}
-                      onClick={() => { if (!disabled) { setSlot(ts.key); setStep(3) } }}>
+                      disabled={blocked}
+                      onClick={() => { if (!blocked) { setSlot(ts.key); setStep(3) } }}>
                       <div className="time-slot-info">
                         <strong>{ts.label}</strong>
-                        <span>{disabled ? '已滿' : ts.time}</span>
+                        <span>{disabled ? '已滿' : slotError ? '暫時無法確認' : ts.time}</span>
                       </div>
                     </button>
                   )})}
                 </div>
-                {!slotLoading && unavailableSlots.length === TIME_SLOTS.length && (
+                {!slotLoading && !slotError && unavailableSlots.length === TIME_SLOTS.length && (
                   <p style={{ marginTop: 14, fontSize: 13, color: 'var(--gray-500)' }}>
                     當天預約已滿，請選擇其他日期。
                   </p>

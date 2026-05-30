@@ -2,7 +2,7 @@ import { supabase, hasSupabase, allowLocalFallback } from '../lib/supabase'
 import { getBookings, saveBookings } from '../data/mockData'
 import { BOOKING_TIME_SLOTS } from '../data/bookingSlots'
 
-const WORKER_URL = import.meta.env.VITE_WORKER_URL || ''
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 const BOOKING_DURATION_MINUTES = 180
 
 function normalizeBooking(row) {
