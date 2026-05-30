@@ -62,9 +62,10 @@ function getFullscreenElement() {
 }
 
 function requestElementFullscreen(el) {
-  if (!el) return
+  if (!el) return Promise.reject(new Error('Fullscreen target is missing'))
   if (el.requestFullscreen) return el.requestFullscreen()
   if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen()
+  return Promise.reject(new Error('Fullscreen API is not supported'))
 }
 
 function exitFullscreen() {
@@ -96,6 +97,7 @@ export default function StreamPlayer({
   const [errMsg, setErrMsg] = useState('')
   const [signedUrl, setSignedUrl] = useState(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
 
   const video = getCFVideos().find(v => v.uid === videoUid)
   const savedSec = userId && courseId && lessonId
@@ -211,7 +213,11 @@ export default function StreamPlayer({
 
   // ── Fullscreen state ────────────────────────────────────────────────────
   useEffect(() => {
-    const sync = () => setIsFullscreen(getFullscreenElement() === outerRef.current)
+    const sync = () => {
+      const active = getFullscreenElement() === outerRef.current
+      setIsFullscreen(active)
+      if (active) setIsPseudoFullscreen(false)
+    }
     document.addEventListener('fullscreenchange', sync)
     document.addEventListener('webkitfullscreenchange', sync)
     return () => {
@@ -220,10 +226,35 @@ export default function StreamPlayer({
     }
   }, [])
 
+  useEffect(() => {
+    if (!isPseudoFullscreen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isPseudoFullscreen])
+
   const toggleFullscreen = () => {
-    if (getFullscreenElement() === outerRef.current) exitFullscreen()
-    else requestElementFullscreen(outerRef.current)
+    if (isPseudoFullscreen) {
+      setIsPseudoFullscreen(false)
+      return
+    }
+
+    if (getFullscreenElement() === outerRef.current) {
+      exitFullscreen()
+      return
+    }
+
+    const result = requestElementFullscreen(outerRef.current)
+    if (result?.catch) {
+      result.catch(() => setIsPseudoFullscreen(true))
+    } else {
+      setIsPseudoFullscreen(true)
+    }
   }
+
+  const fullscreenActive = isFullscreen || isPseudoFullscreen
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (status === 'error') return (
@@ -235,7 +266,7 @@ export default function StreamPlayer({
   )
 
   return (
-    <div className="lesson-player-wrap" ref={wrapRef}>
+    <div className={`lesson-player-wrap${isPseudoFullscreen ? ' is-pseudo-fullscreen' : ''}`} ref={wrapRef}>
       {/* Header bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -251,7 +282,7 @@ export default function StreamPlayer({
             onClick={toggleFullscreen}
             disabled={status !== 'ready'}
           >
-            {isFullscreen ? '離開全螢幕' : '全螢幕'}
+            {fullscreenActive ? '離開全螢幕' : '全螢幕'}
           </button>
           {onClose && (
             <button className="btn btn-ghost btn-sm" onClick={onClose}>✕ 關閉</button>

@@ -28,9 +28,10 @@ function getFullscreenElement() {
 }
 
 function requestElementFullscreen(el) {
-  if (!el) return
+  if (!el) return Promise.reject(new Error('Fullscreen target is missing'))
   if (el.requestFullscreen) return el.requestFullscreen()
   if (el.webkitRequestFullscreen) return el.webkitRequestFullscreen()
+  return Promise.reject(new Error('Fullscreen API is not supported'))
 }
 
 function exitFullscreen() {
@@ -68,9 +69,11 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
   const [playing, setPlaying]       = useState(true)   // for free mode
   const [done, setDone]             = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false)
 
   const latestSec  = useRef(savedProg?.currentSecond || 0)
   const intervalRef = useRef(null)
+  const playerWrapRef = useRef(null)
   const playerOuterRef = useRef(null)
 
   const advance = useCallback(() => {
@@ -107,7 +110,11 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
   }, [isFirstWatch])
 
   useEffect(() => {
-    const sync = () => setIsFullscreen(getFullscreenElement() === playerOuterRef.current)
+    const sync = () => {
+      const active = getFullscreenElement() === playerOuterRef.current
+      setIsFullscreen(active)
+      if (active) setIsPseudoFullscreen(false)
+    }
     document.addEventListener('fullscreenchange', sync)
     document.addEventListener('webkitfullscreenchange', sync)
     return () => {
@@ -116,13 +123,37 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
     }
   }, [])
 
+  useEffect(() => {
+    if (!isPseudoFullscreen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isPseudoFullscreen])
+
   const toggleFullscreen = () => {
-    if (getFullscreenElement() === playerOuterRef.current) exitFullscreen()
-    else requestElementFullscreen(playerOuterRef.current)
+    if (isPseudoFullscreen) {
+      setIsPseudoFullscreen(false)
+      return
+    }
+
+    if (getFullscreenElement() === playerOuterRef.current) {
+      exitFullscreen()
+      return
+    }
+
+    const result = requestElementFullscreen(playerOuterRef.current)
+    if (result?.catch) {
+      result.catch(() => setIsPseudoFullscreen(true))
+    } else {
+      setIsPseudoFullscreen(true)
+    }
   }
 
   const progress = totalSec > 0 ? Math.min(100, (currentSec / totalSec) * 100) : 0
   const bgColor  = BG_COLORS[lesson.id % BG_COLORS.length]
+  const fullscreenActive = isFullscreen || isPseudoFullscreen
 
   // Free-mode seek: click on progress track
   const handleSeek = (e) => {
@@ -136,7 +167,7 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
   }
 
   return (
-    <div className="lesson-player-wrap">
+    <div className={`lesson-player-wrap${isPseudoFullscreen ? ' is-pseudo-fullscreen' : ''}`} ref={playerWrapRef}>
       {/* Top bar */}
       <div className="lesson-player-topbar">
         <div className="lesson-player-status-row">
@@ -153,7 +184,7 @@ export default function LessonPlayer({ lesson, courseId, userId, onComplete, onC
         </div>
         <div className="lesson-player-actions">
           <button type="button" className="player-fullscreen-btn" onClick={toggleFullscreen}>
-            {isFullscreen ? '離開全螢幕' : '全螢幕'}
+            {fullscreenActive ? '離開全螢幕' : '全螢幕'}
           </button>
           {onClose && (
             <button className="btn btn-ghost btn-sm" onClick={onClose}>✕ 關閉</button>
