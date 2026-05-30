@@ -7,6 +7,7 @@ import {
   TRIAL_DURATION_SEC, getTrialVideoUid, getCFVideos,
 } from '../../data/mockData'
 import { getPricing } from '../../data/mockData'
+import { supabase, hasSupabase, allowLocalFallback } from '../../lib/supabase'
 import StreamPlayer from '../../components/StreamPlayer'
 
 // ── Lesson scenes over 3 hours ──────────────────────────────────────────────
@@ -29,6 +30,89 @@ function fmt(sec) {
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
 }
 
+function toDateString(value) {
+  if (!value) return null
+  return String(value).split('T')[0]
+}
+
+function toLocalProgress(row) {
+  if (!row) return null
+  return {
+    userId: row.user_id,
+    currentSecond: row.current_second || 0,
+    completed: row.status === 'completed' || !!row.completed_at,
+    completedAt: row.completed_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+async function loadTrialState(userId) {
+  if (hasSupabase && supabase) {
+    const { data, error } = await supabase
+      .from('trial_sessions')
+      .select('user_id, scheduled_at, status, current_second, completed_at, updated_at')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (error) throw error
+    return {
+      session: data ? { userId: data.user_id, scheduledAt: data.scheduled_at, status: data.status } : null,
+      progress: toLocalProgress(data),
+    }
+  }
+
+  if (allowLocalFallback) {
+    return {
+      session: getTrialSession(userId),
+      progress: getTrialProgress(userId),
+    }
+  }
+
+  throw new Error('體驗課播放資料服務尚未設定')
+}
+
+async function saveProgress(userId, currentSecond, completed = false) {
+  if (hasSupabase && supabase) {
+    const { error } = await supabase
+      .from('trial_sessions')
+      .update({
+        current_second: Math.min(currentSecond, TRIAL_DURATION_SEC),
+        status: completed ? 'completed' : 'watching',
+        completed_at: completed ? new Date().toISOString() : null,
+      })
+      .eq('user_id', userId)
+
+    if (error) throw error
+    return
+  }
+
+  if (allowLocalFallback) {
+    saveTrialProgress(userId, currentSecond, completed)
+    return
+  }
+
+  throw new Error('體驗課播放資料服務尚未設定')
+}
+
+async function completeTrial(userId) {
+  if (hasSupabase && supabase) {
+    const { data, error } = await supabase.rpc('complete_trial_session')
+    if (error) throw error
+    const row = Array.isArray(data) ? data[0] : data
+    return {
+      expiresAt: toDateString(row?.expires_at),
+      trialCompletedAt: toDateString(row?.trial_completed_at) || new Date().toISOString(),
+    }
+  }
+
+  if (allowLocalFallback) {
+    const expiresAt = completeTrialInStorage(userId)
+    return { expiresAt, trialCompletedAt: new Date().toISOString() }
+  }
+
+  throw new Error('體驗課完成資料服務尚未設定')
+}
+
 export default function TrialPlayer() {
   const { currentUser, updateCurrentUser } = useAuth()
   const navigate = useNavigate()
@@ -44,59 +128,88 @@ export default function TrialPlayer() {
   const latestSec                    = useRef(0) // always up-to-date inside interval
 
   useEffect(() => {
+    let cancelled = false
+
+    const run = async () => {
     if (currentUser.tier !== 'basic') { navigate('/dashboard', { replace: true }); return }
 
-    // Already completed?
-    const prog = getTrialProgress(currentUser.id)
-    if (currentUser.expiresAt || prog?.completed) {
-      setCompleted(true)
-      setReady(true)
-      return
-    }
+      try {
+        const { session, progress: prog } = await loadTrialState(currentUser.id)
+
+        // Already completed?
+        if (currentUser.expiresAt || prog?.completed) {
+          if (!cancelled) {
+            setCompleted(true)
+            setReady(true)
+          }
+          return
+        }
 
     // Must have a booked session
-    const session = getTrialSession(currentUser.id)
-    if (!session) {
-      setError('你尚未預約體驗時段，請先完成預約。')
-      setReady(true)
-      return
-    }
+        if (!session) {
+          if (!cancelled) {
+            setError('你尚未預約體驗時段，請先完成預約。')
+            setReady(true)
+          }
+          return
+        }
 
     // Must be at or past scheduled time
-    if (new Date(session.scheduledAt).getTime() > Date.now()) {
-      setError('還沒到你的預約時間，請等到預約時間再進入。')
-      setReady(true)
-      return
-    }
+        if (new Date(session.scheduledAt).getTime() > Date.now()) {
+          if (!cancelled) {
+            setError('還沒到你的預約時間，請等到預約時間再進入。')
+            setReady(true)
+          }
+          return
+        }
 
     // Resume from saved progress
-    const startSec = prog?.currentSecond || 0
-    setCurrentSec(startSec)
-    latestSec.current = startSec
-    setReady(true)
+        const startSec = prog?.currentSecond || 0
+        if (cancelled) return
+        setCurrentSec(startSec)
+        latestSec.current = startSec
+        setReady(true)
 
     // Start playback tick
-    intervalRef.current = setInterval(() => {
+        intervalRef.current = setInterval(() => {
       latestSec.current += 1
       setCurrentSec(latestSec.current)
 
       // Auto-save every 10 seconds
       if (latestSec.current % 10 === 0) {
-        saveTrialProgress(currentUser.id, latestSec.current, false)
+            saveProgress(currentUser.id, latestSec.current, false).catch(err => {
+              console.error('Trial progress save failed:', err)
+            })
       }
 
       // Completion
       if (latestSec.current >= TRIAL_DURATION_SEC) {
         clearInterval(intervalRef.current)
-        // Mark complete in storage and get new expiresAt
-        const newExpiry = completeTrialInStorage(currentUser.id)
-        // Update auth context so ProtectedRoute unlocks
-        updateCurrentUser({ expiresAt: newExpiry })
-        setCompleted(true)
+            completeTrial(currentUser.id)
+              .then(({ expiresAt, trialCompletedAt }) => {
+                updateCurrentUser({ expiresAt, trialCompletedAt })
+                setCompleted(true)
+              })
+              .catch(err => {
+                console.error('Trial completion failed:', err)
+                setError('體驗課完成狀態儲存失敗，請聯絡客服。')
+              })
       }
-    }, 1000)
+        }, 1000)
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || '讀取體驗課播放資料失敗')
+          setReady(true)
+        }
+      }
+    }
 
-    return () => clearInterval(intervalRef.current)
+    run()
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalRef.current)
+    }
   }, []) // run once on mount
 
   // ── Prevent right-click on entire page while player is active ─────────────
@@ -175,10 +288,15 @@ export default function TrialPlayer() {
 
   if (trialCFVideo) {
     const pricing = getPricing()
-    const handleCFComplete = () => {
-      const newExpiry = completeTrialInStorage(currentUser.id)
-      updateCurrentUser({ expiresAt: newExpiry, trialCompletedAt: new Date().toISOString() })
-      setCompleted(true)
+    const handleCFComplete = async () => {
+      try {
+        const { expiresAt, trialCompletedAt } = await completeTrial(currentUser.id)
+        updateCurrentUser({ expiresAt, trialCompletedAt })
+        setCompleted(true)
+      } catch (err) {
+        console.error('Trial completion failed:', err)
+        setError('體驗課完成狀態儲存失敗，請聯絡客服。')
+      }
     }
     return (
       <div className="page-content" style={{ maxWidth: 900 }}>
