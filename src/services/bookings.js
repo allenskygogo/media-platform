@@ -162,12 +162,12 @@ export async function updateBookingDetailsRecord(id, { type, date, timeSlot, top
     notes: notes?.trim() || null,
   }
 
-  if (current?.status === 'confirmed' && current.google_event_id) {
+  if (current?.status === 'confirmed') {
     const profile = current.user_id ? (await getBookingSubmitterProfiles([current.user_id]))[0] : null
     const calendarResult = await syncBookingCalendarEvent({
       booking: normalizeBooking({ ...current, date, time_slot: timeSlot, topic: topic.trim(), notes: notes?.trim() || null }),
       profile,
-      mode: 'update',
+      mode: current.google_event_id ? 'update' : 'create',
     })
     updates.google_event_id = calendarResult.eventId
     updates.google_event_link = calendarResult.htmlLink
