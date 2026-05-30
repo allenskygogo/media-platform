@@ -197,6 +197,15 @@ async function getGoogleAccessToken(env) {
 }
 
 async function getGoogleBusyRanges(date, token, env) {
+  const [freeBusyRanges, eventRanges] = await Promise.all([
+    getGoogleFreeBusyRanges(date, token, env),
+    getGoogleEventRanges(date, token, env),
+  ])
+
+  return [...freeBusyRanges, ...eventRanges]
+}
+
+async function getGoogleFreeBusyRanges(date, token, env) {
   const response = await fetch('https://www.googleapis.com/calendar/v3/freeBusy', {
     method: 'POST',
     headers: {
@@ -220,6 +229,39 @@ async function getGoogleBusyRanges(date, token, env) {
     throw new Error(message || 'Google Calendar access failed')
   }
   return calendar.busy || []
+}
+
+async function getGoogleEventRanges(date, token, env) {
+  const calendarId = encodeURIComponent(env.GOOGLE_CALENDAR_ID)
+  const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`)
+  url.searchParams.set('timeMin', `${date}T00:00:00${TAIPEI_OFFSET}`)
+  url.searchParams.set('timeMax', `${date}T23:59:59${TAIPEI_OFFSET}`)
+  url.searchParams.set('timeZone', 'Asia/Taipei')
+  url.searchParams.set('singleEvents', 'true')
+  url.searchParams.set('orderBy', 'startTime')
+
+  const response = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.error?.message || 'Google Calendar events failed')
+
+  return (data.items || [])
+    .filter(event => event.status !== 'cancelled')
+    .map(event => {
+      const start = parseGoogleEventDate(event.start, 'start')
+      const end = parseGoogleEventDate(event.end, 'end')
+      return start && end ? { start: start.toISOString(), end: end.toISOString() } : null
+    })
+    .filter(Boolean)
+}
+
+function parseGoogleEventDate(value, boundary) {
+  if (!value) return null
+  if (value.dateTime) return new Date(value.dateTime)
+  if (value.date) return new Date(`${value.date}T00:00:00${TAIPEI_OFFSET}`)
+  return boundary === 'end' ? new Date(0) : null
 }
 
 function getRequestedDurationMinutes(value) {

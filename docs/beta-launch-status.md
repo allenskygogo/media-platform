@@ -1,6 +1,6 @@
 # Beta Launch Status
 
-Last updated: 2026-05-30
+Last updated: 2026-05-31
 
 ## Current Status
 
@@ -12,6 +12,17 @@ Last updated: 2026-05-30
 - `/admin/beta` can read submitted beta applications.
 - `VITE_SUPABASE_URL` has been configured in Vercel.
 - `VITE_SUPABASE_ANON_KEY` has been configured in Vercel.
+- Booking availability has been connected to Google Calendar through the Cloudflare Worker.
+- The current booking conflict calendar is `web@xgfx-tw.com`.
+
+## Booking Availability
+
+- Student booking pages check both Supabase `bookings` records and Google Calendar before showing available time slots.
+- Available booking slots are currently limited to `12:00` through `18:00`.
+- Default booking duration is 3 hours.
+- Google Calendar events from `web@xgfx-tw.com` are treated as unavailable time.
+- If a Google Calendar event overlaps a booking slot, the student UI marks that slot as full.
+- The Cloudflare Worker stores Google Calendar service account credentials as Worker secrets, not frontend environment variables.
 
 ## Temporary Admin Access
 

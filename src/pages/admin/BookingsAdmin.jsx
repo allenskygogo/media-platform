@@ -104,6 +104,9 @@ export default function BookingsAdmin() {
   return (
     <div>
       <div className="page-heading"><h1>預約管理</h1><p>一對一輔導與代操拍攝預約總覽</p></div>
+      <div className="auth-alert" style={{ marginBottom: 16 }}>
+        Google Calendar 防撞日曆：web@xgfx-tw.com。學員端會依此日曆與既有預約顯示可預約或已滿。
+      </div>
       {msg && <div className="auth-alert success" style={{ marginBottom: 16 }}>{msg}</div>}
 
       {/* Summary cards */}
