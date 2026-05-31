@@ -11,6 +11,7 @@
  *   GOOGLE_CALENDAR_ID            — Google Calendar ID to check availability
  *   SUPABASE_URL                  — Supabase project URL for admin verification
  *   SUPABASE_ANON_KEY             — Supabase anon key for admin verification
+ *   SUPABASE_SERVICE_ROLE_KEY     — optional server-only key for private AI agent prompts
  *   OPENAI_API_KEY                — OpenAI API key for server-side AI generation
  *   OPENAI_MODEL                  — optional model override for AI generation
  */
@@ -19,6 +20,37 @@ const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
 const BOOKING_TIME_SLOTS = ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00']
 const DEFAULT_BOOKING_DURATION_MINUTES = 180
 const TAIPEI_OFFSET = '+08:00'
+const DEFAULT_AI_AGENTS = {
+  topics: {
+    feature_key: 'topics',
+    name: '爆款選題 Agent',
+    model: 'gpt-4.1-mini',
+    temperature: 0.85,
+    system_prompt: '你是 TOP LEVEL TRAFFIC 的爆款選題智能體。你專門協助自媒體創作者從產業、受眾、痛點、產品服務與流量角度中，設計可拍攝、可引發好奇心、具備短影音標題感的爆款選題。請使用繁體中文，語氣專業、具體、直接。你的輸出必須符合指定 JSON schema，不要輸出 Markdown，不要使用 emoji，不要加入 JSON 以外的文字。',
+    user_prompt_template: `請根據以下輸入產生 8 個爆款短影音選題。
+
+使用者輸入：
+{{input}}
+
+使用者方案：
+{{userPlan}}
+
+輸出要求：
+- 必須回傳 JSON array
+- 必須剛好 8 筆
+- 8 筆元素依序為：奇葩、人群、懷舊、最差、頭牌、荷爾蒙、反差、成本
+- 每一筆格式：
+  {
+    "element": "奇葩|人群|懷舊|最差|頭牌|荷爾蒙|反差|成本",
+    "text": "不含元素括號的選題文字",
+    "traffic": "high|medium|low"
+  }
+- 選題要有短影音標題感，可直接拿去拍
+- 選題要具體，避免空泛口號
+- 不要使用 emoji
+- 不要輸出 JSON 以外的文字`,
+  },
+}
 
 // ── CORS ──────────────────────────────────────────────────────────────────
 const CORS = {
@@ -172,8 +204,8 @@ async function handleAI(request, env) {
 
   if (!feature) return err('Missing AI feature', 400)
 
-  const prompt = buildAIPrompt(feature, input, userPlan)
-  if (!prompt) return err('Unsupported AI feature', 400)
+  const agent = await getAIAgent(feature, env)
+  if (!agent) return err('Unsupported AI feature', 400)
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
@@ -182,18 +214,18 @@ async function handleAI(request, env) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: env.OPENAI_MODEL || 'gpt-4.1-mini',
+      model: env.OPENAI_MODEL || agent.model || 'gpt-4.1-mini',
       input: [
         {
           role: 'system',
-          content: '你是 TOP LEVEL TRAFFIC 的自媒體策略 AI。請使用繁體中文，回覆要具體、可拍攝、適合短影音創作者。只輸出使用者要求的 JSON，不要加 Markdown。',
+          content: agent.system_prompt,
         },
         {
           role: 'user',
-          content: prompt,
+          content: renderPromptTemplate(agent.user_prompt_template, { input, userPlan }),
         },
       ],
-      temperature: 0.85,
+      temperature: Number(agent.temperature ?? 0.85),
     }),
   })
 
@@ -205,35 +237,47 @@ async function handleAI(request, env) {
   const outputText = extractOpenAIText(data)
   const result = parseAIResult(outputText)
 
-  return json({ success: true, result, provider: 'openai' })
+  return json({ success: true, result, provider: 'openai', agent: agent.feature_key || feature })
 }
 
-function buildAIPrompt(feature, input, userPlan) {
-  const rawInput = typeof input === 'string' ? input : JSON.stringify(input || {})
-  const topicPrompt = `
-請根據「${rawInput || '健身'}」產生 8 個爆款短影音選題。
+async function getAIAgent(feature, env) {
+  if (!feature) return null
+  const fallback = DEFAULT_AI_AGENTS[feature] || null
+  const key = env.SUPABASE_SERVICE_ROLE_KEY || null
 
-必須回傳 JSON array，每一筆格式：
-{
-  "element": "奇葩|人群|懷舊|最差|頭牌|荷爾蒙|反差|成本",
-  "text": "不含元素括號的選題文字",
-  "traffic": "high|medium|low"
-}
+  if (!env.SUPABASE_URL || !key) return fallback
 
-限制：
-- 8 筆元素依序為：奇葩、人群、懷舊、最差、頭牌、荷爾蒙、反差、成本
-- 每個選題要具體、有反差、有短影音標題感
-- 不要使用 emoji
-- 不要輸出 JSON 以外的文字
-- 使用者方案：${userPlan}
-`
+  try {
+    const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/ai_agents`)
+    url.searchParams.set('feature_key', `eq.${feature}`)
+    url.searchParams.set('enabled', 'eq.true')
+    url.searchParams.set('select', 'feature_key,name,system_prompt,user_prompt_template,model,temperature,vector_store_id,required_plan')
+    url.searchParams.set('limit', '1')
 
-  switch (feature) {
-    case 'topics':
-      return topicPrompt
-    default:
-      return null
+    const response = await fetch(url.toString(), {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        Accept: 'application/json',
+      },
+    })
+    const data = await response.json().catch(() => [])
+    if (!response.ok) return fallback
+    return Array.isArray(data) && data[0] ? data[0] : fallback
+  } catch (_) {
+    return fallback
   }
+}
+
+function renderPromptTemplate(template, vars) {
+  const inputText = typeof vars.input === 'string'
+    ? vars.input
+    : JSON.stringify(vars.input || {}, null, 2)
+
+  return String(template || '')
+    .replaceAll('{{input}}', inputText || '健身')
+    .replaceAll('{{input_json}}', JSON.stringify(vars.input || {}))
+    .replaceAll('{{userPlan}}', vars.userPlan || 'free')
 }
 
 function extractOpenAIText(data) {
