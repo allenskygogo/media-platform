@@ -11,6 +11,8 @@
  *   GOOGLE_CALENDAR_ID            — Google Calendar ID to check availability
  *   SUPABASE_URL                  — Supabase project URL for admin verification
  *   SUPABASE_ANON_KEY             — Supabase anon key for admin verification
+ *   OPENAI_API_KEY                — OpenAI API key for server-side AI generation
+ *   OPENAI_MODEL                  — optional model override for AI generation
  */
 
 const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
@@ -78,6 +80,11 @@ export default {
       // GET /api/calendar/availability?date=YYYY-MM-DD&type=oneonone
       if (path === '/api/calendar/availability' && request.method === 'GET') {
         return await handleCalendarAvailability(url, env)
+      }
+
+      // POST /api/ai → server-side AI generation
+      if (path === '/api/ai' && request.method === 'POST') {
+        return await handleAI(request, env)
       }
 
       // POST /api/calendar/events → create a confirmed booking event
@@ -151,6 +158,113 @@ async function handleToken(request, videoUid, env) {
 
   const token = await generateSignedToken(videoUid, expiresSeconds, env)
   return json({ success: true, token })
+}
+
+async function handleAI(request, env) {
+  if (!env.OPENAI_API_KEY) {
+    return err('OpenAI API key is not configured', 503)
+  }
+
+  const body = await request.json().catch(() => ({}))
+  const feature = String(body.feature || '').trim()
+  const input = body.input
+  const userPlan = String(body.userPlan || 'free')
+
+  if (!feature) return err('Missing AI feature', 400)
+
+  const prompt = buildAIPrompt(feature, input, userPlan)
+  if (!prompt) return err('Unsupported AI feature', 400)
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: env.OPENAI_MODEL || 'gpt-4.1-mini',
+      input: [
+        {
+          role: 'system',
+          content: '你是 TOP LEVEL TRAFFIC 的自媒體策略 AI。請使用繁體中文，回覆要具體、可拍攝、適合短影音創作者。只輸出使用者要求的 JSON，不要加 Markdown。',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.85,
+    }),
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    return err(data.error?.message || 'OpenAI generation failed', response.status)
+  }
+
+  const outputText = extractOpenAIText(data)
+  const result = parseAIResult(outputText)
+
+  return json({ success: true, result, provider: 'openai' })
+}
+
+function buildAIPrompt(feature, input, userPlan) {
+  const rawInput = typeof input === 'string' ? input : JSON.stringify(input || {})
+  const topicPrompt = `
+請根據「${rawInput || '健身'}」產生 8 個爆款短影音選題。
+
+必須回傳 JSON array，每一筆格式：
+{
+  "element": "奇葩|人群|懷舊|最差|頭牌|荷爾蒙|反差|成本",
+  "text": "不含元素括號的選題文字",
+  "traffic": "high|medium|low"
+}
+
+限制：
+- 8 筆元素依序為：奇葩、人群、懷舊、最差、頭牌、荷爾蒙、反差、成本
+- 每個選題要具體、有反差、有短影音標題感
+- 不要使用 emoji
+- 不要輸出 JSON 以外的文字
+- 使用者方案：${userPlan}
+`
+
+  switch (feature) {
+    case 'topics':
+      return topicPrompt
+    default:
+      return null
+  }
+}
+
+function extractOpenAIText(data) {
+  if (typeof data.output_text === 'string') return data.output_text
+
+  const parts = []
+  for (const item of data.output || []) {
+    for (const content of item.content || []) {
+      if (typeof content.text === 'string') parts.push(content.text)
+    }
+  }
+  return parts.join('\n').trim()
+}
+
+function parseAIResult(outputText) {
+  const text = String(outputText || '').trim()
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch (_) {
+    const match = text.match(/\[[\s\S]*\]|\{[\s\S]*\}/)
+    if (match) {
+      try {
+        return JSON.parse(match[0])
+      } catch (_) {
+        return text
+      }
+    }
+    return text
+  }
 }
 
 async function handleCalendarAvailability(url, env) {

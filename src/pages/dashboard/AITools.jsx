@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../../context/AuthContext'
+import { callAI } from '../../services/aiService'
 import {
   TrendingUp, FileText, Search, Share2, Mic,
   BarChart2, Bookmark, Flame, Target, Bot,
@@ -83,6 +84,33 @@ function buildTopics(industry, round) {
     text:    t.tpl.replace(/{ind}/g, industry),
     traffic: t.traffic,
   }))
+}
+
+function normalizeTopicResults(result, industry, round) {
+  const fallback = buildTopics(industry, round)
+  if (!Array.isArray(result)) return fallback
+
+  return fallback.map((item, index) => {
+    const source = result[index]
+    if (typeof source === 'string') {
+      const match = source.match(/^【(.+?)】(.+)$/)
+      return {
+        ...item,
+        element: match?.[1] || item.element,
+        text: (match?.[2] || source).trim(),
+      }
+    }
+
+    if (source && typeof source === 'object') {
+      return {
+        element: source.element || item.element,
+        text: source.text || source.title || item.text,
+        traffic: source.traffic || item.traffic,
+      }
+    }
+
+    return item
+  })
 }
 
 // ── Script type & shoot format options ───────────────
@@ -570,8 +598,14 @@ function TopicsPage() {
   async function doGenerate(r) {
     setGenerating(true); setSelected([]); setAlertMax(false)
     setScriptType(null); setShootFormat(null); setScript(null)
-    await new Promise(res => setTimeout(res, 1100))
-    setTopics(buildTopics(input.trim(), r)); setRound(r); setGenerating(false)
+    const industry = input.trim()
+    try {
+      const result = await callAI('topics', industry, deriveAITier(currentUser), currentUser?.id)
+      setTopics(normalizeTopicResults(result, industry, r))
+    } catch (_) {
+      setTopics(buildTopics(industry, r))
+    }
+    setRound(r); setGenerating(false)
   }
 
   const handleGenerate = () => { if (!input.trim() || generating) return; doGenerate(round) }

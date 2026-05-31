@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import BrandLogo from '../components/BrandLogo'
 import { initPixel, fbq } from '../utils/fbPixel'
+import { callAI } from '../services/aiService'
 
 const REGISTER_NOTICE = '目前僅開放已購買體驗課的學員註冊，請先購買體驗課後再完成會員註冊。'
 const TRIAL_PRICE = 980
@@ -158,6 +159,22 @@ function makeTopics(industryInput) {
     `看起來最普通的${industry}帳號，為什麼反而最會賺`,
     `做${industry}最低成本起步法，一週就能測出方向`,
   ]
+}
+
+function normalizeSalesTopics(result, industryInput) {
+  const fallback = makeTopics(industryInput)
+  if (!Array.isArray(result)) return fallback
+
+  return fallback.map((item, index) => {
+    const source = result[index]
+    if (typeof source === 'string') {
+      return source.replace(/^【.+?】/, '').trim()
+    }
+    if (source && typeof source === 'object') {
+      return source.text || source.title || item
+    }
+    return item
+  })
 }
 
 function SalesLoginModal({ onClose }) {
@@ -414,6 +431,7 @@ export default function SalesPage() {
   const [showCheckout, setShowCheckout] = useState(false)
   const [industry, setIndustry] = useState('健身')
   const [topics, setTopics] = useState(() => makeTopics('健身'))
+  const [generatingTopics, setGeneratingTopics] = useState(false)
 
   const memberHome = currentUser?.role === 'admin'
     ? '/admin'
@@ -441,8 +459,17 @@ export default function SalesPage() {
     else setShowLogin(true)
   }
 
-  const handleGenerate = () => {
-    setTopics(makeTopics(industry))
+  const handleGenerate = async () => {
+    if (generatingTopics) return
+    setGeneratingTopics(true)
+    try {
+      const result = await callAI('topics', industry, 'free', null)
+      setTopics(normalizeSalesTopics(result, industry))
+    } catch (_) {
+      setTopics(makeTopics(industry))
+    } finally {
+      setGeneratingTopics(false)
+    }
   }
 
   const handlePurchaseClick = () => {
@@ -718,7 +745,9 @@ export default function SalesPage() {
                   onKeyDown={e => e.key === 'Enter' && handleGenerate()}
                   placeholder="例：美食、健身、親子、美妝、餐飲..."
                 />
-                <button className="sp2-btn sp2-btn-primary" onClick={handleGenerate}>立即生成</button>
+                <button className="sp2-btn sp2-btn-primary" onClick={handleGenerate} disabled={generatingTopics}>
+                  {generatingTopics ? '生成中...' : '立即生成'}
+                </button>
               </div>
 
               <div className="sp2-tags">

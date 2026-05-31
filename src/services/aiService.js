@@ -9,6 +9,7 @@ const FREE_DATE_KEY     = 'free_ai_date'
 const FREE_COUNT_KEY    = 'free_ai_count'
 const FREE_DAILY_LIMIT  = 3
 const MOCK_DELAY_MS     = 1300
+const WORKER_URL        = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 // ── Usage Log (localStorage "db") ────────────────────
 export function getAIUsageLogs() {
@@ -530,10 +531,35 @@ ${kw} 相關內容最適合你目前的定位
 //  return await res.json()
 // ══════════════════════════════════════════════════════
 export async function callAI(feature, input, userPlan = 'free', userId = null) {
+  try {
+    const result = await callWorkerAI(feature, input, userPlan)
+    appendAIUsage({ user_id: userId, feature, industry: input, plan: userPlan, provider: 'openai' })
+    return result
+  } catch (error) {
+    if (import.meta.env.DEV) console.warn('AI API unavailable, using mock fallback:', error)
+  }
+
   await new Promise(r => setTimeout(r, MOCK_DELAY_MS))
   const result = getMockData(feature, input)
-  appendAIUsage({ user_id: userId, feature, industry: input, plan: userPlan })
+  appendAIUsage({ user_id: userId, feature, industry: input, plan: userPlan, provider: 'mock' })
   return result
+}
+
+async function callWorkerAI(feature, input, userPlan) {
+  if (!WORKER_URL) throw new Error('Worker URL is not configured')
+
+  const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/ai`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feature, input, userPlan }),
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || data.success === false) {
+    throw new Error(data.error || 'AI worker request failed')
+  }
+
+  return data.result
 }
 
 // ── Free-visitor wrapper (rate-limited) ───────────────
