@@ -129,8 +129,55 @@ const KNOWLEDGE_SCRIPT_SOP = {
   title: '教知識腳本 SOP',
   topicDimensions: ['追求更好', '解決難題', '避免踩坑', '降低成本', '豐富談資'],
   scriptTypes: ['推薦型', '解題型'],
+  scriptFramework: ['場景難題＋腳本類型', '低行動成本解決方案', '具體操作過程'],
   selfCheck: ['信息多', '效果快', '料夠猛'],
   commonMistakes: ['專業用詞', '排列不好', '對象模糊', '等待過久'],
+}
+
+const KNOWLEDGE_PRACTICE_FIELDS = [
+  {
+    key: 'scene',
+    label: '場景難題',
+    placeholder: '寫出觀眾正在遇到的具體場景與難題，並說明你會用推薦型或解題型切入...',
+  },
+  {
+    key: 'solution',
+    label: '低行動成本解決方案',
+    placeholder: '寫出觀眾看完可以立刻做的小方法，不要讓解法太難、太貴或太抽象...',
+  },
+  {
+    key: 'process',
+    label: '具體操作過程',
+    placeholder: '用步驟或流程寫清楚怎麼做，讓觀眾照著做就能開始...',
+  },
+]
+
+function parseKnowledgePractice(text) {
+  return KNOWLEDGE_PRACTICE_FIELDS.reduce((acc, field, index) => {
+    const marker = `【${field.label}】`
+    const start = text.indexOf(marker)
+    if (start === -1) {
+      acc[field.key] = ''
+      return acc
+    }
+
+    const contentStart = start + marker.length
+    const nextStarts = KNOWLEDGE_PRACTICE_FIELDS
+      .slice(index + 1)
+      .map(next => text.indexOf(`【${next.label}】`, contentStart))
+      .filter(pos => pos !== -1)
+    const end = nextStarts.length ? Math.min(...nextStarts) : text.length
+    acc[field.key] = text.slice(contentStart, end).trim()
+    return acc
+  }, {})
+}
+
+function updateKnowledgePractice(text, key, value) {
+  const current = parseKnowledgePractice(text)
+  current[key] = value
+  return KNOWLEDGE_PRACTICE_FIELDS
+    .map(field => `【${field.label}】\n${current[field.key] || ''}`)
+    .join('\n\n')
 }
 
 const SHOOT_FORMATS = [
@@ -152,24 +199,20 @@ const PLANS = [
 const MOCK_SCRIPTS = {
   knowledge: text => [
     {
-      heading: '【選題維度】',
-      body:    `解決難題｜這個選題要直接處理觀眾正在卡住的問題：${text}\n補強方向：也可以加入「避免踩坑」或「降低成本」角度，讓觀眾覺得這支影片看完馬上省時間、省錢或少走彎路。`,
+      heading: '【場景難題｜腳本類型】',
+      body:    `腳本類型：解題型。\n場景難題：觀眾正在遇到「${text}」這個卡點，但不知道問題出在方法、順序還是判斷標準。開頭要先把這個場景講清楚，讓他覺得你說的就是他。`,
     },
     {
-      heading: '【腳本類型】',
-      body:    `解題型｜先指出觀眾的具體卡點，再用清楚步驟拆解解法。\n如果內容偏工具、方法或清單，也可以改成推薦型，但不能只介紹功能，必須說清楚「為什麼值得用」。`,
+      heading: '【低行動成本解決方案】',
+      body:    `不要一開始給很大的方法論，先給一個觀眾今天就能做的小解法。\n例如：先用一個簡單檢查點、表格、三步驟或低成本工具，讓他不用花大錢、不用重做全部流程，就能先改善一小段。`,
     },
     {
-      heading: '【腳本自檢】',
-      body:    `信息多：至少給 3 個具體重點，不要只有口號。\n效果快：開頭 5 秒內要讓觀眾知道看完能得到什麼。\n料夠猛：加入反常識、真實案例、數字或具體操作，避免平鋪直敘。`,
-    },
-    {
-      heading: '【常見錯誤避開】',
-      body:    `不要用太多專業用詞；內容順序要先痛點再解法；對象要明確；不要等太久才進重點。`,
+      heading: '【具體操作過程】',
+      body:    `第一步：先定位觀眾現在卡住的具體情境。\n第二步：給一個低行動成本的解決方式，讓觀眾可以立刻套用。\n第三步：用實際例子示範操作順序，並提醒常見錯誤：不要用太多專業用詞、不要順序混亂、不要讓對象模糊。`,
     },
     {
       heading: '【教知識影片腳本】',
-      body:    `開頭：你是不是也遇過「${text}」這個問題？很多人不是不努力，而是第一步就做錯。\n重點一：先判斷你卡住的是方法、順序，還是資源不足。\n重點二：把問題拆成三步處理，先做最容易看到效果的部分。\n重點三：不要一開始就追求完整，先讓觀眾看到一個可以馬上套用的小成果。\n結尾：如果你也想把這類問題拆成可執行的方法，先把這支影片存起來，下一次直接照這個順序檢查。`,
+      body:    `你是不是也遇過「${text}」這種狀況？很多人不是不努力，而是卡在一開始不知道怎麼判斷。\n先不要急著做完整方案，你今天只要先做一件事：把問題拆成「現在卡在哪裡、最低成本能先改哪一步、下一步怎麼操作」。\n我示範一次：先寫下你現在最常遇到的場景，再選一個最容易做到的小動作，最後用三個步驟把它執行完。這樣你不用重做全部流程，也能先看到一個明確改善。`,
     },
   ],
   opinion: text => [
@@ -576,8 +619,16 @@ function normalizeScriptResult(result, topicText, scriptType) {
     return sections.length ? sections : fallback
   }
 
-  if (result && typeof result === 'object') {
-    const objectSections = [
+    if (result && typeof result === 'object') {
+      const objectSections = [
+      ['scene', '【場景難題｜腳本類型】'],
+      ['scenario', '【場景難題｜腳本類型】'],
+      ['difficulty', '【場景難題｜腳本類型】'],
+      ['script_type_reason', '【場景難題｜腳本類型】'],
+      ['solution', '【低行動成本解決方案】'],
+      ['low_cost_solution', '【低行動成本解決方案】'],
+      ['process', '【具體操作過程】'],
+      ['operation_process', '【具體操作過程】'],
       ['hook', '【鉤子 · 前 3 秒】'],
       ['opening', '【開場】'],
       ['problem', '【問題引入】'],
@@ -1053,7 +1104,7 @@ function CopyPage() {
         scriptTypeLabel: SCRIPT_TYPES.find(s => s.id === nextScriptType)?.label || nextScriptType,
         requiredFramework: nextScriptType === 'knowledge' ? KNOWLEDGE_SCRIPT_SOP : null,
         instruction: nextScriptType === 'knowledge'
-          ? '請優先依照已上傳的 PDF 腳本知識庫與教知識腳本 SOP，輸出順序必須是：選題維度、腳本類型、腳本自檢、常見錯誤避開、教知識影片腳本。不要輸出通用的鉤子/問題引入/主體/CTA 框架。'
+          ? '請優先依照已上傳的 PDF 腳本知識庫與教知識腳本 SOP。輸出順序必須是：場景難題｜腳本類型、低行動成本解決方案、具體操作過程、教知識影片腳本。腳本類型由系統在推薦型或解題型中擇一，不要讓學員自己選。不要輸出通用的鉤子/問題引入/主體/CTA 框架。'
           : '請優先依照已上傳的 PDF 腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
       }
       const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
@@ -1164,6 +1215,7 @@ function CopyPage() {
             feature: 'script',
             topicText: selectedTopic.text,
             scriptType,
+            practiceFramework: scriptType === 'knowledge' ? KNOWLEDGE_SCRIPT_SOP.scriptFramework : null,
             draftText: practice,
             userPlan: deriveAITier(currentUser),
           }),
@@ -1179,10 +1231,10 @@ function CopyPage() {
           approved: practice.length >= 80,
           score: practice.length >= 80 ? 82 : 68,
           summary: practice.length >= 80
-            ? '本機測試判斷：開場長度與結構已達練習門檻。'
-            : '本機測試判斷：內容仍偏短，請補上明確鉤子、衝突與承諾。',
+            ? '本機測試判斷：內容長度與三段框架已達練習門檻。'
+            : '本機測試判斷：內容仍偏短，請補上場景難題、低行動成本解法與具體操作過程。',
           strengths: ['已有明確主題方向'],
-          improvements: ['補強前三秒鉤子', '加入更具體的觀眾痛點'],
+          improvements: ['補強場景難題', '加入低行動成本解決方案', '寫出更具體的操作步驟'],
         }
       } else {
         throw new Error('AI 練習判斷服務尚未設定')
@@ -1403,14 +1455,32 @@ function CopyPage() {
             <span className="ait-step-badge">5</span>
             <span className="ait-step-title">練習寫作</span>
           </div>
-          <p className="ait-practice-hint">用自己的話寫出這支影片的開場白（至少 50 字）。AI 會依照 PDF 內的腳本句式判斷是否通過。</p>
+          <p className="ait-practice-hint">用自己的版本完成這支影片的腳本練習，系統會依照課程框架與 PDF 句式判斷是否符合。</p>
           {!practiceSubmitted ? (
             <>
-              <div className="ait-practice-wrap">
-                <textarea className="ait-practice-ta" rows={6} placeholder="寫下你的開場白…"
-                  value={practice} onChange={e => setPractice(e.target.value)} />
-                <span className="ait-char-count">{practice.length} / 50+ 字</span>
-              </div>
+              {scriptType === 'knowledge' ? (
+                <div className="ait-practice-wrap">
+                  {KNOWLEDGE_PRACTICE_FIELDS.map(field => (
+                    <label key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <span className="ait-sc-heading">【{field.label}】</span>
+                      <textarea
+                        className="ait-practice-ta"
+                        rows={3}
+                        placeholder={field.placeholder}
+                        value={parseKnowledgePractice(practice)[field.key] || ''}
+                        onChange={e => setPractice(prev => updateKnowledgePractice(prev, field.key, e.target.value))}
+                      />
+                    </label>
+                  ))}
+                  <span className="ait-char-count">{practice.length} / 50+ 字</span>
+                </div>
+              ) : (
+                <div className="ait-practice-wrap">
+                  <textarea className="ait-practice-ta" rows={6} placeholder="用自己的版本寫出這支影片的腳本練習…"
+                    value={practice} onChange={e => setPractice(e.target.value)} />
+                  <span className="ait-char-count">{practice.length} / 50+ 字</span>
+                </div>
+              )}
               {practiceError && <div className="ait-inline-error">{practiceError}</div>}
               <button className="ait-btn-primary" disabled={practice.length < 50 || evaluatingPractice}
                 onClick={handleSubmitPractice}>
