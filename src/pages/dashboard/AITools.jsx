@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../../context/AuthContext'
 import { callAI } from '../../services/aiService'
+import { supabase, hasSupabase, allowLocalFallback } from '../../lib/supabase'
 import {
-  TrendingUp, FileText, Search, Share2, Mic,
+  TrendingUp, Search, Share2, Mic,
   BarChart2, Bookmark, Flame, Target, Bot,
   RefreshCw, BookOpen, MessageSquare, BookMarked, Video,
   Camera, Eye, Users, MessageCircle, X, Download,
@@ -16,8 +17,7 @@ import {
 // ══════════════════════════════════════════════════════
 
 const NAV_TOOLS = [
-  { id: 'topics',     label: '爆款選題', Icon: TrendingUp },
-  { id: 'copy',       label: '爆款文案', Icon: FileText   },
+  { id: 'topics',     label: '爆款選題腳本', Icon: TrendingUp },
   { id: 'analysis',   label: '爆款解析', Icon: Search     },
   { id: 'social',     label: '社群貼文', Icon: Share2     },
   { id: 'livestream', label: '直播話術', Icon: Mic        },
@@ -27,6 +27,10 @@ const NAV_TOOLS = [
   { id: 'planning',   label: '企劃定位', Icon: Target     },
   { id: 'chat',       label: '頂流助理', Icon: Bot        },
 ]
+
+const SAVED_TOPICS_FALLBACK_KEY = 'mp_saved_topics'
+const PRACTICE_FALLBACK_KEY = 'mp_topic_practices'
+const AI_PRACTICE_PASS_SCORE = 75
 
 const STATS = [
   { num: '1,200+',  label: '創作者使用'   },
@@ -501,6 +505,73 @@ function buildCopyTopics(idea, round) {
   }))
 }
 
+function normalizeGeneratedTopics(result, input, round) {
+  const fallback = buildCopyTopics(input, round)
+  if (!Array.isArray(result)) return fallback
+
+  return fallback.map((item, index) => {
+    const source = result[index]
+    if (typeof source === 'string') {
+      const match = source.match(/^【(.+?)】(.+)$/)
+      return {
+        ...item,
+        element: match?.[1] || item.element,
+        text: (match?.[2] || source).trim(),
+      }
+    }
+
+    if (source && typeof source === 'object') {
+      return {
+        element: source.element || item.element,
+        text: source.text || source.title || item.text,
+        traffic: source.traffic || item.traffic,
+      }
+    }
+
+    return item
+  })
+}
+
+function getFallbackSavedTopics(userId) {
+  if (!allowLocalFallback) return []
+  try {
+    const all = JSON.parse(localStorage.getItem(SAVED_TOPICS_FALLBACK_KEY) || '[]')
+    return all.filter(item => String(item.user_id) === String(userId))
+  } catch (_) {
+    return []
+  }
+}
+
+function saveFallbackTopic(topic) {
+  if (!allowLocalFallback) return topic
+  const all = JSON.parse(localStorage.getItem(SAVED_TOPICS_FALLBACK_KEY) || '[]')
+  const saved = {
+    ...topic,
+    id: `local-${Date.now()}`,
+    created_at: new Date().toISOString(),
+  }
+  localStorage.setItem(SAVED_TOPICS_FALLBACK_KEY, JSON.stringify([saved, ...all]))
+  return saved
+}
+
+function saveFallbackPractice(practice) {
+  if (!allowLocalFallback) return practice
+  const all = JSON.parse(localStorage.getItem(PRACTICE_FALLBACK_KEY) || '[]')
+  const saved = {
+    ...practice,
+    id: `local-${Date.now()}`,
+    created_at: new Date().toISOString(),
+  }
+  localStorage.setItem(PRACTICE_FALLBACK_KEY, JSON.stringify([saved, ...all]))
+  return saved
+}
+
+async function getSupabaseSessionToken() {
+  if (!hasSupabase || !supabase) return ''
+  const { data } = await supabase.auth.getSession()
+  return data?.session?.access_token || ''
+}
+
 // ── Tier helper ───────────────────────────────────────
 function deriveAITier(user) {
   const tier = user?.tier || 'basic'
@@ -792,6 +863,7 @@ function TopicsPage() {
 function CopyPage() {
   const { currentUser } = useAuth()
   const canSeeAll = deriveAITier(currentUser) !== 'trial'
+  const skipAutoGenerateRef = useRef(false)
 
   // Step 1 — idea
   const [idea, setIdea] = useState('')
@@ -808,30 +880,259 @@ function CopyPage() {
   // Step 5 — practice
   const [practice,          setPractice]          = useState('')
   const [practiceSubmitted, setPracticeSubmitted] = useState(false)
+  const [practiceEvaluation,setPracticeEvaluation]= useState(null)
+  const [evaluatingPractice,setEvaluatingPractice]= useState(false)
+  const [practiceError,     setPracticeError]     = useState('')
   // Step 6 — shoot format + download
   const [shootFormat, setShootFormat] = useState(null)
   const [showModal,   setShowModal]   = useState(false)
+  const [savedTopics, setSavedTopics] = useState([])
+  const [savingTopic, setSavingTopic] = useState('')
+  const [topicLibraryError, setTopicLibraryError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadSavedTopics() {
+      if (!currentUser?.id) {
+        setSavedTopics([])
+        return
+      }
+
+      setTopicLibraryError('')
+
+      if (hasSupabase && supabase && currentUser.source === 'supabase') {
+        const { data, error } = await supabase
+          .from('saved_topics')
+          .select('id, industry, script_type, element, topic_text, traffic, created_at')
+          .eq('user_id', currentUser.id)
+          .order('created_at', { ascending: false })
+          .limit(20)
+
+        if (error) throw error
+        if (!cancelled) setSavedTopics(data || [])
+        return
+      }
+
+      if (!cancelled) setSavedTopics(getFallbackSavedTopics(currentUser.id))
+    }
+
+    loadSavedTopics().catch(error => {
+      if (!cancelled) setTopicLibraryError(error.message || '選題庫讀取失敗')
+    })
+
+    return () => { cancelled = true }
+  }, [currentUser?.id, currentUser?.source])
 
   // Generate topics when scriptType is selected
   useEffect(() => {
     if (!scriptType || !idea.trim()) { setCopyTopics(null); return }
+    if (skipAutoGenerateRef.current) {
+      skipAutoGenerateRef.current = false
+      return
+    }
     let cancelled = false
     setGeneratingTopics(true); setCopyTopics(null); setSelectedTopicIdx(null); setScript(null)
-    const t = setTimeout(() => {
-      if (cancelled) return
-      setCopyTopics(buildCopyTopics(idea, topicRound)); setGeneratingTopics(false)
-    }, 900)
-    return () => { cancelled = true; clearTimeout(t) }
-  }, [scriptType, topicRound])
+    setPractice(''); setPracticeSubmitted(false); setPracticeEvaluation(null); setPracticeError(''); setShootFormat(null)
 
-  const handleRefreshTopics = () => { setTopicRound(r => r + 1); setSelectedTopicIdx(null); setScript(null) }
+    async function generateTopics() {
+      try {
+        const payload = {
+          idea: idea.trim(),
+          scriptType,
+          instruction: '請先產生可拍攝的爆款選題，再讓學員進入腳本練習流程。',
+        }
+        const result = await callAI('topics', payload, deriveAITier(currentUser), currentUser?.id)
+        if (!cancelled) setCopyTopics(normalizeGeneratedTopics(result, idea.trim(), topicRound))
+      } catch (_) {
+        if (!cancelled) setCopyTopics(buildCopyTopics(idea.trim(), topicRound))
+      } finally {
+        if (!cancelled) setGeneratingTopics(false)
+      }
+    }
+
+    generateTopics()
+    return () => { cancelled = true }
+  }, [scriptType, topicRound, idea, currentUser])
+
+  const handleRefreshTopics = () => {
+    setTopicRound(r => r + 1)
+    setSelectedTopicIdx(null)
+    setScript(null)
+    setPractice('')
+    setPracticeSubmitted(false)
+    setPracticeEvaluation(null)
+    setPracticeError('')
+    setShootFormat(null)
+  }
 
   const handleSelectTopic = idx => {
-    setSelectedTopicIdx(idx); setScript(null); setPractice(''); setPracticeSubmitted(false); setShootFormat(null)
+    setSelectedTopicIdx(idx); setScript(null); setPractice(''); setPracticeSubmitted(false); setPracticeEvaluation(null); setPracticeError(''); setShootFormat(null)
     setGeneratingScript(true)
     setTimeout(() => {
       setScript(MOCK_SCRIPTS[scriptType](copyTopics[idx].text)); setGeneratingScript(false)
     }, 900)
+  }
+
+  const handleSelectSavedTopic = item => {
+    const nextScriptType = item.script_type || scriptType || 'knowledge'
+    const topic = {
+      element: item.element || '人群',
+      text: item.topic_text,
+      traffic: item.traffic || 'medium',
+      savedTopicId: item.id,
+    }
+    skipAutoGenerateRef.current = true
+    setIdea(item.industry || item.topic_text)
+    setScriptType(nextScriptType)
+    setCopyTopics([topic])
+    setSelectedTopicIdx(0)
+    setPractice('')
+    setPracticeSubmitted(false)
+    setPracticeEvaluation(null)
+    setPracticeError('')
+    setShootFormat(null)
+    setGeneratingScript(true)
+    setTimeout(() => {
+      setScript(MOCK_SCRIPTS[nextScriptType](topic.text))
+      setGeneratingScript(false)
+    }, 700)
+  }
+
+  const isTopicSaved = topicText => savedTopics.some(item => item.topic_text === topicText)
+
+  const handleSaveTopic = async topic => {
+    if (!currentUser?.id || !topic?.text || savingTopic) return
+    setSavingTopic(topic.text)
+    setTopicLibraryError('')
+
+    const payload = {
+      user_id: currentUser.id,
+      feature_key: 'topic_script',
+      industry: idea.trim(),
+      script_type: scriptType,
+      element: topic.element,
+      topic_text: topic.text,
+      traffic: topic.traffic,
+      source_payload: {
+        idea: idea.trim(),
+        scriptType,
+        generatedAt: new Date().toISOString(),
+      },
+    }
+
+    try {
+      let saved
+      if (hasSupabase && supabase && currentUser.source === 'supabase') {
+        const { data, error } = await supabase
+          .from('saved_topics')
+          .insert(payload)
+          .select('id, industry, script_type, element, topic_text, traffic, created_at')
+          .single()
+        if (error) throw error
+        saved = data
+      } else if (allowLocalFallback) {
+        saved = saveFallbackTopic(payload)
+      } else {
+        throw new Error('選題庫尚未連接，請重新登入後再試')
+      }
+
+      setSavedTopics(prev => [saved, ...prev.filter(item => item.topic_text !== saved.topic_text)])
+    } catch (error) {
+      setTopicLibraryError(error.message || '保存選題失敗')
+    } finally {
+      setSavingTopic('')
+    }
+  }
+
+  const handleSubmitPractice = async () => {
+    if (practice.length < 50 || evaluatingPractice || selectedTopicIdx === null) return
+
+    const selectedTopic = copyTopics?.[selectedTopicIdx]
+    setEvaluatingPractice(true)
+    setPracticeError('')
+    setPracticeEvaluation(null)
+
+    try {
+      let evaluation
+      const token = await getSupabaseSessionToken()
+      const workerUrl = import.meta.env.VITE_WORKER_URL || ''
+
+      if (workerUrl && token) {
+        const response = await fetch(`${workerUrl.replace(/\/$/, '')}/api/ai/writing/evaluate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            feature: 'topics',
+            topicText: selectedTopic.text,
+            scriptType,
+            draftText: practice,
+            userPlan: deriveAITier(currentUser),
+          }),
+        })
+
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'AI 練習判斷失敗')
+        }
+        evaluation = data.evaluation
+      } else if (allowLocalFallback) {
+        evaluation = {
+          approved: practice.length >= 80,
+          score: practice.length >= 80 ? 82 : 68,
+          summary: practice.length >= 80
+            ? '本機測試判斷：開場長度與結構已達練習門檻。'
+            : '本機測試判斷：內容仍偏短，請補上明確鉤子、衝突與承諾。',
+          strengths: ['已有明確主題方向'],
+          improvements: ['補強前三秒鉤子', '加入更具體的觀眾痛點'],
+        }
+      } else {
+        throw new Error('AI 練習判斷服務尚未設定')
+      }
+
+      const approved = Boolean(evaluation?.approved) || Number(evaluation?.score || 0) >= AI_PRACTICE_PASS_SCORE
+      const normalized = {
+        ...evaluation,
+        approved,
+        score: Number(evaluation?.score || 0),
+      }
+
+      if (hasSupabase && supabase && currentUser.source === 'supabase') {
+        const { error } = await supabase.from('topic_writing_practices').insert({
+          saved_topic_id: selectedTopic.savedTopicId || savedTopics.find(item => item.topic_text === selectedTopic.text)?.id || null,
+          user_id: currentUser.id,
+          topic_text: selectedTopic.text,
+          script_type: scriptType,
+          draft_text: practice,
+          ai_result: normalized,
+          score: normalized.score,
+          status: approved ? 'approved' : 'rejected',
+          download_unlocked: approved,
+        })
+        if (error) throw error
+      } else if (allowLocalFallback) {
+        saveFallbackPractice({
+          user_id: currentUser?.id,
+          topic_text: selectedTopic.text,
+          script_type: scriptType,
+          draft_text: practice,
+          ai_result: normalized,
+          score: normalized.score,
+          status: approved ? 'approved' : 'rejected',
+          download_unlocked: approved,
+        })
+      }
+
+      setPracticeEvaluation(normalized)
+      setPracticeSubmitted(true)
+    } catch (error) {
+      setPracticeError(error.message || '練習判斷失敗，請稍後再試')
+    } finally {
+      setEvaluatingPractice(false)
+    }
   }
 
   const handleDownload = () => {
@@ -852,25 +1153,44 @@ function CopyPage() {
   return (
     <>
       <div>
-        <h1 className="ait-tool-title">爆款文案</h1>
-        <p className="ait-tool-desc">輸入你的想法，AI 幫你套入爆款腳本結構</p>
+        <h1 className="ait-tool-title">爆款選題腳本</h1>
+        <p className="ait-tool-desc">先產出爆款選題，再完成腳本練習；AI 判斷符合課程句式後才可下載</p>
       </div>
 
       {/* Step 1: idea input */}
       <div className="ait-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div className="ait-step-hd" style={{ marginBottom: 2 }}>
           <span className="ait-step-badge">1</span>
-          <span className="ait-step-title">輸入你的創作想法</span>
+          <span className="ait-step-title">輸入你的產業或創作想法</span>
         </div>
         <textarea
           className="ait-practice-ta"
           rows={5}
-          placeholder="輸入你的創作想法，例如：我想分享健身三個月的心路歷程，重點是從完全不運動到養成習慣的過程..."
+          placeholder="例如：健身教練想吸引上班族，主題是三個月養成運動習慣；或輸入餐飲、美業、親子教育..."
           value={idea}
           onChange={e => setIdea(e.target.value)}
         />
-        <p style={{ fontSize: 12, color: 'var(--gray-500)', margin: 0 }}>輸入你的想法，AI 幫你套入爆款腳本結構</p>
+        <p style={{ fontSize: 12, color: 'var(--gray-500)', margin: 0 }}>系統會先產生選題，再引導你完成腳本練習</p>
       </div>
+
+      {savedTopics.length > 0 && (
+        <div className="ait-card ait-topic-library">
+          <div className="ait-topic-library-hd">
+            <span>我的選題庫</span>
+            <small>保存後可回來練習；下載仍需完成 AI 寫作判斷</small>
+          </div>
+          <div className="ait-topic-library-list">
+            {savedTopics.slice(0, 4).map(item => (
+              <button key={item.id} className="ait-topic-library-item" onClick={() => handleSelectSavedTopic(item)}>
+                <span className="ait-topic-library-title">{item.topic_text}</span>
+                <span className="ait-topic-library-meta">{item.script_type ? SCRIPT_TYPES.find(s => s.id === item.script_type)?.label : '未選腳本'}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {topicLibraryError && <div className="ait-inline-error">{topicLibraryError}</div>}
 
       {/* Step 2: script type */}
       {idea.trim() && (
@@ -910,11 +1230,20 @@ function CopyPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {copyTopics.map((t, i) => {
                 const es = ELEM_STYLE[t.element] || {}; const ts = TRAFFIC_STYLE[t.traffic] || TRAFFIC_STYLE.low
+                const saved = isTopicSaved(t.text)
                 return (
                   <div key={i} className={`ait-copy-topic-card${selectedTopicIdx === i ? ' selected' : ''}`}>
                     <span className="ait-elem-tag" style={{ background: es.bg, color: es.color, borderColor: es.border, flexShrink: 0 }}>{t.element}</span>
                     <span className="ait-copy-topic-text">{t.text}</span>
                     <span className="ait-traffic-tag" style={{ background: ts.bg, color: ts.color, borderColor: ts.border, flexShrink: 0 }}>{ts.label}</span>
+                    <button
+                      className={`ait-copy-topic-save-btn${saved ? ' saved' : ''}`}
+                      disabled={saved || savingTopic === t.text}
+                      onClick={() => handleSaveTopic(t)}
+                    >
+                      <Bookmark size={13} strokeWidth={1.8} />
+                      {saved ? '已保存' : savingTopic === t.text ? '保存中' : '保存'}
+                    </button>
                     <button className="ait-copy-topic-select-btn" onClick={() => handleSelectTopic(i)}>選這個</button>
                   </div>
                 )
@@ -978,7 +1307,7 @@ function CopyPage() {
             <span className="ait-step-badge">5</span>
             <span className="ait-step-title">練習寫作</span>
           </div>
-          <p className="ait-practice-hint">用自己的話寫出這支影片的開場白（至少 50 字），完成後進入下一步</p>
+          <p className="ait-practice-hint">用自己的話寫出這支影片的開場白（至少 50 字）。AI 會依照 PDF 內的腳本句式判斷是否通過。</p>
           {!practiceSubmitted ? (
             <>
               <div className="ait-practice-wrap">
@@ -986,17 +1315,35 @@ function CopyPage() {
                   value={practice} onChange={e => setPractice(e.target.value)} />
                 <span className="ait-char-count">{practice.length} / 50+ 字</span>
               </div>
-              <button className="ait-btn-primary" disabled={practice.length < 50}
-                onClick={() => setPracticeSubmitted(true)}>提交練習</button>
+              {practiceError && <div className="ait-inline-error">{practiceError}</div>}
+              <button className="ait-btn-primary" disabled={practice.length < 50 || evaluatingPractice}
+                onClick={handleSubmitPractice}>
+                {evaluatingPractice ? <Spinner /> : '提交練習給 AI 判斷'}
+              </button>
             </>
+          ) : practiceEvaluation?.approved ? (
+            <div className="ait-practice-ok">
+              AI 判斷通過，分數 {practiceEvaluation.score || AI_PRACTICE_PASS_SCORE}。可以進入下一步並下載練習內容。
+              {practiceEvaluation.summary && <p>{practiceEvaluation.summary}</p>}
+            </div>
           ) : (
-            <div className="ait-practice-ok">練習已提交，可以進入下一步</div>
+            <div className="ait-practice-review">
+              <strong>AI 判斷尚未通過</strong>
+              <span>分數 {practiceEvaluation?.score || 0}，請依照建議修改後再提交。</span>
+              {practiceEvaluation?.summary && <p>{practiceEvaluation.summary}</p>}
+              {Array.isArray(practiceEvaluation?.improvements) && practiceEvaluation.improvements.length > 0 && (
+                <ul>
+                  {practiceEvaluation.improvements.map((item, index) => <li key={index}>{item}</li>)}
+                </ul>
+              )}
+              <button className="ait-ghost-btn" onClick={() => setPracticeSubmitted(false)}>重新修改練習</button>
+            </div>
           )}
         </div>
       )}
 
       {/* Step 6: shoot format + download */}
-      {practiceSubmitted && (
+      {practiceSubmitted && practiceEvaluation?.approved && (
         <div className="ait-step-card">
           <div className="ait-step-hd">
             <span className="ait-step-badge">6</span>
@@ -2822,8 +3169,7 @@ export default function AITools() {
         {/* ── Right content ── */}
         <main className="ait-main">
           <div className="ait-content">
-            {activeId === 'topics'     && <TopicsPage />}
-            {activeId === 'copy'       && <CopyPage />}
+            {activeId === 'topics'     && <CopyPage />}
             {activeId === 'analysis'   && <AnalysisPage />}
             {activeId === 'social'     && <SocialPage />}
             {activeId === 'livestream' && <LivestreamPage />}

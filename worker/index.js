@@ -120,6 +120,11 @@ export default {
         return await handleAI(request, env)
       }
 
+      // POST /api/ai/writing/evaluate → evaluate a student's writing practice against agent knowledge
+      if (path === '/api/ai/writing/evaluate' && request.method === 'POST') {
+        return await handleWritingEvaluation(request, env)
+      }
+
       // POST /api/ai/knowledge/sync → attach an uploaded PDF to an agent vector store
       if (path === '/api/ai/knowledge/sync' && request.method === 'POST') {
         return await handleAIKnowledgeSync(request, env)
@@ -256,6 +261,124 @@ async function handleAI(request, env) {
   const result = parseAIResult(outputText)
 
   return json({ success: true, result, provider: 'openai', agent: agent.feature_key || feature })
+}
+
+async function handleWritingEvaluation(request, env) {
+  if (!env.OPENAI_API_KEY) {
+    return err('OpenAI API key is not configured', 503)
+  }
+
+  const user = await requireUser(request, env)
+  const body = await request.json().catch(() => ({}))
+  const feature = String(body.feature || 'topics').trim()
+  const topicText = String(body.topicText || '').trim()
+  const scriptType = String(body.scriptType || '').trim()
+  const draftText = String(body.draftText || '').trim()
+  const userPlan = String(body.userPlan || 'free')
+
+  if (!topicText) return err('Missing topic text', 400)
+  if (!scriptType) return err('Missing script type', 400)
+  if (draftText.length < 50) return err('Practice draft must be at least 50 characters', 400)
+
+  const agent = await getAIAgent(feature, env)
+  if (!agent) return err('Unsupported AI feature', 400)
+
+  const scriptTypeMap = {
+    knowledge: '教知識',
+    opinion: '說觀點',
+    story: '說故事',
+    process: '曬過程',
+  }
+
+  const requestBody = {
+    model: env.OPENAI_MODEL || agent.model || 'gpt-4.1-mini',
+    input: [
+      {
+        role: 'system',
+        content: [
+          agent.system_prompt,
+          '',
+          '你現在要擔任 TOP LEVEL TRAFFIC 的腳本練習評分老師。',
+          '請優先參考可用的 PDF 知識庫與課程腳本句式規則，判斷學員寫出的開場白是否符合該腳本類型。',
+          '你只能回傳 JSON，不要輸出 Markdown，不要使用 emoji。',
+        ].join('\n'),
+      },
+      {
+        role: 'user',
+        content: [
+          `學員 ID：${user.id}`,
+          `學員方案：${userPlan}`,
+          `選題：${topicText}`,
+          `腳本類型：${scriptTypeMap[scriptType] || scriptType}`,
+          '',
+          '學員練習內容：',
+          draftText,
+          '',
+          '請用以下 JSON 格式回覆：',
+          '{',
+          '  "approved": true 或 false,',
+          '  "score": 0 到 100 的數字,',
+          '  "summary": "一句話總評",',
+          '  "strengths": ["做得好的地方"],',
+          '  "improvements": ["需要修改的地方"],',
+          '  "matched_patterns": ["符合的 PDF/課程句式重點"],',
+          '  "required_revision": "如果未通過，給一段具體修改方向；通過則填空字串"',
+          '}',
+          '',
+          '通過標準：',
+          '- 不是只看字數，必須符合該腳本類型的開場句式與短影音鉤子。',
+          '- 需要有明確受眾、痛點或反差。',
+          '- 需要能讓觀眾在前三秒產生好奇。',
+          '- score 75 分以上才 approved=true。',
+        ].join('\n'),
+      },
+    ],
+    temperature: 0.2,
+  }
+
+  if (agent.vector_store_id) {
+    requestBody.tools = [
+      {
+        type: 'file_search',
+        vector_store_ids: [agent.vector_store_id],
+        max_num_results: 8,
+      },
+    ]
+  }
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    return err(data.error?.message || 'OpenAI evaluation failed', response.status)
+  }
+
+  const outputText = extractOpenAIText(data)
+  const parsed = parseAIResult(outputText)
+  const evaluation = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+    ? parsed
+    : {
+        approved: false,
+        score: 0,
+        summary: String(outputText || 'AI did not return a valid evaluation'),
+        strengths: [],
+        improvements: ['請重新提交練習，讓 AI 產生完整判斷。'],
+        matched_patterns: [],
+        required_revision: '請補上更明確的前三秒鉤子、受眾痛點與句式結構。',
+      }
+
+  const score = Number(evaluation.score || 0)
+  evaluation.score = Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0
+  evaluation.approved = Boolean(evaluation.approved) && evaluation.score >= 75
+
+  return json({ success: true, evaluation, provider: 'openai', agent: agent.feature_key || feature })
 }
 
 async function handleAIKnowledgeSync(request, env) {
@@ -629,22 +752,10 @@ async function getGoogleAccessToken(env) {
 }
 
 async function requireAdmin(request, env) {
-  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
-    throw new Error('Supabase admin verification is not configured')
-  }
+  const userData = await requireUser(request, env)
 
   const authHeader = request.headers.get('Authorization') || ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
-  if (!token) throw new Error('Missing authorization token')
-
-  const userResponse = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/user`, {
-    headers: {
-      apikey: env.SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token}`,
-    },
-  })
-  const userData = await userResponse.json()
-  if (!userResponse.ok || !userData?.id) throw new Error('Invalid authorization token')
 
   const profileUrl = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
   profileUrl.searchParams.set('id', `eq.${userData.id}`)
@@ -664,6 +775,27 @@ async function requireAdmin(request, env) {
   if (profile?.role !== 'admin' || profile?.status !== 'active') {
     throw new Error('Admin permission required')
   }
+
+  return userData
+}
+
+async function requireUser(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
+    throw new Error('Supabase auth verification is not configured')
+  }
+
+  const authHeader = request.headers.get('Authorization') || ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
+  if (!token) throw new Error('Missing authorization token')
+
+  const userResponse = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/user`, {
+    headers: {
+      apikey: env.SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  const userData = await userResponse.json()
+  if (!userResponse.ok || !userData?.id) throw new Error('Invalid authorization token')
 
   return userData
 }
