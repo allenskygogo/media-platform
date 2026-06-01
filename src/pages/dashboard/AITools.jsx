@@ -199,8 +199,8 @@ const PLANS = [
 const MOCK_SCRIPTS = {
   knowledge: text => [
     {
-      heading: '【場景難題｜腳本類型】',
-      body:    `腳本類型：解題型。\n場景難題：觀眾正在遇到「${text}」這個卡點，但不知道問題出在方法、順序還是判斷標準。開頭要先把這個場景講清楚，讓他覺得你說的就是他。`,
+      heading: '【場景難題】',
+      body:    `觀眾正在遇到「${text}」這個卡點，但不知道問題出在方法、順序還是判斷標準。系統判斷這支適合用解題型切入：先說出具體困境，再讓觀眾知道這支影片會給他一個能馬上開始的解法。`,
     },
     {
       heading: '【低行動成本解決方案】',
@@ -209,10 +209,6 @@ const MOCK_SCRIPTS = {
     {
       heading: '【具體操作過程】',
       body:    `第一步：先定位觀眾現在卡住的具體情境。\n第二步：給一個低行動成本的解決方式，讓觀眾可以立刻套用。\n第三步：用實際例子示範操作順序，並提醒常見錯誤：不要用太多專業用詞、不要順序混亂、不要讓對象模糊。`,
-    },
-    {
-      heading: '【教知識影片腳本】',
-      body:    `你是不是也遇過「${text}」這種狀況？很多人不是不努力，而是卡在一開始不知道怎麼判斷。\n先不要急著做完整方案，你今天只要先做一件事：把問題拆成「現在卡在哪裡、最低成本能先改哪一步、下一步怎麼操作」。\n我示範一次：先寫下你現在最常遇到的場景，再選一個最容易做到的小動作，最後用三個步驟把它執行完。這樣你不用重做全部流程，也能先看到一個明確改善。`,
     },
   ],
   opinion: text => [
@@ -585,6 +581,26 @@ function normalizeGeneratedTopics(result, input, round) {
 
 function normalizeScriptResult(result, topicText, scriptType) {
   const fallback = (MOCK_SCRIPTS[scriptType] || MOCK_SCRIPTS.knowledge)(topicText)
+  const normalizeKnowledgeSections = sections => {
+    const allowed = ['【場景難題】', '【低行動成本解決方案】', '【具體操作過程】']
+    const normalized = sections
+      .map(section => {
+        const heading = String(section.heading || '').trim()
+        if (heading.includes('教知識影片腳本')) return null
+        if (heading.includes('場景難題')) return { ...section, heading: '【場景難題】' }
+        if (heading.includes('低行動成本')) return { ...section, heading: '【低行動成本解決方案】' }
+        if (heading.includes('具體操作')) return { ...section, heading: '【具體操作過程】' }
+        return section
+      })
+      .filter(section => section?.body && allowed.includes(section.heading))
+
+    const unique = []
+    allowed.forEach(heading => {
+      const match = normalized.find(section => section.heading === heading)
+      if (match) unique.push(match)
+    })
+    return unique.length ? unique : fallback
+  }
 
   const normalizeSection = (section, index) => {
     if (typeof section === 'string') {
@@ -616,15 +632,16 @@ function normalizeScriptResult(result, topicText, scriptType) {
 
   if (sectionSource) {
     const sections = sectionSource.map(normalizeSection).filter(section => section?.body)
+    if (scriptType === 'knowledge') return normalizeKnowledgeSections(sections)
     return sections.length ? sections : fallback
   }
 
     if (result && typeof result === 'object') {
       const objectSections = [
-      ['scene', '【場景難題｜腳本類型】'],
-      ['scenario', '【場景難題｜腳本類型】'],
-      ['difficulty', '【場景難題｜腳本類型】'],
-      ['script_type_reason', '【場景難題｜腳本類型】'],
+      ['scene', '【場景難題】'],
+      ['scenario', '【場景難題】'],
+      ['difficulty', '【場景難題】'],
+      ['script_type_reason', '【場景難題】'],
       ['solution', '【低行動成本解決方案】'],
       ['low_cost_solution', '【低行動成本解決方案】'],
       ['process', '【具體操作過程】'],
@@ -641,6 +658,7 @@ function normalizeScriptResult(result, topicText, scriptType) {
       return body ? { heading, body } : null
     }).filter(Boolean)
 
+    if (scriptType === 'knowledge') return normalizeKnowledgeSections(objectSections)
     return objectSections.length ? objectSections : fallback
   }
 
@@ -1104,7 +1122,7 @@ function CopyPage() {
         scriptTypeLabel: SCRIPT_TYPES.find(s => s.id === nextScriptType)?.label || nextScriptType,
         requiredFramework: nextScriptType === 'knowledge' ? KNOWLEDGE_SCRIPT_SOP : null,
         instruction: nextScriptType === 'knowledge'
-          ? '請優先依照已上傳的 PDF 腳本知識庫與教知識腳本 SOP。輸出順序必須是：場景難題｜腳本類型、低行動成本解決方案、具體操作過程、教知識影片腳本。腳本類型由系統在推薦型或解題型中擇一，不要讓學員自己選。不要輸出通用的鉤子/問題引入/主體/CTA 框架。'
+          ? '請優先依照已上傳的 PDF 腳本知識庫與教知識腳本 SOP。輸出順序必須只有三段：場景難題、低行動成本解決方案、具體操作過程。腳本類型由系統在推薦型或解題型中擇一，寫在場景難題段落裡，不要出現在標題。不要輸出教知識影片腳本第四段，也不要輸出通用的鉤子/問題引入/主體/CTA 框架。'
           : '請優先依照已上傳的 PDF 腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
       }
       const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
@@ -1455,7 +1473,7 @@ function CopyPage() {
             <span className="ait-step-badge">5</span>
             <span className="ait-step-title">練習寫作</span>
           </div>
-          <p className="ait-practice-hint">用自己的版本完成這支影片的腳本練習，系統會依照課程框架與 PDF 句式判斷是否符合。</p>
+          <p className="ait-practice-hint">用自己的版本完成這支影片的腳本練習，系統會依照課程框架與句式判斷是否符合。</p>
           {!practiceSubmitted ? (
             <>
               {scriptType === 'knowledge' ? (
