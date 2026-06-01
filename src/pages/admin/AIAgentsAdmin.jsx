@@ -269,10 +269,9 @@ export default function AIAgentsAdmin() {
         throw new Error('PDF 檔案請先控制在 25 MB 以內。')
       }
 
-      const safeName = file.name
-        .replace(/[^\w.\-\u4e00-\u9fff]+/g, '-')
-        .replace(/-+/g, '-')
-      const storagePath = `${selectedKey}/${Date.now()}-${safeName}`
+      const ext = file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'pdf'
+      const randomId = Math.random().toString(36).slice(2, 10)
+      const storagePath = `${selectedKey}/${Date.now()}-${randomId}.${ext}`
 
       const upload = await supabase.storage
         .from(KNOWLEDGE_BUCKET)
