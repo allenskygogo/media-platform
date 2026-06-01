@@ -158,6 +158,52 @@ const KNOWLEDGE_PRACTICE_FIELDS = [
   },
 ]
 
+const OPINION_SCRIPT_SOP = {
+  title: '說觀點腳本 SOP',
+  scriptFramework: ['反常識立場', '錯誤認知', '核心觀點', '例子對比', '行動收束'],
+  selfCheck: ['立場夠鮮明', '反差夠清楚', '例子夠具體', '收束夠有態度'],
+  qualityRules: [
+    '反常識立場：第一段要直接講出和大眾想法不同的判斷，不要只說安全正確的話。',
+    '錯誤認知：指出觀眾原本以為對、但其實會卡住的思維。',
+    '核心觀點：用一句清楚、有立場的話說出你的主張。',
+    '例子對比：必須有一個具體場景、人物、數字、前後差異或真實案例。',
+    '行動收束：最後要留下可被記住的一句話或一個明確行動，不要普通喊口號。',
+  ],
+}
+
+const OPINION_PRACTICE_FIELDS = [
+  {
+    key: 'stance',
+    label: '反常識立場',
+    placeholder: '先寫出你跟大多數人不同的判斷，立場要鮮明，不要只講安全正確的話...',
+  },
+  {
+    key: 'wrongBelief',
+    label: '錯誤認知',
+    placeholder: '寫出觀眾原本以為對、但其實會讓他卡住的想法...',
+  },
+  {
+    key: 'coreView',
+    label: '核心觀點',
+    placeholder: '用一句清楚、有態度的話說出你的主張...',
+  },
+  {
+    key: 'contrastExample',
+    label: '例子對比',
+    placeholder: '補上一個具體場景、人物、數字、前後差異或真實案例...',
+  },
+  {
+    key: 'closing',
+    label: '行動收束',
+    placeholder: '最後留下一句觀眾記得住的收束，或一個明確行動...',
+  },
+]
+
+const STRUCTURED_PRACTICE_FIELDS = {
+  knowledge: KNOWLEDGE_PRACTICE_FIELDS,
+  opinion: OPINION_PRACTICE_FIELDS,
+}
+
 function parseKnowledgePractice(text) {
   return KNOWLEDGE_PRACTICE_FIELDS.reduce((acc, field, index) => {
     const marker = `【${field.label}】`
@@ -178,6 +224,29 @@ function parseKnowledgePractice(text) {
   }, {})
 }
 
+function parseStructuredPractice(scriptType, text) {
+  const fields = STRUCTURED_PRACTICE_FIELDS[scriptType]
+  if (!fields) return {}
+
+  return fields.reduce((acc, field, index) => {
+    const marker = `【${field.label}】`
+    const start = text.indexOf(marker)
+    if (start === -1) {
+      acc[field.key] = ''
+      return acc
+    }
+
+    const contentStart = start + marker.length
+    const nextStarts = fields
+      .slice(index + 1)
+      .map(next => text.indexOf(`【${next.label}】`, contentStart))
+      .filter(pos => pos !== -1)
+    const end = nextStarts.length ? Math.min(...nextStarts) : text.length
+    acc[field.key] = text.slice(contentStart, end).trim()
+    return acc
+  }, {})
+}
+
 function updateKnowledgePractice(text, key, value) {
   const current = parseKnowledgePractice(text)
   current[key] = value
@@ -186,10 +255,21 @@ function updateKnowledgePractice(text, key, value) {
     .join('\n\n')
 }
 
+function updateStructuredPractice(scriptType, text, key, value) {
+  const fields = STRUCTURED_PRACTICE_FIELDS[scriptType]
+  if (!fields) return text
+  const current = parseStructuredPractice(scriptType, text)
+  current[key] = value
+  return fields
+    .map(field => `【${field.label}】\n${current[field.key] || ''}`)
+    .join('\n\n')
+}
+
 function validatePracticeSubmission(scriptType, text) {
-  if (scriptType === 'knowledge') {
-    const fields = parseKnowledgePractice(text)
-    const missing = KNOWLEDGE_PRACTICE_FIELDS
+  const structuredFields = STRUCTURED_PRACTICE_FIELDS[scriptType]
+  if (structuredFields) {
+    const fields = parseStructuredPractice(scriptType, text)
+    const missing = structuredFields
       .filter(field => !String(fields[field.key] || '').trim())
       .map(field => field.label)
 
@@ -200,7 +280,7 @@ function validatePracticeSubmission(scriptType, text) {
       }
     }
 
-    const tooShort = KNOWLEDGE_PRACTICE_FIELDS
+    const tooShort = structuredFields
       .filter(field => String(fields[field.key] || '').trim().length < 12)
       .map(field => field.label)
 
@@ -252,24 +332,24 @@ const MOCK_SCRIPTS = {
   ],
   opinion: text => [
     {
-      heading: '【破題鉤子】',
-      body:    `關於這件事，我有一個觀點可能跟你聽過的都不一樣——\n大多數人把「努力」和「正確」搞混了。`,
+      heading: '【反常識立場】',
+      body:    `大多數人談「${text}」時，第一反應都是找方法，但真正卡住你的，通常不是方法不夠，而是你相信了一個錯誤前提。`,
     },
     {
-      heading: '【觀點陳述】',
-      body:    `我認為，${text.slice(0, 8)}…最重要的不是技術，而是認知。\n技術可以學，但認知決定了你的上限在哪裡。`,
+      heading: '【錯誤認知】',
+      body:    `很多人以為只要更努力、更自律、更大量執行，就一定會變好。問題是，如果方向本身錯了，你做越多，只是在更快累積錯誤。`,
     },
     {
-      heading: '【論據一】',
-      body:    `先來說第一個理由。\n我觀察了身邊做這件事成功的人，他們都有一個共同點：\n在別人看到問題的地方，他們看到的是機會。`,
+      heading: '【核心觀點】',
+      body:    `我的觀點是：先修判斷，再修技巧。你要先知道什麼值得做、什麼不該做，技巧才會變成加速器，而不是消耗你的工具。`,
     },
     {
-      heading: '【論據二】',
-      body:    `第二個理由更有趣。\n研究顯示，在這個領域，決策速度比決策品質更重要。\n大多數人輸，不是輸在能力，而是輸在猶豫。`,
+      heading: '【例子對比】',
+      body:    `同樣是做內容，一個人每天追熱門、改標題、硬拍十支；另一個人先判斷受眾痛點、反差角度、成交路徑，再拍三支。最後有結果的，往往不是產量最大的人，而是判斷最準的人。`,
     },
     {
-      heading: '【總結呼籲】',
-      body:    `所以我的觀點是：\n想把這件事做好，先改變你看問題的角度。\n你覺得呢？留言告訴我你的想法。`,
+      heading: '【行動收束】',
+      body:    `所以不要急著問下一個方法是什麼，先問：我現在相信的前提，真的對嗎？先把判斷修正，後面的執行才有放大的價值。`,
     },
   ],
   story: text => [
@@ -640,6 +720,27 @@ function normalizeScriptResult(result, topicText, scriptType) {
     })
     return unique.length ? unique : fallback
   }
+  const normalizeOpinionSections = sections => {
+    const allowed = ['【反常識立場】', '【錯誤認知】', '【核心觀點】', '【例子對比】', '【行動收束】']
+    const normalized = sections
+      .map(section => {
+        const heading = String(section.heading || '').trim()
+        if (heading.includes('反常識') || heading.includes('破題')) return { ...section, heading: '【反常識立場】' }
+        if (heading.includes('錯誤認知') || heading.includes('錯誤前提')) return { ...section, heading: '【錯誤認知】' }
+        if (heading.includes('核心觀點') || heading.includes('觀點陳述')) return { ...section, heading: '【核心觀點】' }
+        if (heading.includes('例子') || heading.includes('對比') || heading.includes('論據')) return { ...section, heading: '【例子對比】' }
+        if (heading.includes('行動') || heading.includes('收束') || heading.includes('總結')) return { ...section, heading: '【行動收束】' }
+        return section
+      })
+      .filter(section => section?.body && allowed.includes(section.heading))
+
+    const unique = []
+    allowed.forEach(heading => {
+      const match = normalized.find(section => section.heading === heading)
+      if (match) unique.push(match)
+    })
+    return unique.length ? unique : fallback
+  }
 
   const normalizeSection = (section, index) => {
     if (typeof section === 'string') {
@@ -672,6 +773,7 @@ function normalizeScriptResult(result, topicText, scriptType) {
   if (sectionSource) {
     const sections = sectionSource.map(normalizeSection).filter(section => section?.body)
     if (scriptType === 'knowledge') return normalizeKnowledgeSections(sections)
+    if (scriptType === 'opinion') return normalizeOpinionSections(sections)
     return sections.length ? sections : fallback
   }
 
@@ -686,6 +788,14 @@ function normalizeScriptResult(result, topicText, scriptType) {
       ['process', '【具體操作過程】'],
       ['operation_process', '【具體操作過程】'],
       ['hook', '【鉤子 · 前 3 秒】'],
+      ['stance', '【反常識立場】'],
+      ['wrong_belief', '【錯誤認知】'],
+      ['wrongBelief', '【錯誤認知】'],
+      ['core_view', '【核心觀點】'],
+      ['coreView', '【核心觀點】'],
+      ['contrast_example', '【例子對比】'],
+      ['contrastExample', '【例子對比】'],
+      ['action_closing', '【行動收束】'],
       ['opening', '【開場】'],
       ['problem', '【問題引入】'],
       ['main', '【主體內容】'],
@@ -698,6 +808,7 @@ function normalizeScriptResult(result, topicText, scriptType) {
     }).filter(Boolean)
 
     if (scriptType === 'knowledge') return normalizeKnowledgeSections(objectSections)
+    if (scriptType === 'opinion') return normalizeOpinionSections(objectSections)
     return objectSections.length ? objectSections : fallback
   }
 
@@ -1159,10 +1270,16 @@ function CopyPage() {
         traffic: topic.traffic,
         scriptType: nextScriptType,
         scriptTypeLabel: SCRIPT_TYPES.find(s => s.id === nextScriptType)?.label || nextScriptType,
-        requiredFramework: nextScriptType === 'knowledge' ? KNOWLEDGE_SCRIPT_SOP : null,
+        requiredFramework: nextScriptType === 'knowledge'
+          ? KNOWLEDGE_SCRIPT_SOP
+          : nextScriptType === 'opinion'
+            ? OPINION_SCRIPT_SOP
+            : null,
         instruction: nextScriptType === 'knowledge'
           ? '請優先依照已上傳的知識庫與教知識腳本 SOP。輸出順序必須只有三段：場景難題、低行動成本解決方案、具體操作過程。腳本類型由系統在推薦型或解題型中擇一，寫在場景難題段落裡，不要出現在標題。三段都必須通過自檢：信息多、效果快、料夠猛。禁止中規中矩的泛泛論點，例如只說設定目標、善用工具、提升效率。不要輸出教知識影片腳本第四段，也不要輸出通用的鉤子/問題引入/主體/CTA 框架。'
-          : '請優先依照已上傳的 PDF 腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
+          : nextScriptType === 'opinion'
+            ? '請優先依照已上傳的知識庫與說觀點腳本 SOP。輸出順序必須只有五段：反常識立場、錯誤認知、核心觀點、例子對比、行動收束。觀點必須有明確立場，不可以中立評論；必須指出大眾錯誤認知，並用具體場景、人物、數字、前後差異或案例支撐。不要輸出通用的鉤子/論據一/論據二/CTA 框架。'
+            : '請優先依照已上傳的腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
       }
       const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
       setScript(normalizeScriptResult(result, topic.text, nextScriptType))
@@ -1277,7 +1394,11 @@ function CopyPage() {
             feature: 'script',
             topicText: selectedTopic.text,
             scriptType,
-            practiceFramework: scriptType === 'knowledge' ? KNOWLEDGE_SCRIPT_SOP.scriptFramework : null,
+            practiceFramework: scriptType === 'knowledge'
+              ? KNOWLEDGE_SCRIPT_SOP.scriptFramework
+              : scriptType === 'opinion'
+                ? OPINION_SCRIPT_SOP.scriptFramework
+                : null,
             draftText: practice,
             userPlan: deriveAITier(currentUser),
           }),
@@ -1536,22 +1657,22 @@ function CopyPage() {
           <p className="ait-practice-hint">用自己的版本完成這支影片的腳本練習，系統會依照課程框架與句式判斷是否符合。</p>
           {!practiceSubmitted ? (
             <>
-              {scriptType === 'knowledge' ? (
+              {STRUCTURED_PRACTICE_FIELDS[scriptType] ? (
                 <div className="ait-practice-wrap">
-                  {KNOWLEDGE_PRACTICE_FIELDS.map(field => (
+                  {STRUCTURED_PRACTICE_FIELDS[scriptType].map(field => (
                     <label key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <span className="ait-sc-heading">【{field.label}】</span>
                       <textarea
                         className="ait-practice-ta"
                         rows={3}
                         placeholder={field.placeholder}
-                        value={parseKnowledgePractice(practice)[field.key] || ''}
-                        onChange={e => setPractice(prev => updateKnowledgePractice(prev, field.key, e.target.value))}
+                        value={parseStructuredPractice(scriptType, practice)[field.key] || ''}
+                        onChange={e => setPractice(prev => updateStructuredPractice(scriptType, prev, field.key, e.target.value))}
                       />
                     </label>
                   ))}
                   <span className="ait-char-count">{practice.length} / 50+ 字</span>
-                  <span className="ait-practice-hint">判斷標準：三個框都要填寫，完成後只能下載自己的練習內容。</span>
+                  <span className="ait-practice-hint">判斷標準：每個框都要填寫，完成後只能下載自己的練習內容。</span>
                 </div>
               ) : (
                 <div className="ait-practice-wrap">
