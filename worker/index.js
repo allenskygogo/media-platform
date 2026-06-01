@@ -17,6 +17,7 @@
  */
 
 const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
+const AI_KNOWLEDGE_BUCKET = 'ai-knowledge'
 const BOOKING_TIME_SLOTS = ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00']
 const DEFAULT_BOOKING_DURATION_MINUTES = 180
 const TAIPEI_OFFSET = '+08:00'
@@ -119,6 +120,11 @@ export default {
         return await handleAI(request, env)
       }
 
+      // POST /api/ai/knowledge/sync → attach an uploaded PDF to an agent vector store
+      if (path === '/api/ai/knowledge/sync' && request.method === 'POST') {
+        return await handleAIKnowledgeSync(request, env)
+      }
+
       // POST /api/calendar/events → create a confirmed booking event
       if (path === '/api/calendar/events' && request.method === 'POST') {
         return await handleCreateCalendarEvent(request, env)
@@ -207,26 +213,38 @@ async function handleAI(request, env) {
   const agent = await getAIAgent(feature, env)
   if (!agent) return err('Unsupported AI feature', 400)
 
+  const requestBody = {
+    model: env.OPENAI_MODEL || agent.model || 'gpt-4.1-mini',
+    input: [
+      {
+        role: 'system',
+        content: agent.system_prompt,
+      },
+      {
+        role: 'user',
+        content: renderPromptTemplate(agent.user_prompt_template, { input, userPlan }),
+      },
+    ],
+    temperature: Number(agent.temperature ?? 0.85),
+  }
+
+  if (agent.vector_store_id) {
+    requestBody.tools = [
+      {
+        type: 'file_search',
+        vector_store_ids: [agent.vector_store_id],
+        max_num_results: 6,
+      },
+    ]
+  }
+
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${env.OPENAI_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: env.OPENAI_MODEL || agent.model || 'gpt-4.1-mini',
-      input: [
-        {
-          role: 'system',
-          content: agent.system_prompt,
-        },
-        {
-          role: 'user',
-          content: renderPromptTemplate(agent.user_prompt_template, { input, userPlan }),
-        },
-      ],
-      temperature: Number(agent.temperature ?? 0.85),
-    }),
+    body: JSON.stringify(requestBody),
   })
 
   const data = await response.json().catch(() => ({}))
@@ -238,6 +256,101 @@ async function handleAI(request, env) {
   const result = parseAIResult(outputText)
 
   return json({ success: true, result, provider: 'openai', agent: agent.feature_key || feature })
+}
+
+async function handleAIKnowledgeSync(request, env) {
+  if (!env.OPENAI_API_KEY) return err('OpenAI API key is not configured', 503)
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  const admin = await requireAdmin(request, env)
+  const body = await request.json().catch(() => ({}))
+  const featureKey = String(body.agentFeatureKey || body.feature_key || '').trim()
+  const storagePath = String(body.storagePath || '').trim()
+  const fileName = String(body.fileName || '').trim()
+  const fileSize = Number(body.fileSize || 0) || null
+
+  if (!featureKey) return err('Missing agent feature key', 400)
+  if (!storagePath) return err('Missing storage path', 400)
+  if (!fileName.toLowerCase().endsWith('.pdf')) return err('Only PDF knowledge files are supported', 400)
+
+  const agent = await getAIAgent(featureKey, env)
+  if (!agent) return err('AI agent not found', 404)
+
+  let vectorStoreId = agent.vector_store_id || ''
+
+  try {
+    await upsertKnowledgeFile(env, {
+      agent_feature_key: featureKey,
+      storage_path: storagePath,
+      file_name: fileName,
+      mime_type: 'application/pdf',
+      file_size: fileSize,
+      status: 'processing',
+      uploaded_by: admin.id,
+      error_message: null,
+    })
+
+    if (!vectorStoreId) {
+      const vectorStore = await openAIJson('/v1/vector_stores', env, {
+        method: 'POST',
+        body: {
+          name: `TOP LEVEL TRAFFIC ${featureKey} knowledge`,
+        },
+      })
+      vectorStoreId = vectorStore.id
+      await updateAgentVectorStore(env, featureKey, vectorStoreId)
+    }
+
+    const fileBlob = await downloadSupabaseStorageFile(env, storagePath)
+    const openAIFile = await uploadOpenAIFile(env, fileBlob, fileName)
+    const vectorFile = await openAIJson(`/v1/vector_stores/${encodeURIComponent(vectorStoreId)}/files`, env, {
+      method: 'POST',
+      body: {
+        file_id: openAIFile.id,
+        attributes: {
+          feature_key: featureKey,
+          file_name: fileName,
+        },
+      },
+    })
+
+    const saved = await upsertKnowledgeFile(env, {
+      agent_feature_key: featureKey,
+      storage_path: storagePath,
+      file_name: fileName,
+      mime_type: 'application/pdf',
+      file_size: fileSize,
+      status: 'ready',
+      openai_file_id: openAIFile.id,
+      vector_store_id: vectorStoreId,
+      vector_store_file_id: vectorFile.id || null,
+      uploaded_by: admin.id,
+      error_message: null,
+    })
+
+    return json({
+      success: true,
+      knowledgeFile: saved,
+      vectorStoreId,
+      openaiFileId: openAIFile.id,
+    })
+  } catch (syncError) {
+    await upsertKnowledgeFile(env, {
+      agent_feature_key: featureKey,
+      storage_path: storagePath,
+      file_name: fileName || storagePath.split('/').pop(),
+      mime_type: 'application/pdf',
+      file_size: fileSize,
+      status: 'failed',
+      vector_store_id: vectorStoreId || null,
+      uploaded_by: admin.id,
+      error_message: syncError.message,
+    }).catch(() => null)
+
+    return err(syncError.message || 'AI knowledge sync failed', 500)
+  }
 }
 
 async function getAIAgent(feature, env) {
@@ -267,6 +380,108 @@ async function getAIAgent(feature, env) {
   } catch (_) {
     return fallback
   }
+}
+
+async function downloadSupabaseStorageFile(env, storagePath) {
+  const encodedPath = storagePath.split('/').map(encodeURIComponent).join('/')
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/${AI_KNOWLEDGE_BUCKET}/${encodedPath}`, {
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    },
+  })
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => '')
+    throw new Error(message || 'Failed to read PDF from Supabase Storage')
+  }
+
+  return await response.blob()
+}
+
+async function uploadOpenAIFile(env, fileBlob, fileName) {
+  const form = new FormData()
+  form.append('purpose', 'assistants')
+  form.append('file', fileBlob, fileName)
+
+  const response = await fetch('https://api.openai.com/v1/files', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+    },
+    body: form,
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'OpenAI file upload failed')
+  }
+  return data
+}
+
+async function openAIJson(path, env, options = {}) {
+  const response = await fetch(`https://api.openai.com${path}`, {
+    method: options.method || 'GET',
+    headers: {
+      Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+      'OpenAI-Beta': 'assistants=v2',
+      ...(options.headers || {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.error?.message || 'OpenAI request failed')
+  }
+  return data
+}
+
+async function updateAgentVectorStore(env, featureKey, vectorStoreId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/ai_agents`)
+  url.searchParams.set('feature_key', `eq.${featureKey}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'PATCH',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
+      vector_store_id: vectorStoreId,
+      updated_at: new Date().toISOString(),
+    }),
+  })
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => '')
+    throw new Error(message || 'Failed to update agent vector store')
+  }
+}
+
+async function upsertKnowledgeFile(env, payload) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/ai_knowledge_files`)
+  url.searchParams.set('on_conflict', 'storage_path')
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=representation',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to save knowledge file metadata')
+  }
+  return Array.isArray(data) ? data[0] : data
 }
 
 function renderPromptTemplate(template, vars) {

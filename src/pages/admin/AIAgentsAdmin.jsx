@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { hasSupabase, supabase } from '../../lib/supabase'
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
+const KNOWLEDGE_BUCKET = 'ai-knowledge'
 
 const FEATURE_OPTIONS = [
   { key: 'topics', label: '爆款選題' },
@@ -58,11 +59,14 @@ function toForm(agent) {
 }
 
 export default function AIAgentsAdmin() {
+  const fileInputRef = useRef(null)
   const [agents, setAgents] = useState([])
+  const [knowledgeFiles, setKnowledgeFiles] = useState([])
   const [selectedKey, setSelectedKey] = useState('topics')
   const [form, setForm] = useState(() => toForm(EMPTY_AGENT))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [testing, setTesting] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -93,6 +97,10 @@ export default function AIAgentsAdmin() {
     setError('')
     setMessage('')
   }, [selectedAgent, selectedKey])
+
+  useEffect(() => {
+    loadKnowledgeFiles(selectedKey)
+  }, [selectedKey])
 
   const flash = (text, type = 'success') => {
     if (type === 'error') {
@@ -127,6 +135,28 @@ export default function AIAgentsAdmin() {
       setAgents(data || [])
     }
     setLoading(false)
+  }
+
+  async function loadKnowledgeFiles(featureKey = selectedKey) {
+    if (!hasSupabase || !supabase) {
+      setKnowledgeFiles([])
+      return
+    }
+
+    const { data, error: filesError } = await supabase
+      .from('ai_knowledge_files')
+      .select('id,agent_feature_key,storage_path,file_name,mime_type,file_size,status,openai_file_id,vector_store_id,vector_store_file_id,error_message,notes,created_at,updated_at')
+      .eq('agent_feature_key', featureKey)
+      .order('created_at', { ascending: false })
+
+    if (filesError) {
+      setKnowledgeFiles([])
+      if (filesError.code !== '42P01') {
+        flash(`讀取知識庫檔案失敗：${filesError.message}`, 'error')
+      }
+      return
+    }
+    setKnowledgeFiles(data || [])
   }
 
   const updateForm = (key, value) => {
@@ -219,6 +249,78 @@ export default function AIAgentsAdmin() {
     } finally {
       setTesting(false)
     }
+  }
+
+  async function uploadKnowledgeFile(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setUploading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      if (!hasSupabase || !supabase) throw new Error('Supabase 尚未設定，無法上傳知識庫 PDF。')
+      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        throw new Error('目前只支援 PDF 檔案。')
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        throw new Error('PDF 檔案請先控制在 25 MB 以內。')
+      }
+
+      const safeName = file.name
+        .replace(/[^\w.\-\u4e00-\u9fff]+/g, '-')
+        .replace(/-+/g, '-')
+      const storagePath = `${selectedKey}/${Date.now()}-${safeName}`
+
+      const upload = await supabase.storage
+        .from(KNOWLEDGE_BUCKET)
+        .upload(storagePath, file, {
+          cacheControl: '3600',
+          contentType: 'application/pdf',
+          upsert: false,
+        })
+
+      if (upload.error) throw upload.error
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) throw new Error('找不到登入 token，請重新登入管理員帳號。')
+
+      const syncResponse = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/ai/knowledge/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          agentFeatureKey: selectedKey,
+          storagePath,
+          fileName: file.name,
+          fileSize: file.size,
+        }),
+      })
+
+      const syncData = await syncResponse.json().catch(() => ({}))
+      if (!syncResponse.ok || syncData.success === false) {
+        throw new Error(syncData.error || 'PDF 同步到 OpenAI 知識庫失敗')
+      }
+
+      flash('PDF 已上傳並同步到 AI 知識庫。')
+      await Promise.all([loadAgents(), loadKnowledgeFiles(selectedKey)])
+    } catch (err) {
+      flash(`上傳失敗：${err.message}`, 'error')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function formatBytes(value) {
+    const n = Number(value || 0)
+    if (!n) return '-'
+    if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
+    return `${(n / 1024 / 1024).toFixed(1)} MB`
   }
 
   return (
@@ -362,6 +464,50 @@ export default function AIAgentsAdmin() {
                     <span className="form-label">內部備註</span>
                     <input className="form-input" value={form.notes || ''} onChange={e => updateForm('notes', e.target.value)} placeholder="例：已同步爆款選題 GPTs 2026-06-01 版本" />
                   </label>
+                </div>
+
+                <div className="ai-agent-knowledge">
+                  <div className="ai-agent-knowledge-head">
+                    <div>
+                      <h3>PDF 知識庫</h3>
+                      <p>上傳課程講義、案例 PDF 或 SOP。系統會存到 Supabase Storage，並同步到 OpenAI Vector Store 供這個 Agent 搜尋。</p>
+                    </div>
+                    <div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="application/pdf,.pdf"
+                        style={{ display: 'none' }}
+                        onChange={uploadKnowledgeFile}
+                      />
+                      <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                        {uploading ? '同步中...' : '上傳 PDF'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {knowledgeFiles.length === 0 ? (
+                    <div className="ai-agent-knowledge-empty">
+                      目前沒有 PDF。先上傳爆款選題課程講義或案例庫，AI 之後就能用同一套課程內容回答。
+                    </div>
+                  ) : (
+                    <div className="ai-agent-file-list">
+                      {knowledgeFiles.map(file => (
+                        <div key={file.id} className="ai-agent-file-row">
+                          <div>
+                            <strong>{file.file_name}</strong>
+                            <span>{file.storage_path}</span>
+                            {file.error_message && <em>{file.error_message}</em>}
+                          </div>
+                          <div className="ai-agent-file-meta">
+                            <span className={`ai-agent-file-status ${file.status}`}>{file.status}</span>
+                            <span>{formatBytes(file.file_size)}</span>
+                            <span>{file.created_at ? new Date(file.created_at).toLocaleDateString('zh-TW') : '-'}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="ai-agent-actions">
