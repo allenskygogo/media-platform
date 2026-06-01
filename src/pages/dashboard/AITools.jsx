@@ -1066,7 +1066,7 @@ function CopyPage() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            feature: 'topics',
+            feature: 'script',
             topicText: selectedTopic.text,
             scriptType,
             draftText: practice,

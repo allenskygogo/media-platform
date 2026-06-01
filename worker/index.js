@@ -51,6 +51,26 @@ const DEFAULT_AI_AGENTS = {
 - 不要使用 emoji
 - 不要輸出 JSON 以外的文字`,
   },
+  script: {
+    feature_key: 'script',
+    name: '爆款選題腳本 Agent',
+    model: 'gpt-4.1-mini',
+    temperature: 0.2,
+    system_prompt: '你是 TOP LEVEL TRAFFIC 的腳本練習評分老師。你必須依照課程腳本句式、開場鉤子、反差、痛點、承諾與短影音前三秒留人規則來判斷學員練習。你的任務不是幫學員重寫完整文案，而是判斷是否符合課程句式，並給出具體可修改方向。請使用繁體中文，語氣專業、具體、直接。只能輸出 JSON，不要輸出 Markdown，不要使用 emoji。',
+    user_prompt_template: `請判斷以下學員練習是否符合 TOP LEVEL TRAFFIC 腳本句式。
+
+使用者輸入：
+{{input}}
+
+使用者方案：
+{{userPlan}}
+
+輸出要求：
+- 必須回傳 JSON object
+- approved 必須依據是否符合腳本句式判斷
+- score 75 分以上才 approved=true
+- 不要輸出 JSON 以外的文字`,
+  },
 }
 
 // ── CORS ──────────────────────────────────────────────────────────────────
@@ -270,7 +290,7 @@ async function handleWritingEvaluation(request, env) {
 
   const user = await requireUser(request, env)
   const body = await request.json().catch(() => ({}))
-  const feature = String(body.feature || 'topics').trim()
+  const feature = String(body.feature || 'script').trim()
   const topicText = String(body.topicText || '').trim()
   const scriptType = String(body.scriptType || '').trim()
   const draftText = String(body.draftText || '').trim()

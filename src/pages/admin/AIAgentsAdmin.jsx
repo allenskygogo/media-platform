@@ -6,7 +6,7 @@ const KNOWLEDGE_BUCKET = 'ai-knowledge'
 
 const FEATURE_OPTIONS = [
   { key: 'topics', label: '爆款選題' },
-  { key: 'script', label: '腳本全文' },
+  { key: 'script', label: '爆款選題腳本' },
   { key: 'shooting', label: '拍攝形式' },
   { key: 'planning', label: '三個月策劃' },
   { key: 'marketing', label: '行銷文案' },
