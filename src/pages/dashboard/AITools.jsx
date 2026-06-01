@@ -125,6 +125,14 @@ const SCRIPT_TYPES = [
   { id: 'process',   label: '曬過程', Icon: Video         },
 ]
 
+const KNOWLEDGE_SCRIPT_SOP = {
+  title: '教知識腳本 SOP',
+  topicDimensions: ['追求更好', '解決難題', '避免踩坑', '降低成本', '豐富談資'],
+  scriptTypes: ['推薦型', '解題型'],
+  selfCheck: ['信息多', '效果快', '料夠猛'],
+  commonMistakes: ['專業用詞', '排列不好', '對象模糊', '等待過久'],
+}
+
 const SHOOT_FORMATS = [
   { id: 'selfie',    label: '自拍口播', Icon: Camera        },
   { id: 'candid',    label: '偷拍視角', Icon: Eye           },
@@ -144,24 +152,24 @@ const PLANS = [
 const MOCK_SCRIPTS = {
   knowledge: text => [
     {
-      heading: '【鉤子 · 前 3 秒】',
-      body:    `你知道做${text.slice(0, 10)}…最關鍵的一步是什麼嗎？\n90% 的人都搞錯了——今天讓你少走三年彎路。`,
+      heading: '【選題維度】',
+      body:    `解決難題｜這個選題要直接處理觀眾正在卡住的問題：${text}\n補強方向：也可以加入「避免踩坑」或「降低成本」角度，讓觀眾覺得這支影片看完馬上省時間、省錢或少走彎路。`,
     },
     {
-      heading: '【問題引入 · 30 秒】',
-      body:    `很多人在做這件事的時候，犯了同一個錯誤：\n只知道努力，卻不知道方向。\n今天我要告訴你真正的核心是什麼。`,
+      heading: '【腳本類型】',
+      body:    `解題型｜先指出觀眾的具體卡點，再用清楚步驟拆解解法。\n如果內容偏工具、方法或清單，也可以改成推薦型，但不能只介紹功能，必須說清楚「為什麼值得用」。`,
     },
     {
-      heading: '【第一個重點】',
-      body:    `▌ 關鍵一：差異化定位\n同質化競爭是最大的陷阱。\n你需要找到別人沒有講過的視角，用「反常識」的方式切入。`,
+      heading: '【腳本自檢】',
+      body:    `信息多：至少給 3 個具體重點，不要只有口號。\n效果快：開頭 5 秒內要讓觀眾知道看完能得到什麼。\n料夠猛：加入反常識、真實案例、數字或具體操作，避免平鋪直敘。`,
     },
     {
-      heading: '【第二個重點】',
-      body:    `▌ 關鍵二：結構化你的內容\n每支影片只解決一個問題。\n用「問題 → 原因 → 解法 → 行動」四段架構，讓觀眾跟著你的邏輯走。`,
+      heading: '【常見錯誤避開】',
+      body:    `不要用太多專業用詞；內容順序要先痛點再解法；對象要明確；不要等太久才進重點。`,
     },
     {
-      heading: '【結尾 CTA】',
-      body:    `如果你覺得有用，幫我按個讚，讓更多人看到！\n留言告訴我你目前最卡的問題是什麼，下支影片直接針對你的問題來拍！`,
+      heading: '【教知識影片腳本】',
+      body:    `開頭：你是不是也遇過「${text}」這個問題？很多人不是不努力，而是第一步就做錯。\n重點一：先判斷你卡住的是方法、順序，還是資源不足。\n重點二：把問題拆成三步處理，先做最容易看到效果的部分。\n重點三：不要一開始就追求完整，先讓觀眾看到一個可以馬上套用的小成果。\n結尾：如果你也想把這類問題拆成可執行的方法，先把這支影片存起來，下一次直接照這個順序檢查。`,
     },
   ],
   opinion: text => [
@@ -1043,7 +1051,10 @@ function CopyPage() {
         traffic: topic.traffic,
         scriptType: nextScriptType,
         scriptTypeLabel: SCRIPT_TYPES.find(s => s.id === nextScriptType)?.label || nextScriptType,
-        instruction: '請優先依照已上傳的 PDF 腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
+        requiredFramework: nextScriptType === 'knowledge' ? KNOWLEDGE_SCRIPT_SOP : null,
+        instruction: nextScriptType === 'knowledge'
+          ? '請優先依照已上傳的 PDF 腳本知識庫與教知識腳本 SOP，輸出順序必須是：選題維度、腳本類型、腳本自檢、常見錯誤避開、教知識影片腳本。不要輸出通用的鉤子/問題引入/主體/CTA 框架。'
+          : '請優先依照已上傳的 PDF 腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
       }
       const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
       setScript(normalizeScriptResult(result, topic.text, nextScriptType))
