@@ -160,15 +160,17 @@ const KNOWLEDGE_PRACTICE_FIELDS = [
 
 const OPINION_SCRIPT_SOP = {
   title: '說觀點腳本 SOP',
-  scriptFramework: ['開篇', '論據1', '論據2', '總結觀點', '金句'],
-  argumentMethods: ['正反論證｜不同視角', '正反論證｜權衡利弊', '正反論證｜倒打一耙', '歸納論證'],
-  selfCheck: ['開篇是否否定句', '論據是否同一種文法', '是否至少兩段論據', '是否站在受眾那邊', '金句是否可轉發'],
+  scriptFramework: ['開篇', '歸納論據或正反論證', '總結觀點', '金句'],
+  argumentMethods: ['歸納論據：論據1（不同視角）＋論據2（權衡利弊）＋論據3（倒打一耙）', '正反論證：正面論證（維度提升）＋反面論證（負面後果）'],
+  selfCheck: ['開篇是否否定句', '論據段是否標明每段文法', '是否至少兩段論據', '是否夠白話好懂', '是否站在受眾那邊', '金句是否可轉發'],
   qualityRules: [
     '開篇：一定要用否定句或反問句開場，直接把原選題改成有立場的觀點。例如「公寓與住宅的購買解析」要改成「千萬不要買公寓」；「結婚之後過年一定要去男方家過年嗎？」要改成「憑什麼結婚之後過年必須回公婆家」。',
-    '論據：整支腳本只能選一種論證文法，不要混用。可以選正反論證（不同視角、權衡利弊、倒打一耙）或歸納論證。',
-    '論據：至少要有論據1與論據2，不能只寫一個論據。',
+    '歸納論據或正反論證：論據要合在同一格，不要拆成論據1、論據2兩個欄位。',
+    '歸納論據或正反論證：每一段都要標明文法，例如「論據1（不同視角）」、「論據2（權衡利弊）」或「正面論證（維度提升）」、「反面論證（負面後果）」。',
+    '歸納論據或正反論證：至少要有兩段論據，不能只寫一段。',
     '總結觀點：回扣開篇立場，說明我不是否定全部，而是提醒受眾真正該看清楚的代價或處境。',
     '金句：最後用一句可被記住、可轉發、情緒明確的金句收束。',
+    '語氣：把使用者當成完全不懂的新手，句子要短、要白話、要像人在講話，不要學術、不要繞、不要難懂。',
     '觀點不是教育粉絲，也不是罵觀眾；觀點是「我理解你，所以我幫你說出來」。',
     '好的觀點要讓特定受眾感覺：你站在我這邊、你把我不敢講的話講出來了、你替我出了一口氣、我想支持你、我想轉發給某個人看。',
   ],
@@ -181,14 +183,9 @@ const OPINION_PRACTICE_FIELDS = [
     placeholder: '用否定句或反問句開場，直接把選題改成有立場的觀點，例如：千萬不要去當護士...',
   },
   {
-    key: 'argumentOne',
-    label: '論據1',
-    placeholder: '選一種論證文法開始寫，例如正反論證｜權衡利弊。這裡要站在受眾那邊，把他不敢講的理由說出來...',
-  },
-  {
-    key: 'argumentTwo',
-    label: '論據2',
-    placeholder: '沿用同一種論證文法補第二段論據，不要換另一套寫法，也不要只重複第一段...',
+    key: 'argument',
+    label: '歸納論據或正反論證',
+    placeholder: '把論據寫在同一格。每一段先標明文法，例如：論據1（不同視角）、論據2（權衡利弊），或正面論證（維度提升）、反面論證（負面後果）。句子要白話、短、好懂...',
   },
   {
     key: 'summary',
@@ -339,12 +336,8 @@ const MOCK_SCRIPTS = {
       body:    `千萬不要只照著別人的標準去做「${text}」。你以為問題只是你不夠努力？錯了，真正消耗你的，是你一直把別人的成功路徑，硬套在自己的處境上。`,
     },
     {
-      heading: '【論據1】',
-      body:    `正面看，照著別人的方法做，確實比較有安全感。你不用自己摸索，也不用承擔判斷錯誤的壓力，好像只要照抄流程，就能少走很多彎路。`,
-    },
-    {
-      heading: '【論據2】',
-      body:    `但反過來看，別人的方法之所以有效，是因為他的資源、受眾、階段和你不一樣。你盲目照抄，得到的不是捷徑，而是更快地把自己推進錯誤方向。`,
+      heading: '【歸納論據或正反論證】',
+      body:    `論據1（不同視角）：別人叫你照著做，是因為他站在他的角度看。他有團隊、有預算、有時間，所以那套方法對他有用。可是你現在可能只有一個人，時間也不多，照抄只會讓你更累。\n\n論據2（權衡利弊）：照抄的好處是不用想，感覺比較安全。但壞處更大，你會忘記自己的狀況。最後不是變快，而是一直做錯方向。`,
     },
     {
       heading: '【總結觀點】',
@@ -724,23 +717,15 @@ function normalizeScriptResult(result, topicText, scriptType) {
     return unique.length ? unique : fallback
   }
   const normalizeOpinionSections = sections => {
-    const allowed = ['【開篇】', '【論據1】', '【論據2】', '【總結觀點】', '【金句】']
-    let genericArgumentCount = 0
+    const allowed = ['【開篇】', '【歸納論據或正反論證】', '【總結觀點】', '【金句】']
     const normalized = sections
       .map(section => {
         const heading = String(section.heading || '').trim()
         if (heading.includes('開篇') || heading.includes('開場') || heading.includes('表明觀點') || heading.includes('反常識') || heading.includes('核心觀點') || heading.includes('觀點陳述') || heading.includes('破題')) {
           return { ...section, heading: '【開篇】' }
         }
-        if (heading.includes('論據1') || heading.includes('論據一') || heading.includes('第一個論據')) {
-          return { ...section, heading: '【論據1】' }
-        }
-        if (heading.includes('論據2') || heading.includes('論據二') || heading.includes('第二個論據')) {
-          return { ...section, heading: '【論據2】' }
-        }
-        if (heading.includes('論據') || heading.includes('正反') || heading.includes('論證') || heading.includes('錯誤認知') || heading.includes('例子') || heading.includes('對比')) {
-          genericArgumentCount += 1
-          return { ...section, heading: genericArgumentCount === 1 ? '【論據1】' : '【論據2】' }
+        if (heading.includes('論據') || heading.includes('正反') || heading.includes('論證') || heading.includes('錯誤認知') || heading.includes('例子') || heading.includes('對比') || heading.includes('歸納')) {
+          return { ...section, heading: '【歸納論據或正反論證】' }
         }
         if (heading.includes('金句')) {
           return { ...section, heading: '【金句】' }
@@ -754,8 +739,12 @@ function normalizeScriptResult(result, topicText, scriptType) {
 
     const unique = []
     allowed.forEach(heading => {
-      const match = normalized.find(section => section.heading === heading)
-      if (match) unique.push(match)
+      const matches = normalized.filter(section => section.heading === heading)
+      if (!matches.length) return
+      unique.push({
+        heading,
+        body: matches.map(section => section.body).join('\n\n'),
+      })
     })
     return unique.length ? unique : fallback
   }
@@ -809,16 +798,16 @@ function normalizeScriptResult(result, topicText, scriptType) {
       ['viewpoint', '【開篇】'],
       ['point_of_view', '【開篇】'],
       ['stance', '【開篇】'],
-      ['argument_one', '【論據1】'],
-      ['argumentOne', '【論據1】'],
-      ['argument_1', '【論據1】'],
-      ['argument_two', '【論據2】'],
-      ['argumentTwo', '【論據2】'],
-      ['argument_2', '【論據2】'],
-      ['argument', '【論據1】'],
-      ['argumentation', '【論據1】'],
-      ['evidence', '【論據1】'],
-      ['pros_cons', '【論據1】'],
+      ['argument_one', '【歸納論據或正反論證】'],
+      ['argumentOne', '【歸納論據或正反論證】'],
+      ['argument_1', '【歸納論據或正反論證】'],
+      ['argument_two', '【歸納論據或正反論證】'],
+      ['argumentTwo', '【歸納論據或正反論證】'],
+      ['argument_2', '【歸納論據或正反論證】'],
+      ['argument', '【歸納論據或正反論證】'],
+      ['argumentation', '【歸納論據或正反論證】'],
+      ['evidence', '【歸納論據或正反論證】'],
+      ['pros_cons', '【歸納論據或正反論證】'],
       ['summary', '【總結觀點】'],
       ['viewpoint_summary', '【總結觀點】'],
       ['punchline', '【金句】'],
@@ -1306,7 +1295,7 @@ function CopyPage() {
         instruction: nextScriptType === 'knowledge'
           ? '請優先依照已上傳的知識庫與教知識腳本 SOP。輸出順序必須只有三段：場景難題、低行動成本解決方案、具體操作過程。腳本類型由系統在推薦型或解題型中擇一，寫在場景難題段落裡，不要出現在標題。三段都必須通過自檢：信息多、效果快、料夠猛。禁止中規中矩的泛泛論點，例如只說設定目標、善用工具、提升效率。不要輸出教知識影片腳本第四段，也不要輸出通用的鉤子/問題引入/主體/CTA 框架。'
           : nextScriptType === 'opinion'
-            ? '請把已上傳的知識庫 PDF 當成產生腳本的主要依據，不只是練習判斷用。若知識庫有說觀點案例或句式，必須優先貼近該句式。輸出順序必須只有五段：開篇、論據1、論據2、總結觀點、金句。開篇一定要用否定句或反問句，將原選題改成有立場的觀點，例如「公寓與住宅的購買解析」改成「千萬不要買公寓」。論據只能選一種文法並全篇一致，例如正反論證｜權衡利弊、正反論證｜不同視角、正反論證｜倒打一耙或歸納論證；必須有論據1與論據2，不能只寫一個論據。觀點不是教育粉絲，也不是罵觀眾；觀點是分享我覺得這件事對或錯，並站在我的受眾那一邊。內容要讓特定受眾感覺：你站在我這邊、你把我不敢講的話講出來了、你替我出了一口氣、我想支持你、我想轉發給某個人看。禁止輸出表明觀點/論據歸納／正反論證/金句總結三段式，也不要輸出通用的反常識立場/錯誤認知/核心觀點/例子對比/行動收束框架。'
+            ? '請把已上傳的知識庫 PDF 當成產生腳本的主要依據，不只是練習判斷用。若知識庫有說觀點案例或句式，必須優先貼近該句式。語氣要非常白話，把使用者當成完全不懂的新手，句子短、意思直、不要學術、不要難懂。輸出順序必須只有四段：開篇、歸納論據或正反論證、總結觀點、金句。開篇一定要用否定句或反問句，將原選題改成有立場的觀點，例如「公寓與住宅的購買解析」改成「千萬不要買公寓」。論據全部寫在「歸納論據或正反論證」同一段裡，不要拆成兩個欄位；段內要清楚標明每段文法，例如「論據1（不同視角）」「論據2（權衡利弊）」「論據3（倒打一耙）」或「正面論證（維度提升）」「反面論證（負面後果）」。觀點不是教育粉絲，也不是罵觀眾；觀點是分享我覺得這件事對或錯，並站在我的受眾那一邊。內容要讓特定受眾感覺：你站在我這邊、你把我不敢講的話講出來了、你替我出了一口氣、我想支持你、我想轉發給某個人看。禁止輸出論據1/論據2作為獨立段落，也不要輸出通用的反常識立場/錯誤認知/核心觀點/例子對比/行動收束框架。'
             : '請優先依照已上傳的腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
       }
       const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
