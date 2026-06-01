@@ -38,6 +38,7 @@ import PricingAdmin       from './pages/admin/PricingAdmin'
 import PageBuilder        from './pages/admin/PageBuilder'
 import SystemSettings     from './pages/admin/SystemSettings'
 import AIAnalytics        from './pages/admin/AIAnalytics'
+import AIAgentsAdmin      from './pages/admin/AIAgentsAdmin'
 import PracticeAdmin      from './pages/admin/PracticeAdmin'
 import BannerAdmin        from './pages/admin/BannerAdmin'
 import BetaAdmin          from './pages/admin/BetaAdmin'
@@ -123,6 +124,7 @@ export default function App() {
             <Route path="page-builder" element={<PageBuilder />} />
             <Route path="settings"     element={<SystemSettings />} />
             <Route path="ai-analytics" element={<AIAnalytics />} />
+            <Route path="ai-agents"    element={<AIAgentsAdmin />} />
             <Route path="practice"     element={<PracticeAdmin />} />
             <Route path="banners"      element={<BannerAdmin />} />
             <Route path="beta"         element={<BetaAdmin />} />

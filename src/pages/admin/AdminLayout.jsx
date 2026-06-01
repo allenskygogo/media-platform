@@ -13,6 +13,7 @@ const MAIN_NAV = [
   { to: '/admin/bookings',     label: '預約管理', icon: 'booking' },
   { to: '/admin/managed',      label: '頂流代操', icon: 'bolt' },
   { to: '/admin/ai-analytics', label: 'AI 數據', icon: 'spark' },
+  { to: '/admin/ai-agents',    label: 'AI Agent 管理', icon: 'spark' },
   { to: '/admin/beta',         label: '封測管理', icon: 'flask' },
 ]
 
