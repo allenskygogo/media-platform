@@ -186,6 +186,39 @@ function updateKnowledgePractice(text, key, value) {
     .join('\n\n')
 }
 
+function validatePracticeSubmission(scriptType, text) {
+  if (scriptType === 'knowledge') {
+    const fields = parseKnowledgePractice(text)
+    const missing = KNOWLEDGE_PRACTICE_FIELDS
+      .filter(field => !String(fields[field.key] || '').trim())
+      .map(field => field.label)
+
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        message: `請先完成：${missing.join('、')}。每一格都需要填寫內容。`,
+      }
+    }
+
+    const tooShort = KNOWLEDGE_PRACTICE_FIELDS
+      .filter(field => String(fields[field.key] || '').trim().length < 12)
+      .map(field => field.label)
+
+    if (tooShort.length > 0) {
+      return {
+        ok: false,
+        message: `請補強：${tooShort.join('、')}。每一格至少寫出一段完整意思。`,
+      }
+    }
+  }
+
+  if (String(text || '').trim().length < 50) {
+    return { ok: false, message: '練習內容至少需要 50 字。' }
+  }
+
+  return { ok: true, message: '' }
+}
+
 const SHOOT_FORMATS = [
   { id: 'selfie',    label: '自拍口播', Icon: Camera        },
   { id: 'candid',    label: '偷拍視角', Icon: Eye           },
@@ -1216,7 +1249,12 @@ function CopyPage() {
   }
 
   const handleSubmitPractice = async () => {
-    if (practice.length < 50 || evaluatingPractice || selectedTopicIdx === null) return
+    const validation = validatePracticeSubmission(scriptType, practice)
+    if (evaluatingPractice || selectedTopicIdx === null) return
+    if (!validation.ok) {
+      setPracticeError(validation.message)
+      return
+    }
 
     const selectedTopic = copyTopics?.[selectedTopicIdx]
     setEvaluatingPractice(true)
@@ -1260,8 +1298,22 @@ function CopyPage() {
           strengths: ['已有明確主題方向'],
           improvements: ['補強場景難題', '加入低行動成本解決方案', '寫出更具體的操作步驟'],
         }
+      } else if (scriptType === 'knowledge') {
+        evaluation = {
+          approved: true,
+          score: AI_PRACTICE_PASS_SCORE,
+          summary: '已完成三段練習。正式 AI 判斷服務尚未設定時，系統先依照三格必填與最低字數規則解鎖下載。',
+          strengths: ['三段練習皆已填寫'],
+          improvements: [],
+        }
       } else {
-        throw new Error('AI 練習判斷服務尚未設定')
+        evaluation = {
+          approved: true,
+          score: AI_PRACTICE_PASS_SCORE,
+          summary: '已完成練習。正式 AI 判斷服務尚未設定時，系統先依照最低字數規則解鎖下載。',
+          strengths: ['練習內容已完成'],
+          improvements: [],
+        }
       }
 
       const approved = Boolean(evaluation?.approved) || Number(evaluation?.score || 0) >= AI_PRACTICE_PASS_SCORE
@@ -1308,11 +1360,11 @@ function CopyPage() {
 
   const handleDownload = () => {
     const typeLabel   = SCRIPT_TYPES.find(s => s.id === scriptType)?.label  || ''
-    const formatLabel = SHOOT_FORMATS.find(f => f.id === shootFormat)?.label || ''
+    const formatLabel = SHOOT_FORMATS.find(f => f.id === shootFormat)?.label || '尚未選擇'
     const content = [
       `想法：${idea}`, `腳本類型：${typeLabel}`,
       `選題：${selectedTopicIdx !== null ? copyTopics[selectedTopicIdx].text : ''}`,
-      `拍攝形式：${formatLabel}`, '', '== 我的開場白練習 ==', practice,
+      `拍攝形式：${formatLabel}`, '', '== 我的腳本練習 ==', practice,
     ].join('\n')
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url  = URL.createObjectURL(blob)
@@ -1320,6 +1372,8 @@ function CopyPage() {
     a.download = `爆款文案練習_${new Date().toLocaleDateString('zh-TW')}.txt`; a.click()
     URL.revokeObjectURL(url)
   }
+
+  const practiceValidation = validatePracticeSubmission(scriptType, practice)
 
   return (
     <>
@@ -1497,6 +1551,7 @@ function CopyPage() {
                     </label>
                   ))}
                   <span className="ait-char-count">{practice.length} / 50+ 字</span>
+                  <span className="ait-practice-hint">判斷標準：三個框都要填寫，完成後只能下載自己的練習內容。</span>
                 </div>
               ) : (
                 <div className="ait-practice-wrap">
@@ -1506,9 +1561,9 @@ function CopyPage() {
                 </div>
               )}
               {practiceError && <div className="ait-inline-error">{practiceError}</div>}
-              <button className="ait-btn-primary" disabled={practice.length < 50 || evaluatingPractice}
+              <button className="ait-btn-primary" disabled={!practiceValidation.ok || evaluatingPractice}
                 onClick={handleSubmitPractice}>
-                {evaluatingPractice ? <Spinner /> : '提交練習給 AI 判斷'}
+                {evaluatingPractice ? <Spinner /> : '提交練習給系統判斷'}
               </button>
             </>
           ) : practiceEvaluation?.approved ? (
@@ -1547,11 +1602,9 @@ function CopyPage() {
               </button>
             ))}
           </div>
-          {shootFormat && (
-            <button className="ait-btn-primary ait-go-btn" onClick={handleDownload}>
-              <Download size={16} strokeWidth={1.8} />下載我的練習內容
-            </button>
-          )}
+          <button className="ait-btn-primary ait-go-btn" onClick={handleDownload}>
+            <Download size={16} strokeWidth={1.8} />下載我的練習內容
+          </button>
         </div>
       )}
 
