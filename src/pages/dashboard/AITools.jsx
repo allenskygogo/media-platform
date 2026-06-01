@@ -532,6 +532,66 @@ function normalizeGeneratedTopics(result, input, round) {
   })
 }
 
+function normalizeScriptResult(result, topicText, scriptType) {
+  const fallback = (MOCK_SCRIPTS[scriptType] || MOCK_SCRIPTS.knowledge)(topicText)
+
+  const normalizeSection = (section, index) => {
+    if (typeof section === 'string') {
+      return {
+        heading: index === 0 ? '【AI 生成腳本】' : `【段落 ${index + 1}】`,
+        body: section.trim(),
+      }
+    }
+
+    if (section && typeof section === 'object') {
+      return {
+        heading: String(section.heading || section.title || section.label || `【段落 ${index + 1}】`).trim(),
+        body: String(section.body || section.content || section.text || '').trim(),
+      }
+    }
+
+    return null
+  }
+
+  const sectionSource = Array.isArray(result)
+    ? result
+    : Array.isArray(result?.sections)
+      ? result.sections
+      : Array.isArray(result?.script)
+        ? result.script
+        : Array.isArray(result?.items)
+          ? result.items
+          : null
+
+  if (sectionSource) {
+    const sections = sectionSource.map(normalizeSection).filter(section => section?.body)
+    return sections.length ? sections : fallback
+  }
+
+  if (result && typeof result === 'object') {
+    const objectSections = [
+      ['hook', '【鉤子 · 前 3 秒】'],
+      ['opening', '【開場】'],
+      ['problem', '【問題引入】'],
+      ['main', '【主體內容】'],
+      ['body', '【主體內容】'],
+      ['cta', '【結尾 CTA】'],
+      ['closing', '【結尾 CTA】'],
+    ].map(([key, heading]) => {
+      const body = String(result[key] || '').trim()
+      return body ? { heading, body } : null
+    }).filter(Boolean)
+
+    return objectSections.length ? objectSections : fallback
+  }
+
+  if (typeof result === 'string' && result.trim()) {
+    return [{ heading: '【AI 生成腳本】', body: result.trim() }]
+  }
+
+  return fallback
+}
+
 function getFallbackSavedTopics(userId) {
   if (!allowLocalFallback) return []
   try {
@@ -877,6 +937,7 @@ function CopyPage() {
   // Step 4 — script
   const [script,           setScript]           = useState(null)
   const [generatingScript, setGeneratingScript] = useState(false)
+  const [scriptError,      setScriptError]      = useState('')
   // Step 5 — practice
   const [practice,          setPractice]          = useState('')
   const [practiceSubmitted, setPracticeSubmitted] = useState(false)
@@ -932,7 +993,7 @@ function CopyPage() {
       return
     }
     let cancelled = false
-    setGeneratingTopics(true); setCopyTopics(null); setSelectedTopicIdx(null); setScript(null)
+    setGeneratingTopics(true); setCopyTopics(null); setSelectedTopicIdx(null); setScript(null); setScriptError('')
     setPractice(''); setPracticeSubmitted(false); setPracticeEvaluation(null); setPracticeError(''); setShootFormat(null)
 
     async function generateTopics() {
@@ -959,6 +1020,7 @@ function CopyPage() {
     setTopicRound(r => r + 1)
     setSelectedTopicIdx(null)
     setScript(null)
+    setScriptError('')
     setPractice('')
     setPracticeSubmitted(false)
     setPracticeEvaluation(null)
@@ -966,12 +1028,37 @@ function CopyPage() {
     setShootFormat(null)
   }
 
-  const handleSelectTopic = idx => {
-    setSelectedTopicIdx(idx); setScript(null); setPractice(''); setPracticeSubmitted(false); setPracticeEvaluation(null); setPracticeError(''); setShootFormat(null)
+  const generateScriptForTopic = async (topic, nextScriptType = scriptType, sourceIdea = idea.trim()) => {
+    if (!topic?.text || !nextScriptType) return
+
     setGeneratingScript(true)
-    setTimeout(() => {
-      setScript(MOCK_SCRIPTS[scriptType](copyTopics[idx].text)); setGeneratingScript(false)
-    }, 900)
+    setScriptError('')
+
+    try {
+      const payload = {
+        task: 'generate_script',
+        idea: sourceIdea,
+        topicText: topic.text,
+        element: topic.element,
+        traffic: topic.traffic,
+        scriptType: nextScriptType,
+        scriptTypeLabel: SCRIPT_TYPES.find(s => s.id === nextScriptType)?.label || nextScriptType,
+        instruction: '請優先依照已上傳的 PDF 腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
+      }
+      const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
+      setScript(normalizeScriptResult(result, topic.text, nextScriptType))
+    } catch (error) {
+      setScript((MOCK_SCRIPTS[nextScriptType] || MOCK_SCRIPTS.knowledge)(topic.text))
+      setScriptError(error.message || 'AI 腳本生成暫時失敗，已先顯示本機備援腳本。')
+    } finally {
+      setGeneratingScript(false)
+    }
+  }
+
+  const handleSelectTopic = idx => {
+    const topic = copyTopics?.[idx]
+    setSelectedTopicIdx(idx); setScript(null); setPractice(''); setPracticeSubmitted(false); setPracticeEvaluation(null); setPracticeError(''); setScriptError(''); setShootFormat(null)
+    generateScriptForTopic(topic)
   }
 
   const handleSelectSavedTopic = item => {
@@ -991,12 +1078,9 @@ function CopyPage() {
     setPracticeSubmitted(false)
     setPracticeEvaluation(null)
     setPracticeError('')
+    setScriptError('')
     setShootFormat(null)
-    setGeneratingScript(true)
-    setTimeout(() => {
-      setScript(MOCK_SCRIPTS[nextScriptType](topic.text))
-      setGeneratingScript(false)
-    }, 700)
+    generateScriptForTopic(topic, nextScriptType, item.industry || item.topic_text)
   }
 
   const isTopicSaved = topicText => savedTopics.some(item => item.topic_text === topicText)
@@ -1202,7 +1286,7 @@ function CopyPage() {
           <div className="ait-option-grid">
             {SCRIPT_TYPES.map(({ id, label, Icon }) => (
               <button key={id} className={`ait-option-btn${scriptType === id ? ' selected' : ''}`}
-                onClick={() => { setScriptType(id); setSelectedTopicIdx(null); setScript(null) }}>
+                onClick={() => { setScriptType(id); setSelectedTopicIdx(null); setScript(null); setScriptError('') }}>
                 <Icon size={22} strokeWidth={1.5} /><span>{label}</span>
               </button>
             ))}
@@ -1297,6 +1381,7 @@ function CopyPage() {
               )}
             </div>
           )}
+          {scriptError && <div className="ait-inline-error" style={{ margin: '12px 20px 0' }}>{scriptError}</div>}
         </div>
       )}
 

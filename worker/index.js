@@ -56,8 +56,8 @@ const DEFAULT_AI_AGENTS = {
     name: '爆款選題腳本 Agent',
     model: 'gpt-4.1-mini',
     temperature: 0.2,
-    system_prompt: '你是 TOP LEVEL TRAFFIC 的腳本練習評分老師。你必須依照課程腳本句式、開場鉤子、反差、痛點、承諾與短影音前三秒留人規則來判斷學員練習。你的任務不是幫學員重寫完整文案，而是判斷是否符合課程句式，並給出具體可修改方向。請使用繁體中文，語氣專業、具體、直接。只能輸出 JSON，不要輸出 Markdown，不要使用 emoji。',
-    user_prompt_template: `請判斷以下學員練習是否符合 TOP LEVEL TRAFFIC 腳本句式。
+    system_prompt: '你是 TOP LEVEL TRAFFIC 的爆款選題腳本智能體。你負責三個連續任務：產生爆款選題、依選題寫出符合課程句式的爆款文案、最後對照學員練習是否符合 PDF 腳本體系。你不是只定位為老師或批改者；只有在 evaluate_practice 任務時才進入練習對照模式。請優先依照已上傳 PDF 知識庫中的腳本句式、開場鉤子、反差、痛點、承諾與短影音前三秒留人規則。請使用繁體中文，語氣專業、具體、直接。只能輸出 JSON，不要輸出 Markdown，不要使用 emoji。',
+    user_prompt_template: `請依據以下輸入執行 TOP LEVEL TRAFFIC 爆款選題腳本流程。
 
 使用者輸入：
 {{input}}
@@ -66,9 +66,19 @@ const DEFAULT_AI_AGENTS = {
 {{userPlan}}
 
 輸出要求：
-- 必須回傳 JSON object
-- approved 必須依據是否符合腳本句式判斷
-- score 75 分以上才 approved=true
+- 若 input.task = "generate_script"，必須回傳 JSON object：
+  {
+    "sections": [
+      { "heading": "【鉤子 · 前 3 秒】", "body": "..." },
+      { "heading": "【問題引入】", "body": "..." },
+      { "heading": "【主體內容】", "body": "..." },
+      { "heading": "【結尾 CTA】", "body": "..." }
+    ]
+  }
+- generate_script 必須依照 input.scriptType 生成：
+  knowledge=教知識、opinion=說觀點、story=說故事、process=曬過程
+- generate_script 必須參考 PDF 腳本句式，不要使用通用模板
+- 若 input.task = "evaluate_practice"，才回傳 approved、score、summary、strengths、improvements、matched_patterns、required_revision
 - 不要輸出 JSON 以外的文字`,
   },
 }
@@ -318,7 +328,8 @@ async function handleWritingEvaluation(request, env) {
         content: [
           agent.system_prompt,
           '',
-          '你現在要擔任 TOP LEVEL TRAFFIC 的腳本練習評分老師。',
+          '你現在進入 TOP LEVEL TRAFFIC 爆款選題腳本智能體的「練習對照模式」。',
+          '這是選題、寫文案、練習對照流程的最後一步，不是把智能體定位成單純老師。',
           '請優先參考可用的 PDF 知識庫與課程腳本句式規則，判斷學員寫出的開場白是否符合該腳本類型。',
           '你只能回傳 JSON，不要輸出 Markdown，不要使用 emoji。',
         ].join('\n'),
