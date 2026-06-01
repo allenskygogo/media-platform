@@ -160,42 +160,32 @@ const KNOWLEDGE_PRACTICE_FIELDS = [
 
 const OPINION_SCRIPT_SOP = {
   title: '說觀點腳本 SOP',
-  scriptFramework: ['反常識立場', '錯誤認知', '核心觀點', '例子對比', '行動收束'],
-  selfCheck: ['立場夠鮮明', '反差夠清楚', '例子夠具體', '收束夠有態度'],
+  scriptFramework: ['表明觀點', '論據歸納／正反論證', '金句總結'],
+  selfCheck: ['站在受眾那邊', '替受眾說出情緒', '論證有力', '金句可轉發'],
   qualityRules: [
-    '反常識立場：第一段要直接講出和大眾想法不同的判斷，不要只說安全正確的話。',
-    '錯誤認知：指出觀眾原本以為對、但其實會卡住的思維。',
-    '核心觀點：用一句清楚、有立場的話說出你的主張。',
-    '例子對比：必須有一個具體場景、人物、數字、前後差異或真實案例。',
-    '行動收束：最後要留下可被記住的一句話或一個明確行動，不要普通喊口號。',
+    '表明觀點：第一段直接說出你認為這件事對或錯，必須站在特定受眾那邊。',
+    '論據歸納／正反論證：第二段用歸納論據或正反論證，把受眾不敢講的話講清楚。',
+    '金句總結：第三段用一句可被記住、可轉發、情緒明確的金句收束。',
+    '觀點不是教育粉絲，也不是罵觀眾；觀點是「我理解你，所以我幫你說出來」。',
+    '好的觀點要讓特定受眾感覺：你站在我這邊、你替我出了一口氣、我想支持你、我想轉發給某個人看。',
   ],
 }
 
 const OPINION_PRACTICE_FIELDS = [
   {
-    key: 'stance',
-    label: '反常識立場',
-    placeholder: '先寫出你跟大多數人不同的判斷，立場要鮮明，不要只講安全正確的話...',
+    key: 'viewpoint',
+    label: '表明觀點',
+    placeholder: '直接寫出你認為這件事對或錯，並明確站在你的特定受眾那一邊...',
   },
   {
-    key: 'wrongBelief',
-    label: '錯誤認知',
-    placeholder: '寫出觀眾原本以為對、但其實會讓他卡住的想法...',
+    key: 'argument',
+    label: '論據歸納／正反論證',
+    placeholder: '用歸納論據或正反論證，把受眾不敢講、但心裡認同的理由說出來...',
   },
   {
-    key: 'coreView',
-    label: '核心觀點',
-    placeholder: '用一句清楚、有態度的話說出你的主張...',
-  },
-  {
-    key: 'contrastExample',
-    label: '例子對比',
-    placeholder: '補上一個具體場景、人物、數字、前後差異或真實案例...',
-  },
-  {
-    key: 'closing',
-    label: '行動收束',
-    placeholder: '最後留下一句觀眾記得住的收束，或一個明確行動...',
+    key: 'punchline',
+    label: '金句總結',
+    placeholder: '用一句有態度、能被轉發的金句收束，讓對的人看完覺得爽...',
   },
 ]
 
@@ -332,24 +322,16 @@ const MOCK_SCRIPTS = {
   ],
   opinion: text => [
     {
-      heading: '【反常識立場】',
-      body:    `大多數人談「${text}」時，第一反應都是找方法，但真正卡住你的，通常不是方法不夠，而是你相信了一個錯誤前提。`,
+      heading: '【表明觀點】',
+      body:    `我覺得「${text}」這件事，最不該被誤會的地方是：你不是不努力，也不是不會做，而是很多人只想用一套標準答案要求你。真正該被討論的，是這套標準到底有沒有站在你這種人的處境裡看。`,
     },
     {
-      heading: '【錯誤認知】',
-      body:    `很多人以為只要更努力、更自律、更大量執行，就一定會變好。問題是，如果方向本身錯了，你做越多，只是在更快累積錯誤。`,
+      heading: '【論據歸納／正反論證】',
+      body:    `如果只看表面，大家會說「你再努力一點就好」。但現實是，不同階段的人資源不同、時間不同、能承擔的風險也不同。你不能拿已經有團隊、有預算、有流量的人，去要求一個剛開始的人照抄同一套打法。這不是偷懶，這是清楚知道自己現在該用什麼方式活下來。`,
     },
     {
-      heading: '【核心觀點】',
-      body:    `我的觀點是：先修判斷，再修技巧。你要先知道什麼值得做、什麼不該做，技巧才會變成加速器，而不是消耗你的工具。`,
-    },
-    {
-      heading: '【例子對比】',
-      body:    `同樣是做內容，一個人每天追熱門、改標題、硬拍十支；另一個人先判斷受眾痛點、反差角度、成交路徑，再拍三支。最後有結果的，往往不是產量最大的人，而是判斷最準的人。`,
-    },
-    {
-      heading: '【行動收束】',
-      body:    `所以不要急著問下一個方法是什麼，先問：我現在相信的前提，真的對嗎？先把判斷修正，後面的執行才有放大的價值。`,
+      heading: '【金句總結】',
+      body:    `觀點不是為了讓所有人都喜歡你，觀點是為了讓對的人更相信你。你不是在教訓粉絲，你是在替他把那口悶在心裡的氣說出來。`,
     },
   ],
   story: text => [
@@ -721,15 +703,19 @@ function normalizeScriptResult(result, topicText, scriptType) {
     return unique.length ? unique : fallback
   }
   const normalizeOpinionSections = sections => {
-    const allowed = ['【反常識立場】', '【錯誤認知】', '【核心觀點】', '【例子對比】', '【行動收束】']
+    const allowed = ['【表明觀點】', '【論據歸納／正反論證】', '【金句總結】']
     const normalized = sections
       .map(section => {
         const heading = String(section.heading || '').trim()
-        if (heading.includes('反常識') || heading.includes('破題')) return { ...section, heading: '【反常識立場】' }
-        if (heading.includes('錯誤認知') || heading.includes('錯誤前提')) return { ...section, heading: '【錯誤認知】' }
-        if (heading.includes('核心觀點') || heading.includes('觀點陳述')) return { ...section, heading: '【核心觀點】' }
-        if (heading.includes('例子') || heading.includes('對比') || heading.includes('論據')) return { ...section, heading: '【例子對比】' }
-        if (heading.includes('行動') || heading.includes('收束') || heading.includes('總結')) return { ...section, heading: '【行動收束】' }
+        if (heading.includes('表明觀點') || heading.includes('反常識') || heading.includes('核心觀點') || heading.includes('觀點陳述') || heading.includes('破題')) {
+          return { ...section, heading: '【表明觀點】' }
+        }
+        if (heading.includes('論據') || heading.includes('正反') || heading.includes('論證') || heading.includes('錯誤認知') || heading.includes('例子') || heading.includes('對比')) {
+          return { ...section, heading: '【論據歸納／正反論證】' }
+        }
+        if (heading.includes('金句') || heading.includes('總結') || heading.includes('收束') || heading.includes('行動')) {
+          return { ...section, heading: '【金句總結】' }
+        }
         return section
       })
       .filter(section => section?.body && allowed.includes(section.heading))
@@ -788,14 +774,16 @@ function normalizeScriptResult(result, topicText, scriptType) {
       ['process', '【具體操作過程】'],
       ['operation_process', '【具體操作過程】'],
       ['hook', '【鉤子 · 前 3 秒】'],
-      ['stance', '【反常識立場】'],
-      ['wrong_belief', '【錯誤認知】'],
-      ['wrongBelief', '【錯誤認知】'],
-      ['core_view', '【核心觀點】'],
-      ['coreView', '【核心觀點】'],
-      ['contrast_example', '【例子對比】'],
-      ['contrastExample', '【例子對比】'],
-      ['action_closing', '【行動收束】'],
+      ['viewpoint', '【表明觀點】'],
+      ['point_of_view', '【表明觀點】'],
+      ['stance', '【表明觀點】'],
+      ['argument', '【論據歸納／正反論證】'],
+      ['argumentation', '【論據歸納／正反論證】'],
+      ['evidence', '【論據歸納／正反論證】'],
+      ['pros_cons', '【論據歸納／正反論證】'],
+      ['punchline', '【金句總結】'],
+      ['golden_sentence', '【金句總結】'],
+      ['summary_quote', '【金句總結】'],
       ['opening', '【開場】'],
       ['problem', '【問題引入】'],
       ['main', '【主體內容】'],
@@ -1278,7 +1266,7 @@ function CopyPage() {
         instruction: nextScriptType === 'knowledge'
           ? '請優先依照已上傳的知識庫與教知識腳本 SOP。輸出順序必須只有三段：場景難題、低行動成本解決方案、具體操作過程。腳本類型由系統在推薦型或解題型中擇一，寫在場景難題段落裡，不要出現在標題。三段都必須通過自檢：信息多、效果快、料夠猛。禁止中規中矩的泛泛論點，例如只說設定目標、善用工具、提升效率。不要輸出教知識影片腳本第四段，也不要輸出通用的鉤子/問題引入/主體/CTA 框架。'
           : nextScriptType === 'opinion'
-            ? '請優先依照已上傳的知識庫與說觀點腳本 SOP。輸出順序必須只有五段：反常識立場、錯誤認知、核心觀點、例子對比、行動收束。觀點必須有明確立場，不可以中立評論；必須指出大眾錯誤認知，並用具體場景、人物、數字、前後差異或案例支撐。不要輸出通用的鉤子/論據一/論據二/CTA 框架。'
+            ? '請優先依照已上傳的知識庫與說觀點腳本 SOP。輸出順序必須只有三段：表明觀點、論據歸納／正反論證、金句總結。觀點不是教育粉絲，也不是罵觀眾；觀點是分享我覺得這件事對或錯，並站在我的受眾那一邊。內容要讓特定受眾感覺：你站在我這邊、你把我不敢講的話講出來了、你替我出了一口氣、我想支持你、我想轉發給某個人看。不要輸出通用的反常識立場/錯誤認知/核心觀點/例子對比/行動收束框架。'
             : '請優先依照已上傳的腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
       }
       const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
