@@ -659,7 +659,35 @@ const BENCHMARK_INDUSTRY_MOCK = {
   ],
 }
 
-function buildCopyTopics(idea, round) {
+function buildOpinionTopics(idea, round) {
+  const keyword = idea.slice(0, 12) || '你的主題'
+  const sets = [
+    [
+      `如果你是${keyword}，千萬不要再忍這種不公平`,
+      `真正懂${keyword}的人，不會一直替別人的問題買單`,
+      `${keyword}最容易吃虧的，就是把委屈當成懂事`,
+      `很多人以為${keyword}只要忍一下就好，但其實問題會越拖越大`,
+      `建議你不要再用「為了大家好」委屈自己`,
+    ],
+    [
+      `千萬不要把${keyword}裡的衝突，都怪到自己身上`,
+      `如果你是${keyword}，一定不要忽略這種關係壓力`,
+      `真正成熟的人，不會要求${keyword}一直退讓`,
+      `${keyword}最容易被消耗的，就是不敢把話說清楚`,
+      `很多人以為退一步就沒事，但其實只會讓對方更得寸進尺`,
+    ],
+  ]
+  const source = sets[round % sets.length]
+  const elements = ['奇葩', '人群', '懷舊', '最差', '頭牌']
+  return source.map((text, index) => ({
+    element: elements[index] || '人群',
+    text,
+    traffic: index < 3 ? 'high' : 'medium',
+  }))
+}
+
+function buildCopyTopics(idea, round, scriptType) {
+  if (scriptType === 'opinion') return buildOpinionTopics(idea, round)
   const set = TOPIC_SETS[round % TOPIC_SETS.length].slice(0, 5)
   const keyword = idea.slice(0, 8) || '你的主題'
   return set.map(t => ({
@@ -669,8 +697,8 @@ function buildCopyTopics(idea, round) {
   }))
 }
 
-function normalizeGeneratedTopics(result, input, round) {
-  const fallback = buildCopyTopics(input, round)
+function normalizeGeneratedTopics(result, input, round, scriptType) {
+  const fallback = buildCopyTopics(input, round, scriptType)
   if (!Array.isArray(result)) return fallback
 
   return fallback.map((item, index) => {
@@ -1247,12 +1275,14 @@ function CopyPage() {
         const payload = {
           idea: idea.trim(),
           scriptType,
-          instruction: '請先產生可拍攝的爆款選題，再讓學員進入腳本練習流程。',
+          instruction: scriptType === 'opinion'
+            ? '請先依照說觀點選題邏輯產生可拍攝選題：先確認寫作對象 TA，再找 TA 最常衝突的人物關係，再找具體衝突事件，最後輸出明確觀點句。觀點句要優先使用否定句或強立場句，例如「千萬不要 + 行為」、「建議你不要 + 行為」、「真正懂的人，不會 + 行為」、「如果你是【身份】，一定不要 + 行為」、「【身份】最容易吃虧的，就是 + 錯誤行為」、「很多人以為【常識】，但其實【反常識觀點】」。不要做成知識解析題，不要牽強硬套，人物關係與衝突事件必須自然合理。'
+            : '請先產生可拍攝的爆款選題，再讓學員進入腳本練習流程。',
         }
         const result = await callAI('topics', payload, deriveAITier(currentUser), currentUser?.id)
-        if (!cancelled) setCopyTopics(normalizeGeneratedTopics(result, idea.trim(), topicRound))
+        if (!cancelled) setCopyTopics(normalizeGeneratedTopics(result, idea.trim(), topicRound, scriptType))
       } catch (_) {
-        if (!cancelled) setCopyTopics(buildCopyTopics(idea.trim(), topicRound))
+        if (!cancelled) setCopyTopics(buildCopyTopics(idea.trim(), topicRound, scriptType))
       } finally {
         if (!cancelled) setGeneratingTopics(false)
       }
