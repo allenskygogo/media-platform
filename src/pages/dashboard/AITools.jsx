@@ -226,9 +226,75 @@ const OPINION_PRACTICE_FIELDS = [
   },
 ]
 
+const STORY_SCRIPT_SOP = {
+  title: '說故事腳本 SOP',
+  purpose: '故事的目的是交友破冰，用經歷換人心，拉近博主與粉絲之間的距離，建立信任。',
+  storyTypes: [
+    '小有成就：展示自己比過去更好的經歷，重點是昨天的你 vs 今天的你。',
+    '成功案例：展示你如何幫助別人達成成果，必須同時有「你幫他的部分」與「他努力的部分」。',
+    '平凡英雄：用你的價值觀和方法解決他人的困境，展示人品與正向價值觀。',
+  ],
+  scriptFramework: ['故事類型', '成就或衝突事件', '困境與轉機', '感悟與收束'],
+  difficultyBeats: ['盲目自信', '家門不幸', '天災人禍', '惡霸欺壓', '過河拆橋', '至親背叛', '強權干涉'],
+  turningBeats: ['通關密碼', '至情激活', '天賦異稟', '意外之喜', '以和德服', '貴人相助', '韜光養晦'],
+  heroActions: ['敢做敢當', '即時回懟', '即時面對', '堅守原則', '隨手幫助', '照護弱勢'],
+  qualityRules: [
+    '開篇直接進入主題，不要先花大量文字介紹背景。',
+    '小有成就要有已達成的成就、過程中的困境、過程中的轉機、目標帶來的感悟。',
+    '成功案例要有別人的成就、對方遇到的困境、你如何介入幫助、對方自己的努力、合作感悟。',
+    '平凡英雄要有衝突事件、英雄時刻、對事情的正向總結。',
+    '困境與轉機要層層遞進：第一輪困境比第二輪輕，第二輪轉機比第一輪更有力。',
+    '要用畫面詞代替感受詞。不要只說我很難過、我很高興、我很辛苦，要寫具體動作、場景與細節。',
+    '平凡英雄不能用抱怨結尾，最後必須正向呼籲或苦中作樂。',
+    '故事不能一帆風順；沒有困境起伏，就沒有讓觀眾看下去的理由。',
+  ],
+}
+
+const STORY_SCRIPT_GENERATION_INSTRUCTION = [
+  '請把已上傳的知識庫 PDF 當成產生說故事腳本的主要依據。若知識庫有故事腳本案例、橋段、句式或框架，必須優先依照知識庫。',
+  '說故事不是主流爆款論點，而是信任建立。故事的目的，是交友破冰，用經歷換人心，拉近博主與粉絲距離。',
+  '你必須先判斷最適合的故事類型：小有成就、成功案例、平凡英雄。',
+  '小有成就：成就不是和別人比，而是昨天的你 vs 今天的你。結構是已達成的成就、過程中的困境、過程中的轉機、目標帶來的感悟。',
+  '成功案例：你幫助別人達成某個成就。必須同時有你幫他的部分，也要有他自己努力的部分。結構是別人的成就、過程中的困境、過程中的轉機、目標帶來的感悟。',
+  '平凡英雄：用自己的價值觀和方法解決他人的困境。結構是衝突事件、體現英雄時刻、對事情的總結。',
+  '可用困境橋段：盲目自信、家門不幸、天災人禍、惡霸欺壓、過河拆橋、至親背叛、強權干涉。',
+  '可用轉機橋段：通關密碼、至情激活、天賦異稟、意外之喜、以和德服、貴人相助、韜光養晦。',
+  '平凡英雄的解決方式可用：敢做敢當、即時回懟、即時面對、堅守原則、隨手幫助、照護弱勢。',
+  '輸出順序必須只有四段：故事類型、成就或衝突事件、困境與轉機、感悟與收束。',
+  '開篇要直接進入主題，不要先介紹出身、入行經歷、家庭背景。第一句就說成就、案例成果或衝突事件。',
+  '困境與轉機要有情緒曲線。不要一帆風順。第一輪困境要比第二輪輕，第二輪轉機要比第一輪更有力。',
+  '要用畫面詞代替感受詞。不要寫「我很難過、我很高興、我很辛苦」，要寫「那天晚上我盯著天花板到天亮」「我們輪流趴在桌上睡」這種畫面。',
+  '語氣要白話、生活化、像真人口播，不要像作文、報告或雞湯。',
+  '禁止抱怨式結尾。平凡英雄最後一定要正向呼籲或苦中作樂。',
+].join(' ')
+
+const STORY_PRACTICE_FIELDS = [
+  {
+    key: 'type',
+    label: '故事類型',
+    placeholder: '寫出你這支故事屬於小有成就、成功案例或平凡英雄，並簡短說明為什麼...',
+  },
+  {
+    key: 'event',
+    label: '成就或衝突事件',
+    placeholder: '第一句直接進入主題：你達成了什麼、幫別人達成什麼，或遇到什麼不公平的事...',
+  },
+  {
+    key: 'turning',
+    label: '困境與轉機',
+    placeholder: '寫出至少一個困境和一個轉機。盡量用畫面詞，不要只寫我很難過、我很辛苦...',
+  },
+  {
+    key: 'reflection',
+    label: '感悟與收束',
+    placeholder: '寫出這段經歷帶來的感悟。平凡英雄要正向收束，不要只抱怨...',
+  },
+]
+
 const STRUCTURED_PRACTICE_FIELDS = {
   knowledge: KNOWLEDGE_PRACTICE_FIELDS,
   opinion: OPINION_PRACTICE_FIELDS,
+  story: STORY_PRACTICE_FIELDS,
 }
 
 function parseKnowledgePractice(text) {
@@ -377,24 +443,20 @@ const MOCK_SCRIPTS = {
   ],
   story: text => [
     {
-      heading: '【故事開場】',
-      body:    `三年前，我剛接觸這件事的時候，\n窮到連吃飯都要精打細算。\n但我沒有放棄，因為我知道我只差一個關鍵。`,
+      heading: '【故事類型】',
+      body:    `系統判斷這支適合用「小有成就」腳本。故事不是為了炫耀，而是讓觀眾看到你怎麼從過去的卡關，走到今天的改變。這支要講的不是「我比別人強」，而是「我比以前的自己更往前了一步」。`,
     },
     {
-      heading: '【衝突發生】',
-      body:    `那時候每天工作 16 小時，卻始終看不到結果。\n身邊的人開始質疑我，說我在浪費時間。`,
+      heading: '【成就或衝突事件】',
+      body:    `我第一次真正感覺自己有進步，是因為「${text}」這件事。\n那不是一個很誇張的成功，也不是突然變成什麼大人物。只是有一天我回頭看，發現以前會讓我卡住很久的問題，現在我終於能自己拆開、自己處理。`,
     },
     {
-      heading: '【轉折點】',
-      body:    `直到有一天，一個前輩跟我說了一句話：\n「你的問題不是不夠努力，是方向錯了。」\n我當時沉默了很久，因為他說中了。`,
+      heading: '【困境與轉機】',
+      body:    `第一個困境是盲目自信。那時候我以為只要多做一點、多熬一點，結果就會變好。結果每天忙到很晚，桌上堆滿筆記，手機裡也存了一堆資料，但真正能用的東西很少。\n\n後來的轉機是通關密碼。我發現問題不是我不努力，而是我一直沒有把方法整理成順序。那天我把所有事情寫在一張紙上，一項一項圈出最卡的地方，才發現原來我不是差更多資訊，而是差一個能照著走的流程。`,
     },
     {
-      heading: '【成果與反思】',
-      body:    `改變方向後的三個月，一切完全不一樣。\n不是因為我突然變聰明了，\n而是我終於找到了適合自己的路。`,
-    },
-    {
-      heading: '【給你的話】',
-      body:    `如果你也遇到瓶頸了，\n別急著懷疑自己的能力，\n先問問自己：方向對嗎？\n留言說說你現在的狀況，我們一起來看看。`,
+      heading: '【感悟與收束】',
+      body:    `所以我後來才懂，小有成就不是突然變得很厲害，而是你終於能處理以前處理不了的事。不要只看別人跑多快，先看自己是不是比昨天少慌一點、清楚一點、敢往前一點。這種進步不一定會立刻被所有人看見，但它會慢慢把你推到新的位置。`,
     },
   ],
   process: text => [
@@ -803,6 +865,38 @@ function normalizeScriptResult(result, topicText, scriptType) {
     })
     return unique.length ? unique : fallback
   }
+  const normalizeStorySections = sections => {
+    const allowed = ['【故事類型】', '【成就或衝突事件】', '【困境與轉機】', '【感悟與收束】']
+    const normalized = sections
+      .map(section => {
+        const heading = String(section.heading || '').trim()
+        if (heading.includes('故事類型') || heading.includes('類型') || heading.includes('定位')) {
+          return { ...section, heading: '【故事類型】' }
+        }
+        if (heading.includes('成就') || heading.includes('衝突') || heading.includes('事件') || heading.includes('開場') || heading.includes('開篇')) {
+          return { ...section, heading: '【成就或衝突事件】' }
+        }
+        if (heading.includes('困境') || heading.includes('轉機') || heading.includes('轉折') || heading.includes('低谷') || heading.includes('橋段') || heading.includes('英雄時刻')) {
+          return { ...section, heading: '【困境與轉機】' }
+        }
+        if (heading.includes('感悟') || heading.includes('總結') || heading.includes('收束') || heading.includes('反思') || heading.includes('呼籲') || heading.includes('給你的話')) {
+          return { ...section, heading: '【感悟與收束】' }
+        }
+        return section
+      })
+      .filter(section => section?.body && allowed.includes(section.heading))
+
+    const unique = []
+    allowed.forEach(heading => {
+      const matches = normalized.filter(section => section.heading === heading)
+      if (!matches.length) return
+      unique.push({
+        heading,
+        body: matches.map(section => section.body).join('\n\n'),
+      })
+    })
+    return unique.length ? unique : fallback
+  }
 
   const normalizeSection = (section, index) => {
     if (typeof section === 'string') {
@@ -836,6 +930,7 @@ function normalizeScriptResult(result, topicText, scriptType) {
     const sections = sectionSource.map(normalizeSection).filter(section => section?.body)
     if (scriptType === 'knowledge') return normalizeKnowledgeSections(sections)
     if (scriptType === 'opinion') return normalizeOpinionSections(sections)
+    if (scriptType === 'story') return normalizeStorySections(sections)
     return sections.length ? sections : fallback
   }
 
@@ -868,6 +963,16 @@ function normalizeScriptResult(result, topicText, scriptType) {
       ['punchline', '【金句】'],
       ['golden_sentence', '【金句】'],
       ['summary_quote', '【金句】'],
+      ['story_type', '【故事類型】'],
+      ['type', '【故事類型】'],
+      ['achievement', '【成就或衝突事件】'],
+      ['event', '【成就或衝突事件】'],
+      ['conflict', '【成就或衝突事件】'],
+      ['difficulty', '【困境與轉機】'],
+      ['turning_point', '【困境與轉機】'],
+      ['turning', '【困境與轉機】'],
+      ['reflection', '【感悟與收束】'],
+      ['lesson', '【感悟與收束】'],
       ['opening', '【開場】'],
       ['problem', '【問題引入】'],
       ['main', '【主體內容】'],
@@ -881,6 +986,7 @@ function normalizeScriptResult(result, topicText, scriptType) {
 
     if (scriptType === 'knowledge') return normalizeKnowledgeSections(objectSections)
     if (scriptType === 'opinion') return normalizeOpinionSections(objectSections)
+    if (scriptType === 'story') return normalizeStorySections(objectSections)
     return objectSections.length ? objectSections : fallback
   }
 
@@ -1348,11 +1454,15 @@ function CopyPage() {
           ? KNOWLEDGE_SCRIPT_SOP
           : nextScriptType === 'opinion'
             ? OPINION_SCRIPT_SOP
-            : null,
+            : nextScriptType === 'story'
+              ? STORY_SCRIPT_SOP
+              : null,
         instruction: nextScriptType === 'knowledge'
           ? '請優先依照已上傳的知識庫與教知識腳本 SOP。輸出順序必須只有三段：場景難題、低行動成本解決方案、具體操作過程。腳本類型由系統在推薦型或解題型中擇一，寫在場景難題段落裡，不要出現在標題。三段都必須通過自檢：信息多、效果快、料夠猛。禁止中規中矩的泛泛論點，例如只說設定目標、善用工具、提升效率。不要輸出教知識影片腳本第四段，也不要輸出通用的鉤子/問題引入/主體/CTA 框架。'
           : nextScriptType === 'opinion'
             ? OPINION_SCRIPT_GENERATION_INSTRUCTION
+            : nextScriptType === 'story'
+              ? STORY_SCRIPT_GENERATION_INSTRUCTION
             : '請優先依照已上傳的腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
       }
       const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
@@ -1472,7 +1582,9 @@ function CopyPage() {
               ? KNOWLEDGE_SCRIPT_SOP.scriptFramework
               : scriptType === 'opinion'
                 ? OPINION_SCRIPT_SOP.scriptFramework
-                : null,
+                : scriptType === 'story'
+                  ? STORY_SCRIPT_SOP.scriptFramework
+                  : null,
             draftText: practice,
             userPlan: deriveAITier(currentUser),
           }),
