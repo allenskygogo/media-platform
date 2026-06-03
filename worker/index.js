@@ -21,6 +21,18 @@ const AI_KNOWLEDGE_BUCKET = 'ai-knowledge'
 const BOOKING_TIME_SLOTS = ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00']
 const DEFAULT_BOOKING_DURATION_MINUTES = 180
 const TAIPEI_OFFSET = '+08:00'
+const PLAN_TO_LEGACY_TIER = {
+  trial: 'basic',
+  creator: 'standard',
+  master: 'advanced',
+  managed: 'managed',
+}
+const PLAN_DURATION_DAYS = {
+  trial: 90,
+  creator: 365,
+  master: 365,
+  managed: null,
+}
 const DEFAULT_AI_AGENTS = {
   topics: {
     feature_key: 'topics',
@@ -252,6 +264,11 @@ export default {
       // POST /api/ai/knowledge/sync → attach an uploaded PDF to an agent vector store
       if (path === '/api/ai/knowledge/sync' && request.method === 'POST') {
         return await handleAIKnowledgeSync(request, env)
+      }
+
+      // POST /api/admin/students/provision → manually open access for an offline purchaser
+      if (path === '/api/admin/students/provision' && request.method === 'POST') {
+        return await handleProvisionStudent(request, env)
       }
 
       // POST /api/calendar/events → create a confirmed booking event
@@ -625,6 +642,77 @@ async function handleAIKnowledgeSync(request, env) {
   }
 }
 
+async function handleProvisionStudent(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+  const body = await request.json().catch(() => ({}))
+  const name = String(body.name || '').trim()
+  const email = String(body.email || '').trim().toLowerCase()
+  const password = String(body.password || '').trim()
+  const planId = String(body.planId || 'creator').trim()
+  const legacyTier = String(body.legacyTier || planToLegacyTier(planId)).trim()
+  const expiresAt = normalizeDate(body.expiresAt) || defaultMembershipExpiry(planId)
+
+  if (!name) return err('Missing student name', 400)
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err('Invalid email', 400)
+  if (password.length < 6) return err('Password must be at least 6 characters', 400)
+  if (!['trial', 'creator', 'master', 'managed'].includes(planId)) return err('Invalid plan', 400)
+  if (!['basic', 'standard', 'advanced', 'managed'].includes(legacyTier)) return err('Invalid legacy tier', 400)
+
+  const existingProfile = await getProfileByEmail(env, email)
+  let authUser = existingProfile?.id ? { id: existingProfile.id, email } : await getAuthUserByEmail(env, email)
+
+  if (authUser?.id) {
+    authUser = await updateSupabaseAuthUser(env, authUser.id, {
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { display_name: name },
+    })
+  } else {
+    authUser = await createSupabaseAuthUser(env, {
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { display_name: name },
+    })
+  }
+
+  if (!authUser?.id) return err('Failed to create Supabase auth user', 500)
+
+  await upsertProfile(env, {
+    id: authUser.id,
+    display_name: name,
+    email,
+    role: 'student',
+    status: 'active',
+  })
+
+  await insertMembership(env, {
+    user_id: authUser.id,
+    plan_id: planId,
+    legacy_tier: legacyTier,
+    status: 'active',
+    starts_at: new Date().toISOString(),
+    expires_at: expiresAt,
+  })
+
+  return json({
+    success: true,
+    student: {
+      id: authUser.id,
+      name,
+      email,
+      planId,
+      legacyTier,
+      expiresAt,
+    },
+  })
+}
+
 async function getAIAgent(feature, env) {
   if (!feature) return null
   const fallback = DEFAULT_AI_AGENTS[feature] || null
@@ -752,6 +840,137 @@ async function upsertKnowledgeFile(env, payload) {
   const data = await response.json().catch(() => [])
   if (!response.ok) {
     throw new Error(data.message || 'Failed to save knowledge file metadata')
+  }
+  return Array.isArray(data) ? data[0] : data
+}
+
+function planToLegacyTier(planId) {
+  return PLAN_TO_LEGACY_TIER[planId] || 'standard'
+}
+
+function normalizeDate(value) {
+  if (!value) return null
+  const text = String(value).trim()
+  if (!text) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T23:59:59${TAIPEI_OFFSET}`
+
+  const date = new Date(text)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+function defaultMembershipExpiry(planId) {
+  const days = PLAN_DURATION_DAYS[planId]
+  if (!days) return null
+
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return date.toISOString()
+}
+
+function supabaseServiceHeaders(env, extra = {}) {
+  return {
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    ...extra,
+  }
+}
+
+async function getProfileByEmail(env, email) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
+  url.searchParams.set('email', `eq.${email}`)
+  url.searchParams.set('select', 'id,email')
+  url.searchParams.set('limit', '1')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to find student profile')
+  }
+  return Array.isArray(data) ? data[0] || null : null
+}
+
+async function getAuthUserByEmail(env, email) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users`)
+  url.searchParams.set('page', '1')
+  url.searchParams.set('per_page', '1000')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.msg || data.message || 'Failed to list Supabase auth users')
+  }
+
+  const users = Array.isArray(data) ? data : data.users || []
+  return users.find(user => String(user.email || '').toLowerCase() === email) || null
+}
+
+async function createSupabaseAuthUser(env, payload) {
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: supabaseServiceHeaders(env, {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.msg || data.message || 'Failed to create Supabase auth user')
+  }
+  return data
+}
+
+async function updateSupabaseAuthUser(env, userId, payload) {
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    headers: supabaseServiceHeaders(env, {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.msg || data.message || 'Failed to update Supabase auth user')
+  }
+  return data
+}
+
+async function upsertProfile(env, payload) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
+  url.searchParams.set('on_conflict', 'id')
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: supabaseServiceHeaders(env, {
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=representation',
+    }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to save student profile')
+  }
+  return Array.isArray(data) ? data[0] : data
+}
+
+async function insertMembership(env, payload) {
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/memberships`, {
+    method: 'POST',
+    headers: supabaseServiceHeaders(env, {
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to open student membership')
   }
   return Array.isArray(data) ? data[0] : data
 }

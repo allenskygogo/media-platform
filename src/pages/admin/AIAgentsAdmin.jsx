@@ -3,6 +3,8 @@ import { hasSupabase, supabase } from '../../lib/supabase'
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 const KNOWLEDGE_BUCKET = 'ai-knowledge'
+const BOSS_AGENT_PASSWORD = '0910858551'
+const AGENT_UNLOCK_KEY = 'tlt_ai_agents_unlocked'
 
 const FEATURE_OPTIONS = [
   { key: 'topics', label: '爆款選題' },
@@ -60,6 +62,9 @@ function toForm(agent) {
 
 export default function AIAgentsAdmin() {
   const fileInputRef = useRef(null)
+  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(AGENT_UNLOCK_KEY) === 'true')
+  const [password, setPassword] = useState('')
+  const [passwordError, setPasswordError] = useState('')
   const [agents, setAgents] = useState([])
   const [knowledgeFiles, setKnowledgeFiles] = useState([])
   const [selectedKey, setSelectedKey] = useState('topics')
@@ -79,8 +84,9 @@ export default function AIAgentsAdmin() {
   )
 
   useEffect(() => {
+    if (!unlocked) return
     loadAgents()
-  }, [])
+  }, [unlocked])
 
   useEffect(() => {
     if (selectedAgent) {
@@ -99,8 +105,9 @@ export default function AIAgentsAdmin() {
   }, [selectedAgent, selectedKey])
 
   useEffect(() => {
+    if (!unlocked) return
     loadKnowledgeFiles(selectedKey)
-  }, [selectedKey])
+  }, [selectedKey, unlocked])
 
   const flash = (text, type = 'success') => {
     if (type === 'error') {
@@ -110,6 +117,18 @@ export default function AIAgentsAdmin() {
       setMessage(text)
       setError('')
     }
+  }
+
+  const unlockAgentAdmin = (event) => {
+    event.preventDefault()
+    if (password !== BOSS_AGENT_PASSWORD) {
+      setPasswordError('密碼錯誤，請向老闆確認。')
+      return
+    }
+    sessionStorage.setItem(AGENT_UNLOCK_KEY, 'true')
+    setUnlocked(true)
+    setPassword('')
+    setPasswordError('')
   }
 
   async function loadAgents() {
@@ -331,10 +350,44 @@ export default function AIAgentsAdmin() {
             管理網站 AI 的課程規則、輸入模板與模型設定。這裡不是直接連 ChatGPT GPTs，請將 GPTs Instructions 貼到系統指令。
           </p>
         </div>
-        <button className="btn btn-secondary" onClick={loadAgents} disabled={loading}>
-          重新整理
-        </button>
+        {unlocked && (
+          <button className="btn btn-secondary" onClick={loadAgents} disabled={loading}>
+            重新整理
+          </button>
+        )}
       </div>
+
+      {!unlocked ? (
+        <div className="admin-card" style={{ maxWidth: 520 }}>
+          <div className="admin-card-header">老闆密碼驗證</div>
+          <div className="admin-card-body">
+            <p style={{ marginTop: 0, color: 'var(--gray-500)', fontSize: 14 }}>
+              AI Agent 管理會影響全站 AI 輸出，請輸入老闆密碼後再操作。
+            </p>
+            <form onSubmit={unlockAgentAdmin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <label className="form-group">
+                <span className="form-label">管理密碼</span>
+                <input
+                  className="form-input"
+                  type="password"
+                  value={password}
+                  onChange={e => {
+                    setPassword(e.target.value)
+                    setPasswordError('')
+                  }}
+                  placeholder="輸入老闆密碼"
+                  autoFocus
+                />
+              </label>
+              {passwordError && <div className="auth-alert error">{passwordError}</div>}
+              <button className="btn btn-primary" type="submit" disabled={!password.trim()}>
+                解鎖 AI Agent 管理
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : (
+        <>
 
       {message && <div className="auth-alert success" style={{ marginBottom: 16 }}>{message}</div>}
       {error && <div className="auth-alert error" style={{ marginBottom: 16 }}>{error}</div>}
@@ -533,6 +586,8 @@ export default function AIAgentsAdmin() {
           </div>
         </section>
       </div>
+        </>
+      )}
     </div>
   )
 }

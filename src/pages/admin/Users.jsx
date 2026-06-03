@@ -1,8 +1,24 @@
 import { useState } from 'react'
 import { getUsers, saveUsers, addDays, TIER_META } from '../../data/mockData'
+import { hasSupabase, supabase, allowLocalFallback } from '../../lib/supabase'
 
 const TIERS = ['basic', 'standard', 'advanced']
 const TIER_MARK = { basic: '體驗', standard: '達人', advanced: '進階' }
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
+
+const PROVISION_TIERS = [
+  { tier: 'basic', planId: 'trial', label: '體驗課' },
+  { tier: 'standard', planId: 'creator', label: '頂流達人' },
+  { tier: 'advanced', planId: 'master', label: '頂流私塾' },
+]
+
+const emptyProvisionForm = {
+  name: '',
+  email: '',
+  password: '',
+  tier: 'standard',
+  expiresAt: '',
+}
 
 export default function UsersAdmin() {
   const [users, setUsers]       = useState(() => getUsers().filter(u => u.role === 'student' && u.tier !== 'managed'))
@@ -10,7 +26,11 @@ export default function UsersAdmin() {
   const [filterTier, setFilterTier] = useState('all')
   const [editUser, setEditUser] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [showProvision, setShowProvision] = useState(false)
+  const [provisionForm, setProvisionForm] = useState(emptyProvisionForm)
+  const [provisioning, setProvisioning] = useState(false)
   const [msg, setMsg]           = useState('')
+  const [err, setErr]           = useState('')
 
   const filtered = users.filter(u => {
     const matchSearch = u.name.includes(search) || u.email.includes(search)
@@ -18,7 +38,8 @@ export default function UsersAdmin() {
     return matchSearch && matchTier
   })
 
-  const flash = (t) => { setMsg(t); setTimeout(() => setMsg(''), 3000) }
+  const flash = (t) => { setErr(''); setMsg(t); setTimeout(() => setMsg(''), 3000) }
+  const flashError = (t) => { setMsg(''); setErr(t); setTimeout(() => setErr(''), 5000) }
 
   const openEdit = (user) => {
     setEditUser(user)
@@ -63,12 +84,128 @@ export default function UsersAdmin() {
     flash(`${user.name} 已變更為 ${TIER_META[tier]?.label}`)
   }
 
+  const refreshLocalUsers = () => {
+    const next = getUsers().filter(u => u.role === 'student' && u.tier !== 'managed')
+    setUsers(next)
+  }
+
+  const provisionLocalStudent = () => {
+    if (!allowLocalFallback) throw new Error('正式環境需要透過 Worker 建立 Supabase 登入帳號。')
+
+    const all = getUsers()
+    const email = provisionForm.email.trim().toLowerCase()
+    const name = provisionForm.name.trim()
+    const password = provisionForm.password.trim()
+    const tier = provisionForm.tier
+    const days = TIER_META[tier]?.days
+    const today = new Date().toISOString().split('T')[0]
+    const expiresAt = provisionForm.expiresAt || (days ? addDays(today, days) : null)
+    const existingIndex = all.findIndex(u => u.email.toLowerCase() === email)
+
+    if (existingIndex >= 0) {
+      all[existingIndex] = {
+        ...all[existingIndex],
+        name,
+        password,
+        role: 'student',
+        tier,
+        avatar: name.charAt(0),
+        status: 'active',
+        expiresAt,
+        manualEnrollment: true,
+      }
+    } else {
+      all.push({
+        id: Date.now(),
+        name,
+        email,
+        password,
+        role: 'student',
+        tier,
+        avatar: name.charAt(0),
+        createdAt: today,
+        status: 'active',
+        expiresAt,
+        manualEnrollment: true,
+      })
+    }
+
+    saveUsers(all)
+    refreshLocalUsers()
+  }
+
+  const provisionStudent = async (event) => {
+    event.preventDefault()
+    if (provisioning) return
+
+    const name = provisionForm.name.trim()
+    const email = provisionForm.email.trim().toLowerCase()
+    const password = provisionForm.password.trim()
+
+    if (!name || !email || !password) {
+      flashError('請填寫姓名、Email 和登入密碼。')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      flashError('Email 格式不正確。')
+      return
+    }
+    if (password.length < 6) {
+      flashError('登入密碼至少需要 6 碼。')
+      return
+    }
+
+    const selectedPlan = PROVISION_TIERS.find(item => item.tier === provisionForm.tier)
+    setProvisioning(true)
+    try {
+      if (hasSupabase && supabase) {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData?.session?.access_token
+        if (!token) throw new Error('找不到管理員登入 token，請重新登入後台。')
+
+        const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/admin/students/provision`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name,
+            email,
+            password,
+            planId: selectedPlan.planId,
+            legacyTier: selectedPlan.tier,
+            expiresAt: provisionForm.expiresAt || null,
+          }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok || data.success === false) {
+          throw new Error(data.error || '開通學員失敗')
+        }
+      } else {
+        provisionLocalStudent()
+      }
+
+      setProvisionForm(emptyProvisionForm)
+      setShowProvision(false)
+      flash(`已開通 ${name}，學員可直接用 ${email} 登入。`)
+    } catch (error) {
+      flashError(error.message || '開通學員失敗，請稍後再試。')
+    } finally {
+      setProvisioning(false)
+    }
+  }
+
   return (
     <div>
       <div className="page-actions" style={{ marginBottom: 24 }}>
         <div className="page-heading" style={{ margin: 0 }}><h1>學員管理</h1><p>共 {users.length} 位學員（不含代操會員）</p></div>
+        <button className="btn btn-primary" onClick={() => setShowProvision(true)}>
+          協助開通已購學員
+        </button>
       </div>
       {msg && <div className="auth-alert success" style={{ marginBottom: 16 }}>{msg}</div>}
+      {err && <div className="auth-alert error" style={{ marginBottom: 16 }}>{err}</div>}
 
       <div className="filter-bar" style={{ marginBottom: 20 }}>
         <input className="form-input" placeholder="搜尋姓名、電子郵件…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 280 }} />
@@ -123,6 +260,50 @@ export default function UsersAdmin() {
           </table>
         </div>
       </div>
+
+      {showProvision && (
+        <div className="modal-overlay" onClick={() => setShowProvision(false)}>
+          <form className="modal" onSubmit={provisionStudent} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">協助開通已購學員</h2>
+              <button type="button" className="modal-close" onClick={() => setShowProvision(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginTop: 0, color: 'var(--gray-500)', fontSize: 13 }}>
+                用於已經線下購買課程的學員。建立後他們不需要再次付款，可直接用 Email 與密碼登入。
+              </p>
+              <div className="form-group">
+                <label className="form-label">姓名</label>
+                <input className="form-input" value={provisionForm.name} onChange={e => setProvisionForm(f => ({ ...f, name: e.target.value }))} placeholder="學員姓名" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">登入 Email</label>
+                <input className="form-input" type="email" value={provisionForm.email} onChange={e => setProvisionForm(f => ({ ...f, email: e.target.value }))} placeholder="student@example.com" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">預設登入密碼</label>
+                <input className="form-input" value={provisionForm.password} onChange={e => setProvisionForm(f => ({ ...f, password: e.target.value }))} placeholder="至少 6 碼，請提供給學員" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">開通方案</label>
+                <select className="form-select" value={provisionForm.tier} onChange={e => setProvisionForm(f => ({ ...f, tier: e.target.value }))}>
+                  {PROVISION_TIERS.map(item => <option key={item.tier} value={item.tier}>{item.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">效期（選填，留空自動給 1 年 / 體驗課 90 天）</label>
+                <input className="form-input" type="date" value={provisionForm.expiresAt} onChange={e => setProvisionForm(f => ({ ...f, expiresAt: e.target.value }))} />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowProvision(false)}>取消</button>
+              <button type="submit" className="btn btn-primary" disabled={provisioning}>
+                {provisioning ? '開通中...' : '建立登入帳號'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {editUser && (
         <div className="modal-overlay" onClick={() => setEditUser(null)}>
