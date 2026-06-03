@@ -359,7 +359,7 @@ export default function AIAgentsAdmin() {
 
       {!unlocked ? (
         <div className="admin-card" style={{ maxWidth: 520 }}>
-          <div className="admin-card-header">老闆密碼驗證</div>
+          <div className="admin-card-header">工程師專用 請勿使用此欄位</div>
           <div className="admin-card-body">
             <p style={{ marginTop: 0, color: 'var(--gray-500)', fontSize: 14 }}>
               AI Agent 管理會影響全站 AI 輸出，請輸入老闆密碼後再操作。
