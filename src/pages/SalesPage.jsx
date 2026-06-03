@@ -68,7 +68,7 @@ const learningStages = [
   {
     number: '01',
     label: '起點',
-    title: 'AI 實戰體驗課',
+    title: '自媒體獲客-定位體驗課',
     bullets: ['免費體驗 AI 選題', '理解爆款底層邏輯', '建立內容方向感', '知道自己的產業可以怎麼發想內容'],
     accent: 'blue',
   },
@@ -96,7 +96,7 @@ const learningStages = [
 ]
 
 const FEATURES = [
-  ['爆款選題生成', 'AI 實戰體驗課即可使用'],
+  ['爆款選題生成', '自媒體獲客-定位體驗課即可使用'],
   ['腳本全文生成', '頂流達人解鎖'],
   ['拍攝形式推薦', '頂流達人解鎖'],
   ['三個月策劃提案', '頂流私塾解鎖'],
@@ -304,7 +304,7 @@ function SalesCheckoutModal({ onClose }) {
         <div className="modal-header">
           <div>
             <p className="sp-checkout-kicker">Checkout Preview</p>
-            <h2 className="modal-title">購買 AI 實戰體驗課</h2>
+            <h2 className="modal-title">購買 自媒體獲客-定位體驗課</h2>
           </div>
           <button className="modal-close" onClick={onClose} aria-label="關閉結帳視窗">✕</button>
         </div>
@@ -314,7 +314,7 @@ function SalesCheckoutModal({ onClose }) {
             <div className="sp-checkout-summary">
               <div>
                 <span>課程方案</span>
-                <strong>AI 實戰體驗課</strong>
+                <strong>自媒體獲客-定位體驗課</strong>
                 <p>解鎖完整 8 個選題、腳本預覽與體驗課教學。</p>
               </div>
               <div className="sp-checkout-price">${TRIAL_PRICE}</div>
@@ -767,9 +767,9 @@ export default function SalesPage() {
 
               <div className="sp2-unlock-card">
                 <h3>還有 5 個爆款選題等你解鎖</h3>
-                <p>購買 AI 實戰體驗課，解鎖完整 8 個選題 + 腳本預覽 + 課程教學</p>
+                <p>購買 自媒體獲客-定位體驗課，解鎖完整 8 個選題 + 腳本預覽 + 課程教學</p>
                 <button className="sp2-btn sp2-btn-primary" onClick={handlePurchaseClick}>
-                  購買 AI 實戰體驗課 ${TRIAL_PRICE} 立即解鎖
+                  購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE} 立即解鎖
                 </button>
                 <small>每天免費試用 3 次，明天可以再來</small>
               </div>
@@ -863,11 +863,11 @@ export default function SalesPage() {
           <div className="sp2-container sp2-final-inner">
             <p className="sp2-eyebrow">立即開始</p>
             <h2>準備好打造你的頂級流量了嗎？</h2>
-            <p>從 AI 實戰體驗課開始，感受 AI + 課程雙引擎的威力</p>
-            <div className="sp2-price">AI 實戰體驗課 ${TRIAL_PRICE} 起，完課後可升級享早鳥優惠</div>
+            <p>從 自媒體獲客-定位體驗課開始，感受 AI + 課程雙引擎的威力</p>
+            <div className="sp2-price">自媒體獲客-定位體驗課 ${TRIAL_PRICE} 起，完課後可升級享早鳥優惠</div>
             <div className="sp2-final-actions">
               <button className="sp2-btn sp2-btn-primary sp2-btn-lg" onClick={handlePurchaseClick}>
-                立即購買 AI 實戰體驗課 ${TRIAL_PRICE}
+                立即購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
               </button>
               <button className="sp2-btn sp2-btn-outline sp2-btn-lg" onClick={() => scrollToSection('#ai-tools')}>
                 先免費試用 AI →
