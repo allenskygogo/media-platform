@@ -287,10 +287,12 @@ function SalesLoginModal({ onClose }) {
 }
 
 function SalesCheckoutModal({ onClose }) {
+  const ecpayFormRef = useRef(null)
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' })
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [order, setOrder] = useState(null)
+  const [ecpay, setEcpay] = useState(null)
   const [loading, setLoading] = useState(false)
   const setField = (key) => (e) => {
     setMessage('')
@@ -326,13 +328,23 @@ function SalesCheckoutModal({ onClose }) {
         throw new Error(data.error || '建立訂單失敗，請稍後再試。')
       }
       setOrder(data.order)
-      setMessage(`訂單已建立：${data.order.orderNumber}。付款確認後會自動開通登入權限。`)
+      if (data.ecpay?.configured) {
+        setEcpay(data.ecpay)
+        setMessage(`訂單已建立：${data.order.orderNumber}。正在前往綠界付款頁...`)
+      } else {
+        setMessage(`訂單已建立：${data.order.orderNumber}。付款確認後會自動開通登入權限。`)
+      }
     } catch (err) {
       setError(err.message || '建立訂單失敗，請稍後再試。')
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!ecpay?.configured || !ecpayFormRef.current) return
+    ecpayFormRef.current.submit()
+  }, [ecpay])
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -397,6 +409,14 @@ function SalesCheckoutModal({ onClose }) {
             </button>
           </div>
         </form>
+
+        {ecpay?.configured && (
+          <form ref={ecpayFormRef} action={ecpay.action} method={ecpay.method || 'POST'} style={{ display: 'none' }}>
+            {Object.entries(ecpay.params || {}).map(([key, value]) => (
+              <input key={key} type="hidden" name={key} value={value} />
+            ))}
+          </form>
+        )}
       </div>
     </div>
   )

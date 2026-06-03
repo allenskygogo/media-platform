@@ -14,6 +14,12 @@
  *   SUPABASE_SERVICE_ROLE_KEY     — optional server-only key for private AI agent prompts
  *   OPENAI_API_KEY                — OpenAI API key for server-side AI generation
  *   OPENAI_MODEL                  — optional model override for AI generation
+ *   ECPAY_MERCHANT_ID             — ECPay merchant ID
+ *   ECPAY_HASH_KEY                — ECPay HashKey
+ *   ECPAY_HASH_IV                 — ECPay HashIV
+ *   ECPAY_ENV                     — stage or production
+ *   PUBLIC_APP_URL                — public frontend base URL
+ *   WORKER_PUBLIC_URL             — public Worker base URL for ECPay ReturnURL
  */
 
 const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
@@ -38,6 +44,8 @@ const PLAN_AMOUNT = {
   creator: 39800,
   master: 129800,
 }
+const ECPAY_STAGE_URL = 'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5'
+const ECPAY_PROD_URL = 'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5'
 const DEFAULT_AI_AGENTS = {
   topics: {
     feature_key: 'topics',
@@ -274,6 +282,11 @@ export default {
       // POST /api/checkout/orders → create a pending checkout order
       if (path === '/api/checkout/orders' && request.method === 'POST') {
         return await handleCreateCheckoutOrder(request, env)
+      }
+
+      // POST /api/ecpay/return → ECPay server-side payment notification
+      if (path === '/api/ecpay/return' && request.method === 'POST') {
+        return await handleEcpayReturn(request, env)
       }
 
       // GET /api/admin/orders → list checkout orders
@@ -806,6 +819,7 @@ async function handleCreateCheckoutOrder(request, env) {
     provider: 'manual',
     notes: 'Created from sales checkout form',
   })
+  const ecpay = await buildEcpayCheckout(order, env)
 
   return json({
     success: true,
@@ -817,8 +831,57 @@ async function handleCreateCheckoutOrder(request, env) {
       currency: order.currency,
       planId: order.plan_id,
     },
+    ecpay,
     message: '訂單已建立。付款確認後系統會開通學員帳號。',
   })
+}
+
+async function handleEcpayReturn(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return new Response('0|Supabase service key is not configured', { status: 503, headers: CORS })
+  }
+
+  const payload = await parseEcpayPayload(request)
+  if (!(await verifyEcpayCheckMacValue(payload, env))) {
+    return new Response('0|CheckMacValue Error', { status: 400, headers: CORS })
+  }
+
+  const merchantTradeNo = String(payload.MerchantTradeNo || '').trim()
+  const rtnCode = String(payload.RtnCode || '').trim()
+  const order = await getOrderByTradeNo(env, merchantTradeNo)
+  if (!order) return new Response('0|Order Not Found', { status: 404, headers: CORS })
+
+  if (rtnCode === '1') {
+    if (order.status !== 'paid') {
+      const updated = await updateOrder(env, order.id, {
+        status: 'paid',
+        provider: 'ecpay',
+        provider_trade_no: String(payload.TradeNo || '').trim() || null,
+        paid_at: normalizeDate(payload.PaymentDate) || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+
+      if (updated.user_id) {
+        await insertMembership(env, {
+          user_id: updated.user_id,
+          plan_id: updated.plan_id,
+          legacy_tier: updated.legacy_tier || planToLegacyTier(updated.plan_id),
+          status: 'active',
+          starts_at: new Date().toISOString(),
+          expires_at: defaultMembershipExpiry(updated.plan_id),
+        })
+      }
+    }
+    return new Response('1|OK', { status: 200, headers: CORS })
+  }
+
+  await updateOrder(env, order.id, {
+    provider: 'ecpay',
+    provider_trade_no: String(payload.TradeNo || '').trim() || null,
+    notes: `ECPay returned RtnCode=${rtnCode}, RtnMsg=${payload.RtnMsg || ''}`,
+    updated_at: new Date().toISOString(),
+  })
+  return new Response('1|OK', { status: 200, headers: CORS })
 }
 
 async function handleListOrders(request, env) {
@@ -1131,8 +1194,9 @@ function defaultMembershipExpiry(planId) {
 }
 
 function makeOrderNumber() {
-  const random = crypto.randomUUID().slice(0, 8).toUpperCase()
-  return `TLT-${Date.now()}-${random}`
+  const time = Date.now().toString(36).toUpperCase()
+  const random = crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()
+  return `TLT${time}${random}`.slice(0, 20)
 }
 
 function mapOrder(order) {
@@ -1155,6 +1219,127 @@ function mapOrder(order) {
     createdAt: order.created_at,
     updatedAt: order.updated_at,
   }
+}
+
+function ecpayConfigured(env) {
+  return Boolean(env.ECPAY_MERCHANT_ID && env.ECPAY_HASH_KEY && env.ECPAY_HASH_IV)
+}
+
+function getEcpayAction(env) {
+  if (env.ECPAY_CHECKOUT_URL) return env.ECPAY_CHECKOUT_URL
+  return String(env.ECPAY_ENV || 'stage').toLowerCase() === 'production' ? ECPAY_PROD_URL : ECPAY_STAGE_URL
+}
+
+function getPublicBaseUrl(env) {
+  return String(env.PUBLIC_APP_URL || 'https://media-platform-orcin.vercel.app').replace(/\/$/, '')
+}
+
+function getWorkerBaseUrl(env) {
+  return String(env.WORKER_PUBLIC_URL || 'https://media-platform-api.allen-a76.workers.dev').replace(/\/$/, '')
+}
+
+function formatEcpayDate(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, '0')
+  return [
+    date.getFullYear(),
+    '/',
+    pad(date.getMonth() + 1),
+    '/',
+    pad(date.getDate()),
+    ' ',
+    pad(date.getHours()),
+    ':',
+    pad(date.getMinutes()),
+    ':',
+    pad(date.getSeconds()),
+  ].join('')
+}
+
+async function buildEcpayCheckout(order, env) {
+  if (!ecpayConfigured(env)) {
+    return {
+      configured: false,
+      message: 'ECPay secrets are not configured. Order remains pending for manual confirmation.',
+    }
+  }
+
+  const params = {
+    MerchantID: env.ECPAY_MERCHANT_ID,
+    MerchantTradeNo: order.order_number,
+    MerchantTradeDate: formatEcpayDate(),
+    PaymentType: 'aio',
+    TotalAmount: String(order.amount),
+    TradeDesc: 'TOP LEVEL TRAFFIC course checkout',
+    ItemName: planItemName(order.plan_id),
+    ReturnURL: `${getWorkerBaseUrl(env)}/api/ecpay/return`,
+    OrderResultURL: `${getPublicBaseUrl(env)}/dashboard/profile`,
+    ClientBackURL: getPublicBaseUrl(env),
+    ChoosePayment: env.ECPAY_CHOOSE_PAYMENT || 'Credit',
+    EncryptType: '1',
+  }
+
+  params.CheckMacValue = await makeEcpayCheckMacValue(params, env)
+
+  return {
+    configured: true,
+    action: getEcpayAction(env),
+    method: 'POST',
+    params,
+  }
+}
+
+function planItemName(planId) {
+  if (planId === 'trial') return '自媒體獲客-定位體驗課'
+  if (planId === 'creator') return '頂流達人'
+  if (planId === 'master') return '頂流私塾'
+  return 'TOP LEVEL TRAFFIC'
+}
+
+async function makeEcpayCheckMacValue(params, env) {
+  const source = Object.entries(params)
+    .filter(([key]) => key !== 'CheckMacValue')
+    .sort(([a], [b]) => a.localeCompare(b, 'en', { sensitivity: 'base' }))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&')
+  const raw = `HashKey=${env.ECPAY_HASH_KEY}&${source}&HashIV=${env.ECPAY_HASH_IV}`
+  return (await sha256Hex(ecpayUrlEncode(raw).toLowerCase())).toUpperCase()
+}
+
+function ecpayUrlEncode(value) {
+  return encodeURIComponent(value)
+    .replace(/%20/g, '+')
+    .replace(/%2D/gi, '-')
+    .replace(/%5F/gi, '_')
+    .replace(/%2E/gi, '.')
+    .replace(/%21/gi, '!')
+    .replace(/%2A/gi, '*')
+    .replace(/%28/gi, '(')
+    .replace(/%29/gi, ')')
+}
+
+async function sha256Hex(text) {
+  const data = new TextEncoder().encode(text)
+  const digest = await crypto.subtle.digest('SHA-256', data)
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function parseEcpayPayload(request) {
+  const contentType = request.headers.get('Content-Type') || ''
+  if (contentType.includes('application/json')) {
+    return await request.json().catch(() => ({}))
+  }
+
+  const text = await request.text()
+  const params = new URLSearchParams(text)
+  return Object.fromEntries(params.entries())
+}
+
+async function verifyEcpayCheckMacValue(payload, env) {
+  if (!ecpayConfigured(env)) return false
+  const expected = String(payload.CheckMacValue || '').trim().toUpperCase()
+  if (!expected) return false
+  const actual = await makeEcpayCheckMacValue(payload, env)
+  return actual === expected
 }
 
 function supabaseServiceHeaders(env, extra = {}) {
@@ -1363,6 +1548,25 @@ async function listOrders(env) {
 async function getOrderById(env, orderId) {
   const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/orders`)
   url.searchParams.set('id', `eq.${orderId}`)
+  url.searchParams.set('select', 'id,order_number,user_id,customer_name,customer_email,customer_phone,plan_id,legacy_tier,amount,currency,status,provider,provider_trade_no,paid_at,notes,created_at,updated_at')
+  url.searchParams.set('limit', '1')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    if (isMissingOrdersTable(data)) {
+      throw new Error('訂單資料表尚未建立，請先在 Supabase SQL Editor 執行 orders migration。')
+    }
+    throw new Error(data.message || 'Failed to read order')
+  }
+  return Array.isArray(data) ? data[0] || null : null
+}
+
+async function getOrderByTradeNo(env, merchantTradeNo) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/orders`)
+  url.searchParams.set('order_number', `eq.${merchantTradeNo}`)
   url.searchParams.set('select', 'id,order_number,user_id,customer_name,customer_email,customer_phone,plan_id,legacy_tier,amount,currency,status,provider,provider_trade_no,paid_at,notes,created_at,updated_at')
   url.searchParams.set('limit', '1')
 
