@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getUsers, saveUsers, addDays, TIER_META } from '../../data/mockData'
 import { hasSupabase, supabase, allowLocalFallback } from '../../lib/supabase'
 
@@ -12,6 +12,8 @@ const PROVISION_TIERS = [
   { tier: 'advanced', planId: 'master', label: '頂流私塾' },
 ]
 
+const TIER_TO_PLAN_ID = Object.fromEntries(PROVISION_TIERS.map(item => [item.tier, item.planId]))
+
 const emptyProvisionForm = {
   name: '',
   email: '',
@@ -22,6 +24,8 @@ const emptyProvisionForm = {
 
 export default function UsersAdmin() {
   const [users, setUsers]       = useState(() => getUsers().filter(u => u.role === 'student' && u.tier !== 'managed'))
+  const [loading, setLoading]   = useState(false)
+  const [updatingId, setUpdatingId] = useState('')
   const [search, setSearch]     = useState('')
   const [filterTier, setFilterTier] = useState('all')
   const [editUser, setEditUser] = useState(null)
@@ -41,12 +45,84 @@ export default function UsersAdmin() {
   const flash = (t) => { setErr(''); setMsg(t); setTimeout(() => setMsg(''), 3000) }
   const flashError = (t) => { setMsg(''); setErr(t); setTimeout(() => setErr(''), 5000) }
 
-  const openEdit = (user) => {
-    setEditUser(user)
-    setEditForm({ name: user.name, tier: user.tier, status: user.status, expiresAt: user.expiresAt || '' })
+  useEffect(() => {
+    loadStudents()
+  }, [])
+
+  const toDateValue = (value) => value ? String(value).split('T')[0] : ''
+
+  const getAdminToken = async () => {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const token = sessionData?.session?.access_token
+    if (!token) throw new Error('找不到管理員登入 token，請重新登入後台。')
+    return token
   }
 
-  const saveEdit = () => {
+  const workerJson = async (path, options = {}) => {
+    const token = await getAdminToken()
+    const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(options.headers || {}),
+      },
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || '會員資料更新失敗')
+    }
+    return data
+  }
+
+  const loadStudents = async () => {
+    if (!hasSupabase || !supabase) {
+      refreshLocalUsers()
+      return
+    }
+
+    setLoading(true)
+    try {
+      const data = await workerJson('/api/admin/students')
+      setUsers((data.students || []).filter(u => u.role === 'student' && u.tier !== 'managed'))
+    } catch (error) {
+      flashError(error.message || '讀取正式會員失敗')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const openEdit = (user) => {
+    setEditUser(user)
+    setEditForm({ name: user.name, tier: user.tier, status: user.status, expiresAt: toDateValue(user.expiresAt) })
+  }
+
+  const saveEdit = async () => {
+    if (hasSupabase && supabase && editUser?.source === 'supabase') {
+      setUpdatingId(editUser.id)
+      try {
+        await workerJson(`/api/admin/students/${encodeURIComponent(editUser.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: editForm.name,
+            status: editForm.status,
+            tier: editForm.tier,
+            planId: TIER_TO_PLAN_ID[editForm.tier],
+            legacyTier: editForm.tier,
+            expiresAt: editForm.expiresAt || null,
+          }),
+        })
+        await loadStudents()
+        setEditUser(null)
+        flash('正式會員資料已更新')
+      } catch (error) {
+        flashError(error.message || '更新正式會員失敗')
+      } finally {
+        setUpdatingId('')
+      }
+      return
+    }
+
     const all = getUsers()
     const idx = all.findIndex(u => u.id === editUser.id)
     const days = TIER_META[editForm.tier]?.days
@@ -64,7 +140,25 @@ export default function UsersAdmin() {
     flash('學員資料已更新')
   }
 
-  const toggleStatus = (user) => {
+  const toggleStatus = async (user) => {
+    if (hasSupabase && supabase && user.source === 'supabase') {
+      const nextStatus = user.status === 'active' ? 'inactive' : 'active'
+      setUpdatingId(user.id)
+      try {
+        await workerJson(`/api/admin/students/${encodeURIComponent(user.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: nextStatus }),
+        })
+        await loadStudents()
+        flash(`已${nextStatus === 'active' ? '啟用' : '停用'}學員 ${user.name}`)
+      } catch (error) {
+        flashError(error.message || '更新帳號狀態失敗')
+      } finally {
+        setUpdatingId('')
+      }
+      return
+    }
+
     const all = getUsers()
     const idx = all.findIndex(u => u.id === user.id)
     all[idx].status = all[idx].status === 'active' ? 'inactive' : 'active'
@@ -73,7 +167,32 @@ export default function UsersAdmin() {
     flash(`已${all[idx].status === 'active' ? '啟用' : '停用'}學員 ${user.name}`)
   }
 
-  const changeTier = (user, tier) => {
+  const changeTier = async (user, tier) => {
+    if (hasSupabase && supabase && user.source === 'supabase') {
+      const days = TIER_META[tier]?.days
+      const today = new Date().toISOString().split('T')[0]
+      const expiresAt = days ? addDays(today, days) : null
+      setUpdatingId(user.id)
+      try {
+        await workerJson(`/api/admin/students/${encodeURIComponent(user.id)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            tier,
+            planId: TIER_TO_PLAN_ID[tier],
+            legacyTier: tier,
+            expiresAt,
+          }),
+        })
+        await loadStudents()
+        flash(`${user.name} 已變更為 ${TIER_META[tier]?.label}`)
+      } catch (error) {
+        flashError(error.message || '更新會員方案失敗')
+      } finally {
+        setUpdatingId('')
+      }
+      return
+    }
+
     const all = getUsers()
     const idx = all.findIndex(u => u.id === user.id)
     const days = TIER_META[tier]?.days
@@ -159,16 +278,8 @@ export default function UsersAdmin() {
     setProvisioning(true)
     try {
       if (hasSupabase && supabase) {
-        const { data: sessionData } = await supabase.auth.getSession()
-        const token = sessionData?.session?.access_token
-        if (!token) throw new Error('找不到管理員登入 token，請重新登入後台。')
-
-        const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/admin/students/provision`, {
+        await workerJson('/api/admin/students/provision', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
           body: JSON.stringify({
             name,
             email,
@@ -178,10 +289,7 @@ export default function UsersAdmin() {
             expiresAt: provisionForm.expiresAt || null,
           }),
         })
-        const data = await response.json().catch(() => ({}))
-        if (!response.ok || data.success === false) {
-          throw new Error(data.error || '開通學員失敗')
-        }
+        await loadStudents()
       } else {
         provisionLocalStudent()
       }
@@ -199,7 +307,7 @@ export default function UsersAdmin() {
   return (
     <div>
       <div className="page-actions" style={{ marginBottom: 24 }}>
-        <div className="page-heading" style={{ margin: 0 }}><h1>學員管理</h1><p>共 {users.length} 位學員（不含代操會員）</p></div>
+        <div className="page-heading" style={{ margin: 0 }}><h1>學員管理</h1><p>{loading ? '讀取正式會員中...' : `共 ${users.length} 位學員（不含代操會員）`}</p></div>
         <button className="btn btn-primary" onClick={() => setShowProvision(true)}>
           協助開通已購學員
         </button>
@@ -223,7 +331,9 @@ export default function UsersAdmin() {
               <tr><th>學員</th><th>電子郵件</th><th>會員等級</th><th>效期</th><th>狀態</th><th>操作</th></tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>讀取正式會員中...</td></tr>
+              ) : filtered.length === 0 ? (
                 <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>沒有符合條件的學員</td></tr>
               ) : filtered.map(user => (
                 <tr key={user.id}>
@@ -235,7 +345,7 @@ export default function UsersAdmin() {
                   </td>
                   <td style={{ color: 'var(--gray-500)', fontSize: 13 }}>{user.email}</td>
                   <td>
-                    <select value={user.tier} onChange={e => changeTier(user, e.target.value)}
+                    <select value={user.tier || 'basic'} onChange={e => changeTier(user, e.target.value)} disabled={updatingId === user.id}
                       style={{ padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1.5px solid var(--gray-300)', fontSize: 13, cursor: 'pointer',
                         background: user.tier === 'basic' ? 'var(--basic-light)' : user.tier === 'standard' ? 'var(--standard-light)' : 'var(--advanced-light)',
                         color: user.tier === 'basic' ? 'var(--basic-text)' : user.tier === 'standard' ? 'var(--standard-text)' : 'var(--advanced-text)', fontWeight: 700 }}>
@@ -248,9 +358,9 @@ export default function UsersAdmin() {
                   <td><span className={`badge badge-${user.status}`}>{user.status === 'active' ? '啟用' : '停用'}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn btn-secondary btn-sm" onClick={() => openEdit(user)}>編輯</button>
-                      <button className={`btn btn-sm ${user.status === 'active' ? 'btn-danger' : 'btn-success'}`} onClick={() => toggleStatus(user)}>
-                        {user.status === 'active' ? '停用' : '啟用'}
+                      <button className="btn btn-secondary btn-sm" onClick={() => openEdit(user)} disabled={updatingId === user.id}>編輯</button>
+                      <button className={`btn btn-sm ${user.status === 'active' ? 'btn-danger' : 'btn-success'}`} onClick={() => toggleStatus(user)} disabled={updatingId === user.id}>
+                        {updatingId === user.id ? '更新中...' : user.status === 'active' ? '停用' : '啟用'}
                       </button>
                     </div>
                   </td>
@@ -327,7 +437,9 @@ export default function UsersAdmin() {
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setEditUser(null)}>取消</button>
-              <button className="btn btn-primary" onClick={saveEdit}>儲存變更</button>
+              <button className="btn btn-primary" onClick={saveEdit} disabled={updatingId === editUser.id}>
+                {updatingId === editUser.id ? '儲存中...' : '儲存變更'}
+              </button>
             </div>
           </div>
         </div>

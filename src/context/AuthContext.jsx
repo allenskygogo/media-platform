@@ -123,6 +123,10 @@ export function AuthProvider({ children }) {
       .maybeSingle()
 
     if (membershipError) throw membershipError
+    if (profile.role === 'student' && !membership) throw new Error('會員尚未開通，請聯絡管理員')
+    if (membership?.expires_at && new Date(membership.expires_at).getTime() < Date.now()) {
+      throw new Error('會員效期已到期，請聯絡管理員續約')
+    }
     return buildUserFromSupabase(profile, membership)
   }
 

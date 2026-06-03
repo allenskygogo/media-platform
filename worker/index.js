@@ -271,6 +271,17 @@ export default {
         return await handleProvisionStudent(request, env)
       }
 
+      // GET /api/admin/students → list formal student memberships
+      if (path === '/api/admin/students' && request.method === 'GET') {
+        return await handleListStudents(request, env)
+      }
+
+      // PATCH /api/admin/students/:id → update profile status or open a new membership
+      if (path.startsWith('/api/admin/students/') && request.method === 'PATCH') {
+        const userId = decodeURIComponent(path.slice('/api/admin/students/'.length))
+        return await handleUpdateStudent(request, userId, env)
+      }
+
       // POST /api/calendar/events → create a confirmed booking event
       if (path === '/api/calendar/events' && request.method === 'POST') {
         return await handleCreateCalendarEvent(request, env)
@@ -713,6 +724,105 @@ async function handleProvisionStudent(request, env) {
   })
 }
 
+async function handleListStudents(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+  const profiles = await listStudentProfiles(env)
+  const memberships = await listLatestActiveMemberships(env, profiles.map(profile => profile.id))
+  const membershipByUserId = Object.fromEntries(memberships.map(item => [item.user_id, item]))
+
+  return json({
+    success: true,
+    students: profiles.map(profile => {
+      const membership = membershipByUserId[profile.id] || null
+      const name = profile.display_name || profile.email?.split('@')[0] || '學員'
+      return {
+        id: profile.id,
+        name,
+        email: profile.email,
+        role: profile.role,
+        status: profile.status,
+        avatar: name.charAt(0),
+        createdAt: profile.created_at || null,
+        planId: membership?.plan_id || null,
+        legacyTier: membership?.legacy_tier || null,
+        tier: membership?.plan_id ? planToLegacyTier(membership.plan_id) : membership?.legacy_tier || 'basic',
+        expiresAt: membership?.expires_at || null,
+        trialCompletedAt: membership?.trial_completed_at || null,
+        source: 'supabase',
+      }
+    }),
+  })
+}
+
+async function handleUpdateStudent(request, userId, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) return err('Invalid student id', 400)
+
+  const body = await request.json().catch(() => ({}))
+  const name = String(body.name || '').trim()
+  const status = String(body.status || '').trim()
+  const tier = String(body.tier || '').trim()
+  const planId = String(body.planId || tierToPlanId(tier) || '').trim()
+  const expiresAt = body.expiresAt === '' ? null : normalizeDate(body.expiresAt)
+
+  if (name || status) {
+    const profilePayload = {}
+    if (name) profilePayload.display_name = name
+    if (status) {
+      if (!['active', 'inactive'].includes(status)) return err('Invalid status', 400)
+      profilePayload.status = status
+    }
+    await updateProfile(env, userId, profilePayload)
+  }
+
+  if (planId) {
+    if (!['trial', 'creator', 'master', 'managed'].includes(planId)) return err('Invalid plan', 400)
+    const legacyTier = String(body.legacyTier || planToLegacyTier(planId)).trim()
+    if (!['basic', 'standard', 'advanced', 'managed'].includes(legacyTier)) return err('Invalid legacy tier', 400)
+
+    await insertMembership(env, {
+      user_id: userId,
+      plan_id: planId,
+      legacy_tier: legacyTier,
+      status: 'active',
+      starts_at: new Date().toISOString(),
+      expires_at: expiresAt || defaultMembershipExpiry(planId),
+    })
+  }
+
+  const profile = await getProfileById(env, userId)
+  const memberships = await listLatestActiveMemberships(env, [userId])
+  const membership = memberships[0] || null
+  const displayName = profile.display_name || profile.email?.split('@')[0] || '學員'
+
+  return json({
+    success: true,
+    student: {
+      id: userId,
+      name: displayName,
+      email: profile.email,
+      role: profile.role,
+      status: profile.status,
+      avatar: displayName.charAt(0),
+      createdAt: profile.created_at || null,
+      planId: membership?.plan_id || null,
+      legacyTier: membership?.legacy_tier || null,
+      tier: membership?.plan_id ? planToLegacyTier(membership.plan_id) : membership?.legacy_tier || 'basic',
+      expiresAt: membership?.expires_at || null,
+      trialCompletedAt: membership?.trial_completed_at || null,
+      source: 'supabase',
+    },
+  })
+}
+
 async function getAIAgent(feature, env) {
   if (!feature) return null
   const fallback = DEFAULT_AI_AGENTS[feature] || null
@@ -848,6 +958,11 @@ function planToLegacyTier(planId) {
   return PLAN_TO_LEGACY_TIER[planId] || 'standard'
 }
 
+function tierToPlanId(tier) {
+  const entry = Object.entries(PLAN_TO_LEGACY_TIER).find(([, legacyTier]) => legacyTier === tier)
+  return entry ? entry[0] : ''
+}
+
 function normalizeDate(value) {
   if (!value) return null
   const text = String(value).trim()
@@ -889,6 +1004,58 @@ async function getProfileByEmail(env, email) {
     throw new Error(data.message || 'Failed to find student profile')
   }
   return Array.isArray(data) ? data[0] || null : null
+}
+
+async function getProfileById(env, userId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
+  url.searchParams.set('id', `eq.${userId}`)
+  url.searchParams.set('select', 'id,display_name,email,role,status,created_at')
+  url.searchParams.set('limit', '1')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to find student profile')
+  const profile = Array.isArray(data) ? data[0] : null
+  if (!profile) throw new Error('Student profile not found')
+  return profile
+}
+
+async function listStudentProfiles(env) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
+  url.searchParams.set('role', 'eq.student')
+  url.searchParams.set('select', 'id,display_name,email,role,status,created_at')
+  url.searchParams.set('order', 'created_at.desc')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to list student profiles')
+  return Array.isArray(data) ? data : []
+}
+
+async function listLatestActiveMemberships(env, userIds) {
+  if (!userIds.length) return []
+
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/memberships`)
+  url.searchParams.set('user_id', `in.(${userIds.join(',')})`)
+  url.searchParams.set('status', 'eq.active')
+  url.searchParams.set('select', 'user_id,plan_id,legacy_tier,status,starts_at,expires_at,trial_completed_at')
+  url.searchParams.set('order', 'starts_at.desc')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to list student memberships')
+
+  const latest = new Map()
+  for (const membership of Array.isArray(data) ? data : []) {
+    if (!latest.has(membership.user_id)) latest.set(membership.user_id, membership)
+  }
+  return [...latest.values()]
 }
 
 async function getAuthUserByEmail(env, email) {
@@ -955,6 +1122,27 @@ async function upsertProfile(env, payload) {
   const data = await response.json().catch(() => [])
   if (!response.ok) {
     throw new Error(data.message || 'Failed to save student profile')
+  }
+  return Array.isArray(data) ? data[0] : data
+}
+
+async function updateProfile(env, userId, payload) {
+  if (!Object.keys(payload).length) return null
+
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
+  url.searchParams.set('id', `eq.${userId}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'PATCH',
+    headers: supabaseServiceHeaders(env, {
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to update student profile')
   }
   return Array.isArray(data) ? data[0] : data
 }
