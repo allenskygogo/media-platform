@@ -13,7 +13,14 @@ function workerFetch(path, options = {}) {
   return fetch(`${WORKER_URL}${path}`, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-  }).then(r => r.json())
+  }).then(async r => {
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok || data.success === false) {
+      const message = data.errors?.[0]?.message || data.error || data.message || `Worker request failed: ${r.status}`
+      throw new Error(message)
+    }
+    return data
+  })
 }
 
 // ── Upload ─────────────────────────────────────────────────────────────────
@@ -26,6 +33,11 @@ export function getUploadUrl(name) {
   return workerFetch('/api/upload/start', {
     method: 'POST',
     body: JSON.stringify({ name }),
+  }).catch(error => {
+    if (/Storage capacity exceeded/i.test(error.message)) {
+      throw new Error('Cloudflare Stream 容量已滿，請先刪除舊影片或升級 Stream 額度後再上傳。')
+    }
+    throw error
   })
 }
 
