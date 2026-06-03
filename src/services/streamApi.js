@@ -4,7 +4,7 @@
  * but they will throw "Worker not configured" so callers can show appropriate UI.
  */
 
-const WORKER_URL = import.meta.env.VITE_WORKER_URL || ''
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 export const isConfigured = () => Boolean(WORKER_URL)
 
