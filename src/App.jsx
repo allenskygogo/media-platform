@@ -28,6 +28,7 @@ import ShootingBooking    from './pages/managed/ShootingBooking'
 
 import AdminLayout        from './pages/admin/AdminLayout'
 import AdminDashboard     from './pages/admin/Dashboard'
+import OrdersAdmin        from './pages/admin/OrdersAdmin'
 import UsersAdmin         from './pages/admin/Users'
 import CoursesAdmin       from './pages/admin/CoursesAdmin'
 import ManagedAdmin       from './pages/admin/ManagedAdmin'
@@ -114,6 +115,7 @@ export default function App() {
           {/* ── Admin routes ── */}
           <Route path="/admin" element={<ProtectedRoute requireAdmin><div className="app-layout"><Header /><AdminLayout /></div></ProtectedRoute>}>
             <Route index               element={<AdminDashboard />} />
+            <Route path="orders"       element={<OrdersAdmin />} />
             <Route path="users"        element={<UsersAdmin />} />
             <Route path="courses"      element={<CoursesAdmin />} />
             <Route path="managed"      element={<ManagedAdmin />} />

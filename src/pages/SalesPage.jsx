@@ -7,6 +7,7 @@ import { callAI } from '../services/aiService'
 
 const REGISTER_NOTICE = '目前僅開放已購買體驗課的學員註冊，請先購買體驗課後再完成會員註冊。'
 const TRIAL_PRICE = 980
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 // Replace with a public image path or URL when the final hero visual is ready.
 const heroBgImage = ''
 const heroPersonImages = {
@@ -286,16 +287,51 @@ function SalesLoginModal({ onClose }) {
 }
 
 function SalesCheckoutModal({ onClose }) {
-  const [form, setForm] = useState({ name: '', email: '', phone: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' })
   const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [order, setOrder] = useState(null)
+  const [loading, setLoading] = useState(false)
   const setField = (key) => (e) => {
     setMessage('')
+    setError('')
     setForm(prev => ({ ...prev, [key]: e.target.value }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    setMessage('目前為結帳視窗預覽，正式上線後會在這一步串接金流付款頁。')
+    if (loading) return
+    if (form.password.trim().length < 6) {
+      setError('登入密碼至少需要 6 碼。')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setMessage('')
+    try {
+      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/checkout/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          password: form.password,
+          planId: 'trial',
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || '建立訂單失敗，請稍後再試。')
+      }
+      setOrder(data.order)
+      setMessage(`訂單已建立：${data.order.orderNumber}。付款確認後會自動開通登入權限。`)
+    } catch (err) {
+      setError(err.message || '建立訂單失敗，請稍後再試。')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -303,7 +339,7 @@ function SalesCheckoutModal({ onClose }) {
       <div className="modal sp-checkout-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <p className="sp-checkout-kicker">Checkout Preview</p>
+            <p className="sp-checkout-kicker">Checkout</p>
             <h2 className="modal-title">購買 自媒體獲客-定位體驗課</h2>
           </div>
           <button className="modal-close" onClick={onClose} aria-label="關閉結帳視窗">✕</button>
@@ -333,19 +369,32 @@ function SalesCheckoutModal({ onClose }) {
                 <label className="form-label">手機號碼</label>
                 <input className="form-input" value={form.phone} onChange={setField('phone')} placeholder="方便課程通知與客服聯繫" required />
               </div>
+              <div className="form-group sp-checkout-full">
+                <label className="form-label">設定登入密碼</label>
+                <input type="password" className="form-input" value={form.password} onChange={setField('password')} placeholder="至少 6 碼，付款確認後用於登入" required />
+              </div>
             </div>
 
             <div className="sp-checkout-note">
-              <strong>付款流程預留</strong>
-              <p>正式上線後，這裡會串接金流付款頁。付款完成後再開通體驗課學員帳號與第一次輔導預約流程。</p>
+              <strong>訂單與開通流程</strong>
+              <p>送出後會建立正式訂單與學員帳號。付款確認後，系統會開通體驗課會員權限。</p>
             </div>
 
+            {order && (
+              <div className="sp-checkout-note">
+                <strong>訂單編號：{order.orderNumber}</strong>
+                <p>請保留此編號。後台確認付款後即可使用剛剛設定的 Email 與密碼登入。</p>
+              </div>
+            )}
+            {error && <div className="auth-alert error">{error}</div>}
             {message && <div className="auth-alert success">{message}</div>}
           </div>
 
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>取消</button>
-            <button type="submit" className="btn btn-primary">前往金流結帳</button>
+            <button type="submit" className="btn btn-primary" disabled={loading || Boolean(order)}>
+              {loading ? '建立訂單中...' : order ? '訂單已建立' : '建立訂單'}
+            </button>
           </div>
         </form>
       </div>

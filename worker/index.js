@@ -33,6 +33,11 @@ const PLAN_DURATION_DAYS = {
   master: 365,
   managed: null,
 }
+const PLAN_AMOUNT = {
+  trial: 980,
+  creator: 39800,
+  master: 129800,
+}
 const DEFAULT_AI_AGENTS = {
   topics: {
     feature_key: 'topics',
@@ -264,6 +269,22 @@ export default {
       // POST /api/ai/knowledge/sync → attach an uploaded PDF to an agent vector store
       if (path === '/api/ai/knowledge/sync' && request.method === 'POST') {
         return await handleAIKnowledgeSync(request, env)
+      }
+
+      // POST /api/checkout/orders → create a pending checkout order
+      if (path === '/api/checkout/orders' && request.method === 'POST') {
+        return await handleCreateCheckoutOrder(request, env)
+      }
+
+      // GET /api/admin/orders → list checkout orders
+      if (path === '/api/admin/orders' && request.method === 'GET') {
+        return await handleListOrders(request, env)
+      }
+
+      // PATCH /api/admin/orders/:id → mark an order paid/cancelled
+      if (path.startsWith('/api/admin/orders/') && request.method === 'PATCH') {
+        const orderId = decodeURIComponent(path.slice('/api/admin/orders/'.length))
+        return await handleUpdateOrder(request, orderId, env)
       }
 
       // POST /api/admin/students/provision → manually open access for an offline purchaser
@@ -724,6 +745,133 @@ async function handleProvisionStudent(request, env) {
   })
 }
 
+async function handleCreateCheckoutOrder(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  const body = await request.json().catch(() => ({}))
+  const name = String(body.name || '').trim()
+  const email = String(body.email || '').trim().toLowerCase()
+  const phone = String(body.phone || '').trim()
+  const password = String(body.password || '').trim()
+  const planId = String(body.planId || 'trial').trim()
+  const legacyTier = planToLegacyTier(planId)
+  const amount = PLAN_AMOUNT[planId]
+
+  if (!name) return err('Missing customer name', 400)
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err('Invalid email', 400)
+  if (!phone) return err('Missing phone', 400)
+  if (password.length < 6) return err('Password must be at least 6 characters', 400)
+  if (!amount || !['trial', 'creator', 'master'].includes(planId)) return err('Invalid checkout plan', 400)
+
+  const existingProfile = await getProfileByEmail(env, email)
+  let authUser = existingProfile?.id ? { id: existingProfile.id, email } : await getAuthUserByEmail(env, email)
+
+  if (authUser?.id) {
+    authUser = await updateSupabaseAuthUser(env, authUser.id, {
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { display_name: name, phone },
+    })
+  } else {
+    authUser = await createSupabaseAuthUser(env, {
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { display_name: name, phone },
+    })
+  }
+
+  await upsertProfile(env, {
+    id: authUser.id,
+    display_name: name,
+    email,
+    role: 'student',
+    status: 'active',
+  })
+
+  const order = await insertOrder(env, {
+    order_number: makeOrderNumber(),
+    user_id: authUser.id,
+    customer_name: name,
+    customer_email: email,
+    customer_phone: phone,
+    plan_id: planId,
+    legacy_tier: legacyTier,
+    amount,
+    currency: 'TWD',
+    status: 'pending',
+    provider: 'manual',
+    notes: 'Created from sales checkout form',
+  })
+
+  return json({
+    success: true,
+    order: {
+      id: order.id,
+      orderNumber: order.order_number,
+      status: order.status,
+      amount: order.amount,
+      currency: order.currency,
+      planId: order.plan_id,
+    },
+    message: '訂單已建立。付款確認後系統會開通學員帳號。',
+  })
+}
+
+async function handleListOrders(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+  const orders = await listOrders(env)
+  return json({ success: true, orders: orders.map(mapOrder) })
+}
+
+async function handleUpdateOrder(request, orderId, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+  if (!/^[0-9a-f-]{36}$/i.test(orderId)) return err('Invalid order id', 400)
+
+  const body = await request.json().catch(() => ({}))
+  const status = String(body.status || '').trim()
+  if (!['paid', 'cancelled', 'pending'].includes(status)) return err('Invalid order status', 400)
+
+  const currentOrder = await getOrderById(env, orderId)
+  if (!currentOrder) return err('Order not found', 404)
+
+  const updatePayload = {
+    status,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (status === 'paid') {
+    updatePayload.paid_at = currentOrder.paid_at || new Date().toISOString()
+    updatePayload.provider_trade_no = String(body.providerTradeNo || currentOrder.provider_trade_no || '').trim() || null
+  }
+
+  const order = await updateOrder(env, orderId, updatePayload)
+
+  if (status === 'paid' && order.user_id) {
+    await insertMembership(env, {
+      user_id: order.user_id,
+      plan_id: order.plan_id,
+      legacy_tier: order.legacy_tier || planToLegacyTier(order.plan_id),
+      status: 'active',
+      starts_at: new Date().toISOString(),
+      expires_at: defaultMembershipExpiry(order.plan_id),
+    })
+  }
+
+  return json({ success: true, order: mapOrder(order) })
+}
+
 async function handleListStudents(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
     return err('Supabase service key is not configured', 503)
@@ -982,6 +1130,33 @@ function defaultMembershipExpiry(planId) {
   return date.toISOString()
 }
 
+function makeOrderNumber() {
+  const random = crypto.randomUUID().slice(0, 8).toUpperCase()
+  return `TLT-${Date.now()}-${random}`
+}
+
+function mapOrder(order) {
+  return {
+    id: order.id,
+    orderNumber: order.order_number,
+    userId: order.user_id,
+    customerName: order.customer_name,
+    customerEmail: order.customer_email,
+    customerPhone: order.customer_phone,
+    planId: order.plan_id,
+    legacyTier: order.legacy_tier,
+    amount: order.amount,
+    currency: order.currency,
+    status: order.status,
+    provider: order.provider,
+    providerTradeNo: order.provider_trade_no,
+    paidAt: order.paid_at,
+    notes: order.notes,
+    createdAt: order.created_at,
+    updatedAt: order.updated_at,
+  }
+}
+
 function supabaseServiceHeaders(env, extra = {}) {
   return {
     apikey: env.SUPABASE_SERVICE_ROLE_KEY,
@@ -1143,6 +1318,73 @@ async function updateProfile(env, userId, payload) {
   const data = await response.json().catch(() => [])
   if (!response.ok) {
     throw new Error(data.message || 'Failed to update student profile')
+  }
+  return Array.isArray(data) ? data[0] : data
+}
+
+async function insertOrder(env, payload) {
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/orders`, {
+    method: 'POST',
+    headers: supabaseServiceHeaders(env, {
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to create order')
+  }
+  return Array.isArray(data) ? data[0] : data
+}
+
+async function listOrders(env) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/orders`)
+  url.searchParams.set('select', 'id,order_number,user_id,customer_name,customer_email,customer_phone,plan_id,legacy_tier,amount,currency,status,provider,provider_trade_no,paid_at,notes,created_at,updated_at')
+  url.searchParams.set('order', 'created_at.desc')
+  url.searchParams.set('limit', '200')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to list orders')
+  }
+  return Array.isArray(data) ? data : []
+}
+
+async function getOrderById(env, orderId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/orders`)
+  url.searchParams.set('id', `eq.${orderId}`)
+  url.searchParams.set('select', 'id,order_number,user_id,customer_name,customer_email,customer_phone,plan_id,legacy_tier,amount,currency,status,provider,provider_trade_no,paid_at,notes,created_at,updated_at')
+  url.searchParams.set('limit', '1')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to read order')
+  }
+  return Array.isArray(data) ? data[0] || null : null
+}
+
+async function updateOrder(env, orderId, payload) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/orders`)
+  url.searchParams.set('id', `eq.${orderId}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'PATCH',
+    headers: supabaseServiceHeaders(env, {
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to update order')
   }
   return Array.isArray(data) ? data[0] : data
 }

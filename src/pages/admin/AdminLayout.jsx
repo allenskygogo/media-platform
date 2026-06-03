@@ -6,6 +6,7 @@ import BrandLogo from '../../components/BrandLogo'
 
 const MAIN_NAV = [
   { to: '/admin',              label: '控制台', icon: 'dashboard', end: true },
+  { to: '/admin/orders',       label: '訂單管理', icon: 'booking' },
   { to: '/admin/users',        label: '學員管理', icon: 'users' },
   { to: '/admin/courses',      label: '課程與影片', icon: 'video' },
   { to: '/admin/homework',     label: '作業審核', icon: 'edit' },
