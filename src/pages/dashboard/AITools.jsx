@@ -125,6 +125,25 @@ const SCRIPT_TYPES = [
   { id: 'process',   label: '曬過程', Icon: Video         },
 ]
 
+const PUBLIC_AI_TOOL_IDS = new Set(['topics'])
+const PUBLIC_SCRIPT_TYPE_IDS = new Set(['knowledge', 'opinion'])
+
+function isPublicAITool(id) {
+  return PUBLIC_AI_TOOL_IDS.has(id)
+}
+
+function isPublicScriptType(id) {
+  return PUBLIC_SCRIPT_TYPE_IDS.has(id)
+}
+
+function ComingSoonLabel() {
+  return (
+    <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--gray-500)', flexShrink: 0 }}>
+      即將開放
+    </span>
+  )
+}
+
 const KNOWLEDGE_SCRIPT_SOP = {
   title: '教知識腳本 SOP',
   topicDimensions: ['追求更好', '解決難題', '避免踩坑', '降低成本', '豐富談資'],
@@ -1194,6 +1213,7 @@ function TopicsPage() {
 
   const handleGenerateScript = async () => {
     if (!scriptType || !shootFormat || selected.length === 0) return
+    if (!isPublicScriptType(scriptType)) return
     setGeneratingScript(true); setScript(null)
     await new Promise(r => setTimeout(r, 1100))
     const firstTopic = topics[selected[0]]
@@ -1259,12 +1279,16 @@ function TopicsPage() {
         <div className="ait-step-card">
           <div className="ait-step-hd"><span className="ait-step-badge">2</span><span className="ait-step-title">選擇腳本類型</span></div>
           <div className="ait-option-grid">
-            {SCRIPT_TYPES.map(({ id, label, Icon }) => (
+            {SCRIPT_TYPES.map(({ id, label, Icon }) => {
+              const locked = !isPublicScriptType(id)
+              return (
               <button key={id} className={`ait-option-btn${scriptType === id ? ' selected' : ''}`}
-                onClick={() => { setScriptType(id); setShootFormat(null); setScript(null) }}>
-                <Icon size={22} strokeWidth={1.5} /><span>{label}</span>
+                disabled={locked}
+                onClick={() => { if (locked) return; setScriptType(id); setShootFormat(null); setScript(null) }}>
+                <Icon size={22} strokeWidth={1.5} /><span>{label}</span>{locked && <ComingSoonLabel />}
               </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -1432,6 +1456,7 @@ function CopyPage() {
   // Generate topics when scriptType is selected
   useEffect(() => {
     if (!scriptType || !idea.trim()) { setCopyTopics(null); return }
+    if (!isPublicScriptType(scriptType)) { setCopyTopics(null); return }
     if (skipAutoGenerateRef.current) {
       skipAutoGenerateRef.current = false
       return
@@ -1478,6 +1503,7 @@ function CopyPage() {
 
   const generateScriptForTopic = async (topic, nextScriptType = scriptType, sourceIdea = idea.trim()) => {
     if (!topic?.text || !nextScriptType) return
+    if (!isPublicScriptType(nextScriptType)) return
 
     setGeneratingScript(true)
     setScriptError('')
@@ -1524,6 +1550,7 @@ function CopyPage() {
 
   const handleSelectSavedTopic = item => {
     const nextScriptType = item.script_type || scriptType || 'knowledge'
+    if (!isPublicScriptType(nextScriptType)) return
     const topic = {
       element: item.element || '人群',
       text: item.topic_text,
@@ -1773,12 +1800,19 @@ function CopyPage() {
             <span className="ait-step-title">選擇腳本類型</span>
           </div>
           <div className="ait-option-grid">
-            {SCRIPT_TYPES.map(({ id, label, Icon }) => (
+            {SCRIPT_TYPES.map(({ id, label, Icon }) => {
+              const locked = !isPublicScriptType(id)
+              return (
               <button key={id} className={`ait-option-btn${scriptType === id ? ' selected' : ''}`}
-                onClick={() => { setScriptType(id); setSelectedTopicIdx(null); setScript(null); setScriptError('') }}>
-                <Icon size={22} strokeWidth={1.5} /><span>{label}</span>
+                disabled={locked}
+                onClick={() => {
+                  if (locked) return
+                  setScriptType(id); setSelectedTopicIdx(null); setScript(null); setScriptError('')
+                }}>
+                <Icon size={22} strokeWidth={1.5} /><span>{label}</span>{locked && <ComingSoonLabel />}
               </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -3744,16 +3778,21 @@ export default function AITools() {
         <nav className="ait-nav">
           <div className="ait-nav-header">AI 工具箱</div>
           <div className="ait-nav-list">
-            {NAV_TOOLS.map(({ id, label, Icon }) => (
+            {NAV_TOOLS.map(({ id, label, Icon }) => {
+              const locked = !isPublicAITool(id)
+              return (
               <button
                 key={id}
                 className={`ait-nav-flat-item${activeId === id ? ' active' : ''}`}
-                onClick={() => setActiveId(id)}
+                disabled={locked}
+                onClick={() => { if (!locked) setActiveId(id) }}
               >
                 <Icon size={15} strokeWidth={1.7} style={{ flexShrink: 0 }} />
                 <span className="ait-nav-flat-label">{label}</span>
+                {locked && <ComingSoonLabel />}
               </button>
-            ))}
+              )
+            })}
           </div>
         </nav>
 
