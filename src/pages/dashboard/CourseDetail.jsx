@@ -14,6 +14,7 @@ const CAT_EMOJI = { '影音創作':'🎬', '社群媒體':'📱', '音頻創作'
 
 // Only standard/advanced tier students get the forced-watch + homework system
 const NEEDS_HOMEWORK = ['standard', 'advanced']
+const NEEDS_SEQUENTIAL_WATCH = ['basic']
 
 function mapProgress(records) {
   return records.reduce((acc, record) => {
@@ -51,24 +52,26 @@ function latestHomeworkForLesson(userId, courseId, lessonId, homeworkByLesson) {
   return homeworkByLesson[lessonId] || getLatestHomework(userId, courseId, lessonId)
 }
 
-function isLessonUnlockedByProgress(userId, courseId, lessons, idx, needsHomework, progressByLesson, specByLesson, homeworkByLesson) {
-  if (!needsHomework) return true
+function isLessonUnlockedByProgress(userId, courseId, lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson) {
+  if (!needsSequentialWatch && !needsHomework) return true
   if (idx === 0) return true
   const prev = lessons[idx - 1]
   const prog = lessonProgress(userId, courseId, prev.id, progressByLesson)
   if (!prog?.completed) return false
+  if (!needsHomework) return true
   const spec = homeworkSpecForLesson(prev.id, specByLesson)
   if (!spec) return true
   const hw = latestHomeworkForLesson(userId, courseId, prev.id, homeworkByLesson)
   return hw?.status === 'approved'
 }
 
-function lessonStatusIcon(userId, courseId, lessons, idx, needsHomework, progressByLesson, specByLesson, homeworkByLesson) {
-  if (!needsHomework) return null
-  if (!isLessonUnlockedByProgress(userId, courseId, lessons, idx, needsHomework, progressByLesson, specByLesson, homeworkByLesson)) return { icon:'🔒', color:'var(--gray-300)', label:'尚未解鎖' }
+function lessonStatusIcon(userId, courseId, lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson) {
+  if (!needsSequentialWatch && !needsHomework) return null
+  if (!isLessonUnlockedByProgress(userId, courseId, lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)) return { icon:'🔒', color:'var(--gray-300)', label:'尚未解鎖' }
   const lesson = lessons[idx]
   const prog = lessonProgress(userId, courseId, lesson.id, progressByLesson)
   if (!prog?.completed) return { icon:'▶', color:'var(--primary)', label:'可觀看' }
+  if (!needsHomework) return { icon:'✅', color:'var(--success)', label:'已完成' }
   const spec = homeworkSpecForLesson(lesson.id, specByLesson)
   if (!spec) return { icon:'✅', color:'var(--success)', label:'已完成' }
   const hw = latestHomeworkForLesson(userId, courseId, lesson.id, homeworkByLesson)
@@ -151,10 +154,11 @@ export default function CourseDetail() {
   }
 
   const needsHomework = NEEDS_HOMEWORK.includes(currentUser.tier)
+  const needsSequentialWatch = NEEDS_SEQUENTIAL_WATCH.includes(currentUser.tier)
   const activeLesson  = course.lessons.find(l => l.id === activeLessonId) || null
 
   const handleLessonClick = (lesson, lessonIdx) => {
-    if (needsHomework && !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, lessonIdx, needsHomework, progressByLesson, specByLesson, homeworkByLesson)) return
+    if (!isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, lessonIdx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)) return
     setActiveLessonId(lesson.id)
     // If already completed and replaying, go straight to player in free mode
     setView('player')
@@ -166,9 +170,15 @@ export default function CourseDetail() {
   }, [])
 
   const handlePlayerComplete = useCallback(() => {
-    // After forced-watch done → show homework panel (if spec exists)
-    setView('homework')
-  }, [])
+    // After forced-watch done → show homework panel only for tiers that require it.
+    const spec = activeLesson ? homeworkSpecForLesson(activeLesson.id, specByLesson) : null
+    if (needsHomework && spec) {
+      setView('homework')
+      return
+    }
+    setView('info')
+    setActiveLessonId(null)
+  }, [activeLesson, needsHomework, specByLesson])
 
   const handleClose = () => {
     setView('info')
@@ -265,8 +275,8 @@ export default function CourseDetail() {
               <div className="lesson-list" style={{ padding:'8px 0' }}>
                 {course.lessons.map((lesson, idx) => {
                   const isActive  = activeLessonId === lesson.id
-                  const statusCfg = lessonStatusIcon(currentUser.id, course.id, course.lessons, idx, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
-                  const locked    = needsHomework && !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, idx, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
+                  const statusCfg = lessonStatusIcon(currentUser.id, course.id, course.lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
+                  const locked    = !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
 
                   return (
                     <div
@@ -331,8 +341,8 @@ export default function CourseDetail() {
               </div>
               <div className="lesson-list" style={{ padding:'8px 0' }}>
                 {course.lessons.map((lesson, idx) => {
-                  const statusCfg = lessonStatusIcon(currentUser.id, course.id, course.lessons, idx, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
-                  const locked    = needsHomework && !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, idx, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
+                  const statusCfg = lessonStatusIcon(currentUser.id, course.id, course.lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
+                  const locked    = !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
                   const prog      = lessonProgress(currentUser.id, course.id, lesson.id, progressByLesson)
 
                   return (
