@@ -16,15 +16,6 @@ const heroPersonImages = {
   youtube: '/images/hero-youtube.png',
 }
 
-const LOGIN_DEMO_ACCOUNTS = [
-  { label: '管理員',        email: 'admin@media.com',    password: 'admin123', color: 'var(--admin)' },
-  { label: '體驗未完成',    email: 'trial@media.com',    password: 'user123',  color: 'var(--danger)' },
-  { label: '初階（已體驗）', email: 'basic@media.com',    password: 'user123',  color: 'var(--basic)' },
-  { label: '頂流達人',      email: 'standard@media.com', password: 'user123',  color: 'var(--standard)' },
-  { label: '頂流私塾',      email: 'advanced@media.com', password: 'user123',  color: 'var(--advanced)' },
-  { label: '頂流代操',      email: 'managed1@media.com', password: 'user123',  color: 'var(--managed)' },
-]
-
 const STATS = [
   { icon: '01', value: '1,200+', label: '幫助創作者' },
   { icon: '02', value: '50,000+', label: '爆款選題生成' },
@@ -259,23 +250,6 @@ function SalesLoginModal({ onClose }) {
               </button>
             </p>
 
-            <div style={{ padding: 14, background: 'rgba(255,255,255,0.025)', borderRadius: 10, border: '1px solid var(--glass-border)' }}>
-              <p style={{ fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8, fontSize: 13 }}>測試帳號</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {LOGIN_DEMO_ACCOUNTS.map(({ label, email, password, color }) => (
-                  <button
-                    key={email}
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => setForm({ email, password })}
-                    style={{ justifyContent: 'flex-start', gap: 8 }}
-                  >
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    {label}：{email}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>回到首頁</button>

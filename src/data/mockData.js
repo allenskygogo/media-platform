@@ -120,31 +120,31 @@ const defaultCourses = [
 
 const defaultUsers = [
   {
-    id: 1, name: '平台管理員', email: 'admin@media.com', password: 'admin123',
+    id: 1, name: '平台管理員', email: 'local-admin@example.invalid', password: 'local-only',
     role: 'admin', tier: null, avatar: 'A', createdAt: '2024-01-01', status: 'active', expiresAt: null,
   },
   {
-    id: 2, name: '張小明', email: 'basic@media.com', password: 'user123',
+    id: 2, name: '張小明', email: 'local-basic@example.invalid', password: 'local-only',
     role: 'student', tier: 'basic', avatar: '張', createdAt: '2026-02-21', status: 'active',
     expiresAt: '2026-08-20', // 已完成體驗，使用期限進行中
   },
   {
-    id: 7, name: '陳大文', email: 'trial@media.com', password: 'user123',
+    id: 7, name: '陳大文', email: 'local-trial@example.invalid', password: 'local-only',
     role: 'student', tier: 'basic', avatar: '陳', createdAt: '2026-05-22', status: 'active',
     expiresAt: null, // 尚未完成體驗，期限未起算
   },
   {
-    id: 3, name: '李雅婷', email: 'standard@media.com', password: 'user123',
+    id: 3, name: '李雅婷', email: 'local-standard@example.invalid', password: 'local-only',
     role: 'student', tier: 'standard', avatar: '李', createdAt: '2025-05-21', status: 'active',
     expiresAt: '2026-05-21',
   },
   {
-    id: 4, name: '陳美玲', email: 'advanced@media.com', password: 'user123',
+    id: 4, name: '陳美玲', email: 'local-advanced@example.invalid', password: 'local-only',
     role: 'student', tier: 'advanced', avatar: '陳', createdAt: '2025-05-21', status: 'active',
     expiresAt: '2026-05-21', advancedPaidAmount: 0,
   },
   {
-    id: 5, name: '王建偉', email: 'managed1@media.com', password: 'user123',
+    id: 5, name: '王建偉', email: 'local-managed-1@example.invalid', password: 'local-only',
     role: 'student', tier: 'managed', avatar: '王', createdAt: '2025-04-01', status: 'active',
     expiresAt: null, contractExpiry: '2026-04-01',
     socialAccounts: {
@@ -153,7 +153,7 @@ const defaultUsers = [
     },
   },
   {
-    id: 6, name: '林佳慧', email: 'managed2@media.com', password: 'user123',
+    id: 6, name: '林佳慧', email: 'local-managed-2@example.invalid', password: 'local-only',
     role: 'student', tier: 'managed', avatar: '林', createdAt: '2025-09-15', status: 'active',
     expiresAt: null, contractExpiry: '2026-09-15',
     socialAccounts: {

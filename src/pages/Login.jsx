@@ -2,15 +2,6 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-const DEMO_ACCOUNTS = [
-  { label: '管理員',        email: 'admin@media.com',    password: 'admin123', color: 'var(--admin)' },
-  { label: '體驗未完成',    email: 'trial@media.com',    password: 'user123',  color: 'var(--danger)' },
-  { label: '初階（已體驗）', email: 'basic@media.com',    password: 'user123',  color: 'var(--basic)' },
-  { label: '頂流達人',      email: 'standard@media.com', password: 'user123',  color: 'var(--standard)' },
-  { label: '頂流私塾',      email: 'advanced@media.com', password: 'user123',  color: 'var(--advanced)' },
-  { label: '頂流代操',      email: 'managed1@media.com', password: 'user123',  color: 'var(--managed)' },
-]
-
 export default function Login() {
   const { login } = useAuth()
   const navigate  = useNavigate()
@@ -66,19 +57,6 @@ export default function Login() {
           &nbsp;·&nbsp;<Link to="/pricing" className="auth-link">查看方案</Link>
         </p>
 
-        <div style={{ marginTop: 24, padding: 16, background: 'var(--gray-50)', borderRadius: 'var(--radius)', fontSize: 13 }}>
-          <p style={{ fontWeight: 700, color: 'var(--gray-600)', marginBottom: 8 }}>測試帳號</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {DEMO_ACCOUNTS.map(({ label, email, password, color }) => (
-              <button key={email} type="button" className="btn btn-outline btn-sm"
-                onClick={() => setForm({ email, password })}
-                style={{ justifyContent: 'flex-start', gap: 8 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                {label}：{email}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   )
