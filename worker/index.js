@@ -349,7 +349,7 @@ async function handleUploadStart(request, env) {
     `/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/stream/direct_upload`,
     'POST', env,
     {
-      maxDurationSeconds: 28800,
+      maxDurationSeconds: 3600,
       requireSignedURLs: true,
       meta: { name: body.name || 'Untitled' },
     }
@@ -1739,7 +1739,9 @@ async function cfFetch(path, method, env, body) {
     },
     body: body ? JSON.stringify(body) : undefined,
   })
-  return res.json()
+  const text = await res.text()
+  if (!text) return { success: res.ok, result: null, errors: [], messages: [] }
+  return JSON.parse(text)
 }
 
 async function getGoogleAccessToken(env) {
