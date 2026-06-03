@@ -89,7 +89,7 @@ function UploadModal({ courses, onUploaded, onClose }) {
     setProgress(0)
     try {
       // Step 1: Get upload URL
-      const res = await getUploadUrl(name || file.name)
+      const res = await getUploadUrl(name || file.name, file.size)
       if (!res?.result?.uploadURL) throw new Error('無法取得上傳連結')
       const { uploadURL, uid } = res.result
 

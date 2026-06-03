@@ -1,3 +1,5 @@
+import * as tus from 'tus-js-client'
+
 /**
  * Frontend API client — talks to the Cloudflare Worker backend.
  * When VITE_WORKER_URL is not configured the module still exports all functions
@@ -29,10 +31,10 @@ function workerFetch(path, options = {}) {
  * Step 1: Ask the worker for a one-time direct-upload URL.
  * Returns { result: { uploadURL, uid } }
  */
-export function getUploadUrl(name) {
+export function getUploadUrl(name, size) {
   return workerFetch('/api/upload/start', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, size }),
   }).catch(error => {
     if (/Storage capacity exceeded/i.test(error.message)) {
       throw new Error('Cloudflare Stream 容量已滿，請先刪除舊影片或升級 Stream 額度後再上傳。')
@@ -48,21 +50,27 @@ export function getUploadUrl(name) {
  */
 export function uploadFileToCF(uploadURL, file, onProgress) {
   return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', uploadURL)
-    xhr.upload.addEventListener('progress', e => {
-      if (e.lengthComputable && onProgress) {
-        onProgress(Math.round((e.loaded / e.total) * 100))
-      }
+    const upload = new tus.Upload(file, {
+      uploadUrl: uploadURL,
+      chunkSize: 25 * 1024 * 1024,
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      removeFingerprintOnSuccess: true,
+      metadata: {
+        filename: file.name,
+        filetype: file.type || 'video/mp4',
+      },
+      onError: error => {
+        reject(new Error(error?.message || '影片上傳失敗，請確認網路連線後再重試。'))
+      },
+      onProgress: (bytesUploaded, bytesTotal) => {
+        if (bytesTotal > 0 && onProgress) {
+          onProgress(Math.round((bytesUploaded / bytesTotal) * 100))
+        }
+      },
+      onSuccess: () => resolve(),
     })
-    xhr.addEventListener('load', () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve()
-      else reject(new Error(`Upload failed: ${xhr.status}`))
-    })
-    xhr.addEventListener('error', () => reject(new Error('Network error')))
-    const fd = new FormData()
-    fd.append('file', file)
-    xhr.send(fd)
+
+    upload.start()
   })
 }
 

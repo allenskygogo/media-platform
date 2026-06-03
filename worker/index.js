@@ -345,16 +345,57 @@ export default {
 
 async function handleUploadStart(request, env) {
   const body = await request.json().catch(() => ({}))
-  const res = await cfFetch(
+  const uploadLength = Number(body.size || body.uploadLength || 0)
+  const name = String(body.name || 'Untitled').trim() || 'Untitled'
+  const maxDurationSeconds = Number(body.maxDurationSeconds || 3600)
+
+  if (uploadLength > 0) {
+    const metadata = [
+      ['name', name],
+      ['requiresignedurls', 'true'],
+      ['maxdurationseconds', String(maxDurationSeconds)],
+    ].map(([key, value]) => `${key} ${base64Encode(value)}`).join(',')
+
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/stream?direct_user=true`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
+          'Tus-Resumable': '1.0.0',
+          'Upload-Length': String(uploadLength),
+          'Upload-Metadata': metadata,
+        },
+      }
+    )
+    const uploadURL = response.headers.get('Location')
+    const uid = response.headers.get('stream-media-id')
+    if (!response.ok || !uploadURL || !uid) {
+      const errorText = await response.text().catch(() => '')
+      return json({
+        success: false,
+        result: null,
+        errors: [{ message: errorText || `Cloudflare TUS upload create failed: ${response.status}` }],
+        messages: [],
+      }, response.ok ? 502 : response.status)
+    }
+    return json({
+      success: true,
+      result: { uploadURL, uid, tus: true },
+      errors: [],
+      messages: [],
+    })
+  }
+
+  return json(await cfFetch(
     `/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/stream/direct_upload`,
     'POST', env,
     {
-      maxDurationSeconds: 3600,
+      maxDurationSeconds,
       requireSignedURLs: true,
-      meta: { name: body.name || 'Untitled' },
+      meta: { name },
     }
-  )
-  return json(res)
+  ))
 }
 
 async function handleListVideos(env) {
@@ -1742,6 +1783,13 @@ async function cfFetch(path, method, env, body) {
   const text = await res.text()
   if (!text) return { success: res.ok, result: null, errors: [], messages: [] }
   return JSON.parse(text)
+}
+
+function base64Encode(value) {
+  const bytes = new TextEncoder().encode(String(value))
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
 }
 
 async function getGoogleAccessToken(env) {

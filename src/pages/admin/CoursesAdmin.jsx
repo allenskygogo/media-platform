@@ -71,7 +71,7 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
 
       // 1. Get direct upload URL from Worker
       const label = `${lessonTitle || 'Lesson'} - ${name}`
-      const res   = await getUploadUrl(label)
+      const res   = await getUploadUrl(label, file.size)
       if (!res?.result?.uploadURL || !res?.result?.uid) throw new Error('無法取得上傳連結')
       const { uploadURL, uid } = res.result
 
