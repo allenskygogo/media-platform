@@ -1,5 +1,7 @@
 begin;
 
+create extension if not exists pgcrypto;
+
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   order_number text unique not null,
@@ -56,5 +58,7 @@ begin
       using (user_id = auth.uid());
   end if;
 end $$;
+
+notify pgrst, 'reload schema';
 
 commit;

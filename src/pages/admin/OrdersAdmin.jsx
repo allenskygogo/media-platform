@@ -15,6 +15,14 @@ const PLAN_LABEL = {
   master: '頂流私塾',
 }
 
+function normalizeOrderError(error) {
+  const message = String(error?.message || '')
+  if (message.includes('public.orders') || message.includes('schema cache') || message.includes('orders migration')) {
+    return '訂單資料表尚未建立，請先在 Supabase SQL Editor 執行 orders migration。'
+  }
+  return message || '訂單操作失敗'
+}
+
 function money(value, currency = 'TWD') {
   return `${currency === 'TWD' ? 'NT$' : currency} ${Number(value || 0).toLocaleString()}`
 }
@@ -78,7 +86,7 @@ export default function OrdersAdmin() {
       const data = await workerJson('/api/admin/orders')
       setOrders(data.orders || [])
     } catch (error) {
-      flashError(error.message || '讀取訂單失敗')
+      flashError(normalizeOrderError(error))
     } finally {
       setLoading(false)
     }
@@ -98,7 +106,7 @@ export default function OrdersAdmin() {
       await loadOrders()
       flash(status === 'paid' ? `已確認付款並開通 ${order.customerName}` : '訂單狀態已更新')
     } catch (error) {
-      flashError(error.message || '訂單狀態更新失敗')
+      flashError(normalizeOrderError(error))
     } finally {
       setUpdatingId('')
     }

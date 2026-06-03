@@ -1333,6 +1333,9 @@ async function insertOrder(env, payload) {
   })
   const data = await response.json().catch(() => [])
   if (!response.ok) {
+    if (isMissingOrdersTable(data)) {
+      throw new Error('訂單資料表尚未建立，請先在 Supabase SQL Editor 執行 orders migration。')
+    }
     throw new Error(data.message || 'Failed to create order')
   }
   return Array.isArray(data) ? data[0] : data
@@ -1349,6 +1352,9 @@ async function listOrders(env) {
   })
   const data = await response.json().catch(() => [])
   if (!response.ok) {
+    if (isMissingOrdersTable(data)) {
+      throw new Error('訂單資料表尚未建立，請先在 Supabase SQL Editor 執行 orders migration。')
+    }
     throw new Error(data.message || 'Failed to list orders')
   }
   return Array.isArray(data) ? data : []
@@ -1365,6 +1371,9 @@ async function getOrderById(env, orderId) {
   })
   const data = await response.json().catch(() => [])
   if (!response.ok) {
+    if (isMissingOrdersTable(data)) {
+      throw new Error('訂單資料表尚未建立，請先在 Supabase SQL Editor 執行 orders migration。')
+    }
     throw new Error(data.message || 'Failed to read order')
   }
   return Array.isArray(data) ? data[0] || null : null
@@ -1384,9 +1393,17 @@ async function updateOrder(env, orderId, payload) {
   })
   const data = await response.json().catch(() => [])
   if (!response.ok) {
+    if (isMissingOrdersTable(data)) {
+      throw new Error('訂單資料表尚未建立，請先在 Supabase SQL Editor 執行 orders migration。')
+    }
     throw new Error(data.message || 'Failed to update order')
   }
   return Array.isArray(data) ? data[0] : data
+}
+
+function isMissingOrdersTable(data) {
+  const message = String(data?.message || data?.error || '')
+  return data?.code === 'PGRST205' || message.includes("public.orders") || message.includes("'orders'")
 }
 
 async function insertMembership(env, payload) {
