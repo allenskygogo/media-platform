@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import BrandLogo from '../components/BrandLogo'
 import { initPixel, fbq } from '../utils/fbPixel'
 import { callAI } from '../services/aiService'
+import { LINE_OFFICIAL_URL, buildManualPaymentMessage, openLineOfficial } from '../utils/manualPayment'
 
 const REGISTER_NOTICE = '目前僅開放已購買體驗課的學員註冊，請先購買體驗課後再完成會員註冊。'
 const TRIAL_PRICE = 980
@@ -261,17 +262,41 @@ function SalesLoginModal({ onClose }) {
 }
 
 function SalesCheckoutModal({ onClose }) {
-  const ecpayFormRef = useRef(null)
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' })
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [order, setOrder] = useState(null)
-  const [ecpay, setEcpay] = useState(null)
+  const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(false)
+  const lineMessage = buildManualPaymentMessage({
+    planName: '自媒體獲客-定位體驗課',
+    amount: TRIAL_PRICE,
+    orderNumber: order?.orderNumber,
+    name: form.name,
+    email: form.email,
+    phone: form.phone,
+  })
+
   const setField = (key) => (e) => {
     setMessage('')
     setError('')
+    setCopied(false)
     setForm(prev => ({ ...prev, [key]: e.target.value }))
+  }
+
+  const handleCopyLineMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(lineMessage)
+      setCopied(true)
+      setMessage('已複製 LINE@ 開通訊息，請貼到官方 LINE@ 傳給我們。')
+    } catch (_) {
+      setError('複製失敗，請手動選取下方文字後傳到 LINE@。')
+    }
+  }
+
+  const handleOpenLine = () => {
+    if (openLineOfficial()) return
+    setError('LINE@ 連結尚未設定，請先複製下方開通訊息，並傳到官方 LINE@。')
   }
 
   const handleSubmit = async (e) => {
@@ -302,23 +327,13 @@ function SalesCheckoutModal({ onClose }) {
         throw new Error(data.error || '建立訂單失敗，請稍後再試。')
       }
       setOrder(data.order)
-      if (data.ecpay?.configured) {
-        setEcpay(data.ecpay)
-        setMessage(`訂單已建立：${data.order.orderNumber}。正在前往綠界付款頁...`)
-      } else {
-        setMessage(`訂單已建立：${data.order.orderNumber}。付款確認後會自動開通登入權限。`)
-      }
+      setMessage(`訂單已建立：${data.order.orderNumber}。請匯款後透過 LINE@ 聯繫我們，後台確認後會開通登入權限。`)
     } catch (err) {
       setError(err.message || '建立訂單失敗，請稍後再試。')
     } finally {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    if (!ecpay?.configured || !ecpayFormRef.current) return
-    ecpayFormRef.current.submit()
-  }, [ecpay])
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -363,13 +378,29 @@ function SalesCheckoutModal({ onClose }) {
 
             <div className="sp-checkout-note">
               <strong>訂單與開通流程</strong>
-              <p>送出後會建立正式訂單與學員帳號。付款確認後，系統會開通體驗課會員權限。</p>
+              <p>目前信用卡付款審核中。送出後會建立正式訂單與學員帳號，請匯款後透過 LINE@ 聯繫我們，確認後會由後台開通體驗課會員權限。</p>
             </div>
 
             {order && (
               <div className="sp-checkout-note">
                 <strong>訂單編號：{order.orderNumber}</strong>
-                <p>請保留此編號。後台確認付款後即可使用剛剛設定的 Email 與密碼登入。</p>
+                <p>請保留此編號。匯款後請把下方訊息傳到 LINE@，後台確認付款後即可使用剛剛設定的 Email 與密碼登入。</p>
+                <textarea
+                  className="form-input"
+                  value={lineMessage}
+                  readOnly
+                  rows={7}
+                  style={{ marginTop: 12, resize: 'vertical' }}
+                  aria-label="LINE@ 開通訊息"
+                />
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+                  <button type="button" className="btn btn-secondary" onClick={handleCopyLineMessage}>
+                    {copied ? '已複製訊息' : '複製 LINE@ 訊息'}
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={handleOpenLine}>
+                    {LINE_OFFICIAL_URL ? '開啟 LINE@' : 'LINE@ 連結設定中'}
+                  </button>
+                </div>
               </div>
             )}
             {error && <div className="auth-alert error">{error}</div>}
@@ -379,18 +410,10 @@ function SalesCheckoutModal({ onClose }) {
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>取消</button>
             <button type="submit" className="btn btn-primary" disabled={loading || Boolean(order)}>
-              {loading ? '建立訂單中...' : order ? '訂單已建立' : '建立訂單'}
+              {loading ? '建立訂單中...' : order ? '訂單已建立' : '建立匯款開通訂單'}
             </button>
           </div>
         </form>
-
-        {ecpay?.configured && (
-          <form ref={ecpayFormRef} action={ecpay.action} method={ecpay.method || 'POST'} style={{ display: 'none' }}>
-            {Object.entries(ecpay.params || {}).map(([key, value]) => (
-              <input key={key} type="hidden" name={key} value={value} />
-            ))}
-          </form>
-        )}
       </div>
     </div>
   )
