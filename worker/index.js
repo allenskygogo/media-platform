@@ -14,12 +14,12 @@
  *   SUPABASE_SERVICE_ROLE_KEY     — optional server-only key for private AI agent prompts
  *   OPENAI_API_KEY                — OpenAI API key for server-side AI generation
  *   OPENAI_MODEL                  — optional model override for AI generation
- *   ECPAY_MERCHANT_ID             — ECPay merchant ID
- *   ECPAY_HASH_KEY                — ECPay HashKey
- *   ECPAY_HASH_IV                 — ECPay HashIV
- *   ECPAY_ENV                     — stage or production
+ *   NEWEBPAY_MERCHANT_ID          — NewebPay merchant ID
+ *   NEWEBPAY_HASH_KEY             — NewebPay HashKey
+ *   NEWEBPAY_HASH_IV              — NewebPay HashIV
+ *   NEWEBPAY_ENV                  — stage or production
  *   PUBLIC_APP_URL                — public frontend base URL
- *   WORKER_PUBLIC_URL             — public Worker base URL for ECPay ReturnURL/OrderResultURL
+ *   WORKER_PUBLIC_URL             — public Worker base URL for payment callback URLs
  */
 
 const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
@@ -46,6 +46,9 @@ const PLAN_AMOUNT = {
 }
 const ECPAY_STAGE_URL = 'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5'
 const ECPAY_PROD_URL = 'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5'
+const NEWEBPAY_STAGE_URL = 'https://ccore.newebpay.com/MPG/mpg_gateway'
+const NEWEBPAY_PROD_URL = 'https://core.newebpay.com/MPG/mpg_gateway'
+const NEWEBPAY_VERSION = '2.0'
 const DEFAULT_AI_AGENTS = {
   topics: {
     feature_key: 'topics',
@@ -302,6 +305,16 @@ export default {
       // POST /api/ecpay/result → ECPay client-side payment result redirect
       if (path === '/api/ecpay/result' && request.method === 'POST') {
         return await handleEcpayResult(request, env)
+      }
+
+      // POST /api/newebpay/notify → NewebPay server-side payment notification
+      if (path === '/api/newebpay/notify' && request.method === 'POST') {
+        return await handleNewebPayNotify(request, env)
+      }
+
+      // POST /api/newebpay/result → NewebPay client-side payment result redirect
+      if (path === '/api/newebpay/result' && request.method === 'POST') {
+        return await handleNewebPayResult(request, env)
       }
 
       // GET /api/admin/orders → list checkout orders
@@ -889,10 +902,10 @@ async function handleCreateCheckoutOrder(request, env) {
     amount,
     currency: 'TWD',
     status: 'pending',
-    provider: ecpayConfigured(env) ? 'ecpay' : 'manual',
+    provider: newebPayConfigured(env) ? 'newebpay' : 'manual',
     notes: 'Created from sales checkout form',
   })
-  const ecpay = await buildEcpayCheckout(order, env)
+  const payment = await buildNewebPayCheckout(order, env, { email, name, phone })
 
   return json({
     success: true,
@@ -904,7 +917,8 @@ async function handleCreateCheckoutOrder(request, env) {
       currency: order.currency,
       planId: order.plan_id,
     },
-    ecpay,
+    payment,
+    newebpay: payment,
     message: '訂單已建立。付款確認後系統會開通學員帳號。',
   })
 }
@@ -964,6 +978,72 @@ async function handleEcpayResult(request, env) {
   const query = new URLSearchParams({
     order: merchantTradeNo,
     status: rtnCode === '1' ? 'paid' : 'pending',
+  })
+  return Response.redirect(`${getPublicBaseUrl(env)}/checkout/result?${query.toString()}`, 303)
+}
+
+async function handleNewebPayNotify(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return new Response('0|Supabase service key is not configured', { status: 503, headers: CORS })
+  }
+
+  let payload
+  try {
+    payload = await parseNewebPayPayload(request, env)
+  } catch (error) {
+    return new Response(`0|${error.message || 'NewebPay payload error'}`, { status: 400, headers: CORS })
+  }
+
+  const result = payload.Result || {}
+  const merchantOrderNo = String(result.MerchantOrderNo || '').trim()
+  const order = await getOrderByTradeNo(env, merchantOrderNo)
+  if (!order) return new Response('0|Order Not Found', { status: 404, headers: CORS })
+
+  if (payload.Status === 'SUCCESS') {
+    if (order.status !== 'paid') {
+      const updated = await updateOrder(env, order.id, {
+        status: 'paid',
+        provider: 'newebpay',
+        provider_trade_no: String(result.TradeNo || '').trim() || null,
+        paid_at: normalizeDate(result.PayTime) || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+
+      if (updated.user_id) {
+        await insertMembership(env, {
+          user_id: updated.user_id,
+          plan_id: updated.plan_id,
+          legacy_tier: updated.legacy_tier || planToLegacyTier(updated.plan_id),
+          status: 'active',
+          starts_at: new Date().toISOString(),
+          expires_at: defaultMembershipExpiry(updated.plan_id),
+        })
+      }
+    }
+    return new Response('1|OK', { status: 200, headers: CORS })
+  }
+
+  await updateOrder(env, order.id, {
+    provider: 'newebpay',
+    provider_trade_no: String(result.TradeNo || '').trim() || null,
+    notes: `NewebPay returned Status=${payload.Status}, Message=${payload.Message || ''}`,
+    updated_at: new Date().toISOString(),
+  })
+  return new Response('1|OK', { status: 200, headers: CORS })
+}
+
+async function handleNewebPayResult(request, env) {
+  let payload = {}
+  try {
+    payload = await parseNewebPayPayload(request, env)
+  } catch (_) {
+    payload = {}
+  }
+  const result = payload.Result || {}
+  const merchantOrderNo = String(result.MerchantOrderNo || '').trim()
+  const query = new URLSearchParams({
+    order: merchantOrderNo,
+    status: payload.Status === 'SUCCESS' ? 'paid' : 'pending',
   })
   return Response.redirect(`${getPublicBaseUrl(env)}/checkout/result?${query.toString()}`, 303)
 }
@@ -1303,6 +1383,129 @@ function mapOrder(order) {
     createdAt: order.created_at,
     updatedAt: order.updated_at,
   }
+}
+
+function newebPayConfigured(env) {
+  return Boolean(env.NEWEBPAY_MERCHANT_ID && env.NEWEBPAY_HASH_KEY && env.NEWEBPAY_HASH_IV)
+}
+
+function getNewebPayAction(env) {
+  if (env.NEWEBPAY_CHECKOUT_URL) return env.NEWEBPAY_CHECKOUT_URL
+  return String(env.NEWEBPAY_ENV || 'stage').toLowerCase() === 'production' ? NEWEBPAY_PROD_URL : NEWEBPAY_STAGE_URL
+}
+
+async function buildNewebPayCheckout(order, env, customer = {}) {
+  if (!newebPayConfigured(env)) {
+    return {
+      configured: false,
+      provider: 'newebpay',
+      message: 'NewebPay secrets are not configured. Set NEWEBPAY_MERCHANT_ID, NEWEBPAY_HASH_KEY, and NEWEBPAY_HASH_IV.',
+    }
+  }
+
+  const tradeData = {
+    MerchantID: env.NEWEBPAY_MERCHANT_ID,
+    RespondType: 'JSON',
+    TimeStamp: String(Math.floor(Date.now() / 1000)),
+    Version: NEWEBPAY_VERSION,
+    MerchantOrderNo: order.order_number,
+    Amt: String(order.amount),
+    ItemDesc: planItemName(order.plan_id),
+    Email: customer.email || order.customer_email || '',
+    LoginType: '0',
+    NotifyURL: `${getWorkerBaseUrl(env)}/api/newebpay/notify`,
+    ReturnURL: `${getWorkerBaseUrl(env)}/api/newebpay/result`,
+    ClientBackURL: getPublicBaseUrl(env),
+    CREDIT: '1',
+  }
+
+  const tradeInfo = await makeNewebPayTradeInfo(tradeData, env)
+  const tradeSha = await makeNewebPayTradeSha(tradeInfo, env)
+
+  return {
+    configured: true,
+    provider: 'newebpay',
+    action: getNewebPayAction(env),
+    method: 'POST',
+    params: {
+      MerchantID: env.NEWEBPAY_MERCHANT_ID,
+      TradeInfo: tradeInfo,
+      TradeSha: tradeSha,
+      Version: NEWEBPAY_VERSION,
+    },
+  }
+}
+
+async function makeNewebPayTradeInfo(data, env) {
+  const source = new URLSearchParams(data).toString()
+  return aes256CbcEncryptHex(source, env.NEWEBPAY_HASH_KEY, env.NEWEBPAY_HASH_IV)
+}
+
+async function makeNewebPayTradeSha(tradeInfo, env) {
+  return (await sha256Hex(`HashKey=${env.NEWEBPAY_HASH_KEY}&${tradeInfo}&HashIV=${env.NEWEBPAY_HASH_IV}`)).toUpperCase()
+}
+
+async function parseNewebPayPayload(request, env) {
+  if (!newebPayConfigured(env)) throw new Error('NewebPay secrets are not configured')
+  const form = await parseEcpayPayload(request)
+  const tradeInfo = String(form.TradeInfo || '').trim()
+  if (!tradeInfo) throw new Error('Missing TradeInfo')
+
+  const expectedSha = await makeNewebPayTradeSha(tradeInfo, env)
+  const receivedSha = String(form.TradeSha || '').trim().toUpperCase()
+  if (receivedSha && receivedSha !== expectedSha) throw new Error('TradeSha Error')
+
+  const decrypted = await aes256CbcDecryptHex(tradeInfo, env.NEWEBPAY_HASH_KEY, env.NEWEBPAY_HASH_IV)
+  return JSON.parse(decrypted)
+}
+
+async function aes256CbcEncryptHex(text, key, iv) {
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(key),
+    { name: 'AES-CBC' },
+    false,
+    ['encrypt'],
+  )
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-CBC', iv: new TextEncoder().encode(iv) },
+    cryptoKey,
+    pkcs7Pad(new TextEncoder().encode(text), 16),
+  )
+  return [...new Uint8Array(encrypted)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+async function aes256CbcDecryptHex(hex, key, iv) {
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(key),
+    { name: 'AES-CBC' },
+    false,
+    ['decrypt'],
+  )
+  const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)))
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-CBC', iv: new TextEncoder().encode(iv) },
+    cryptoKey,
+    bytes,
+  )
+  const unpadded = pkcs7Unpad(new Uint8Array(decrypted))
+  return new TextDecoder().decode(unpadded)
+}
+
+function pkcs7Pad(bytes, blockSize) {
+  const remainder = bytes.length % blockSize
+  const pad = remainder === 0 ? blockSize : blockSize - remainder
+  const output = new Uint8Array(bytes.length + pad)
+  output.set(bytes)
+  output.fill(pad, bytes.length)
+  return output
+}
+
+function pkcs7Unpad(bytes) {
+  const pad = bytes[bytes.length - 1]
+  if (!pad || pad > 16) return bytes
+  return bytes.slice(0, bytes.length - pad)
 }
 
 function ecpayConfigured(env) {

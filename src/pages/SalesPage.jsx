@@ -272,17 +272,17 @@ function SalesCheckoutModal({ onClose }) {
     setForm(prev => ({ ...prev, [key]: e.target.value }))
   }
 
-  const submitEcpayCheckout = (ecpay) => {
-    if (!ecpay?.configured || !ecpay?.action || !ecpay?.params) {
-      throw new Error(ecpay?.message || '綠界付款尚未設定完成，請稍後再試。')
+  const submitPaymentCheckout = (payment) => {
+    if (!payment?.configured || !payment?.action || !payment?.params) {
+      throw new Error(payment?.message || '藍新付款尚未設定完成，請稍後再試。')
     }
 
     const formEl = document.createElement('form')
-    formEl.method = ecpay.method || 'POST'
-    formEl.action = ecpay.action
+    formEl.method = payment.method || 'POST'
+    formEl.action = payment.action
     formEl.style.display = 'none'
 
-    Object.entries(ecpay.params).forEach(([key, value]) => {
+    Object.entries(payment.params).forEach(([key, value]) => {
       const input = document.createElement('input')
       input.type = 'hidden'
       input.name = key
@@ -321,8 +321,8 @@ function SalesCheckoutModal({ onClose }) {
       if (!response.ok || data.success === false) {
         throw new Error(data.error || '建立訂單失敗，請稍後再試。')
       }
-      setMessage(`訂單已建立：${data.order.orderNumber}。正在前往綠界付款頁...`)
-      submitEcpayCheckout(data.ecpay)
+      setMessage(`訂單已建立：${data.order.orderNumber}。正在前往藍新付款頁...`)
+      submitPaymentCheckout(data.payment || data.newebpay || data.ecpay)
     } catch (err) {
       setError(err.message || '建立訂單失敗，請稍後再試。')
       setLoading(false)
@@ -372,7 +372,7 @@ function SalesCheckoutModal({ onClose }) {
 
             <div className="sp-checkout-note">
               <strong>訂單與開通流程</strong>
-              <p>送出後會建立正式訂單與學員帳號，並前往綠界安全付款頁。付款成功後系統會自動開通體驗課會員權限。</p>
+              <p>送出後會建立正式訂單與學員帳號，並前往藍新安全付款頁。付款成功後系統會自動開通體驗課會員權限。</p>
             </div>
 
             {error && <div className="auth-alert error">{error}</div>}
@@ -382,7 +382,7 @@ function SalesCheckoutModal({ onClose }) {
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>取消</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? '前往綠界付款中...' : '前往綠界付款'}
+              {loading ? '前往藍新付款中...' : '前往藍新付款'}
             </button>
           </div>
         </form>
