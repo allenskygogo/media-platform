@@ -59,60 +59,92 @@ function compressImage(file, maxW=1200, quality=0.8) {
   })
 }
 
+function getAutoVideoName(file) {
+  return (file?.name || 'Untitled').replace(/\.[^.]+$/, '').trim() || 'Untitled'
+}
+
+function getLocalVideoDuration(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+    const cleanup = () => URL.revokeObjectURL(url)
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      const duration = Number.isFinite(video.duration) ? Math.round(video.duration) : 0
+      cleanup()
+      resolve(duration)
+    }
+    video.onerror = () => {
+      cleanup()
+      resolve(0)
+    }
+    video.src = url
+  })
+}
+
 // ── Upload Modal ──────────────────────────────────────────────────────────────
 function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
-  const [file, setFile]     = useState(null)
+  const [files, setFiles]   = useState([])
   const [name, setName]     = useState('')
   const [phase, setPhase]   = useState('idle') // idle|uploading|done|error
   const [pct, setPct]       = useState(0)
   const [errMsg, setErrMsg] = useState('')
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [uploadedCount, setUploadedCount] = useState(0)
   const dropRef = useRef()
 
-  const handleFile = (f) => {
-    if (!f || !f.type.startsWith('video/')) return
-    setFile(f)
-    setName(f.name.replace(/\.[^.]+$/, ''))
+  const handleFiles = (selectedFiles) => {
+    const selected = Array.from(selectedFiles || []).filter(f => f.type.startsWith('video/'))
+    if (!selected.length) return
+    setFiles(selected)
+    setName(selected.length === 1 ? getAutoVideoName(selected[0]) : '')
   }
 
   const handleDrop = (e) => {
     e.preventDefault()
     dropRef.current?.classList.remove('drag-over')
-    handleFile(e.dataTransfer.files[0])
+    handleFiles(e.dataTransfer.files)
   }
 
   const handleUpload = async () => {
-    if (!file) return
+    if (!files.length) return
     try {
-      setPhase('uploading'); setErrMsg(''); setPct(0)
+      setPhase('uploading'); setErrMsg(''); setPct(0); setCurrentIndex(0); setUploadedCount(0)
 
-      const label = `${lessonTitle || 'Lesson'} - ${name}`
-      const { uid } = await uploadVideoToCF(label, file, setPct)
-      setPct(100)
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const displayName = files.length === 1 ? (name || getAutoVideoName(file)) : getAutoVideoName(file)
+        const label = `${lessonTitle || 'Lesson'} - ${displayName}`
+        setCurrentIndex(i)
+        setPct(0)
 
-      // 3. Poll for video details (up to 30s)
-      let video = null
-      for (let i = 0; i < 10; i++) {
-        await new Promise(r => setTimeout(r, 3000))
-        const vRes = await getVideo(uid)
-        if (vRes?.result) { video = vRes.result; break }
+        const localDuration = await getLocalVideoDuration(file)
+        const { uid } = await uploadVideoToCF(label, file, setPct)
+        setPct(100)
+
+        let video = null
+        for (let j = 0; j < 10; j++) {
+          await new Promise(r => setTimeout(r, 3000))
+          const vRes = await getVideo(uid)
+          if (vRes?.result) { video = vRes.result; break }
+        }
+
+        const hlsUrl = video?.playback?.hls || ''
+        const record = {
+          uid, name: label,
+          status: video?.status?.state || 'pendingupload',
+          readyToStream: video?.readyToStream || false,
+          duration: Math.round(video?.duration || localDuration || 0),
+          size: file.size,
+          created: new Date().toISOString(),
+          customerSubdomain: extractCustomerSubdomain(hlsUrl) || 'customer-unknown',
+          hlsUrl,
+        }
+        saveCFVideo(record)
+
+        if (i === 0) assignVideoToLesson(lessonId, uid)
+        setUploadedCount(i + 1)
       }
-
-      // 4. Save to local CF videos list
-      const hlsUrl = video?.playback?.hls || ''
-      const record = {
-        uid, name: label,
-        status: video?.status?.state || 'pendingupload',
-        readyToStream: video?.readyToStream || false,
-        duration: video?.duration || 0,
-        size: file.size,
-        created: new Date().toISOString(),
-        customerSubdomain: extractCustomerSubdomain(hlsUrl) || 'customer-unknown',
-        hlsUrl,
-      }
-      saveCFVideo(record)
-
-      // 5. Auto-assign to lesson
-      assignVideoToLesson(lessonId, uid)
 
       setPhase('done')
       await onSuccess?.()
@@ -148,11 +180,17 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
                 onDrop={handleDrop}
                 onClick={() => document.getElementById('vup-file').click()}
               >
-                {file ? (
+                {files.length ? (
                   <div>
                     <div style={{ fontSize:24, marginBottom:8 }}>影片 </div>
-                    <p style={{ fontWeight:700 }}>{file.name}</p>
-                    <p style={{ fontSize:12, color:'var(--gray-400)' }}>{(file.size/1024/1024).toFixed(1)} MB</p>
+                    <p style={{ fontWeight:700 }}>
+                      {files.length === 1 ? files[0].name : `已選擇 ${files.length} 支影片`}
+                    </p>
+                    <p style={{ fontSize:12, color:'var(--gray-400)' }}>
+                      {files.length === 1
+                        ? `${(files[0].size/1024/1024).toFixed(1)} MB`
+                        : '將依檔名自動命名並逐支上傳'}
+                    </p>
                   </div>
                 ) : (
                   <div>
@@ -161,10 +199,10 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
                     <p style={{ fontSize:12, color:'var(--gray-400)', marginTop:4 }}>支援 MP4、MOV、WebM</p>
                   </div>
                 )}
-                <input id="vup-file" type="file" accept="video/*" style={{ display:'none' }}
-                  onChange={e => handleFile(e.target.files[0])} />
+                <input id="vup-file" type="file" accept="video/*" multiple style={{ display:'none' }}
+                  onChange={e => handleFiles(e.target.files)} />
               </div>
-              {file && (
+              {files.length === 1 && (
                 <div className="form-group" style={{ marginTop:12 }}>
                   <label className="form-label">影片名稱</label>
                   <input className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="影片顯示名稱" />
@@ -177,7 +215,11 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
           {phase === 'uploading' && (
             <div style={{ textAlign:'center', padding:'24px 0' }}>
               <div style={{ fontSize:32, marginBottom:12 }}>⬆️</div>
-              <p style={{ fontWeight:700, marginBottom:12 }}>上傳中… {pct}%</p>
+              <p style={{ fontWeight:700, marginBottom:12 }}>
+                {files.length > 1
+                  ? `上傳中 ${currentIndex + 1}/${files.length}：${files[currentIndex]?.name || ''} ${pct}%`
+                  : `上傳中… ${pct}%`}
+              </p>
               <div className="upload-progress-bar">
                 <div className="upload-progress-fill" style={{ width:`${pct}%` }} />
               </div>
@@ -189,7 +231,9 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
           {phase === 'done' && (
             <div style={{ textAlign:'center', padding:'24px 0' }}>
               <div style={{ fontSize:40, marginBottom:12 }}>已</div>
-              <p style={{ fontWeight:700 }}>上傳完成，已自動綁定此課堂</p>
+              <p style={{ fontWeight:700 }}>
+                已上傳 {uploadedCount || files.length} 支影片，第一支已自動綁定此課堂
+              </p>
             </div>
           )}
 
@@ -205,8 +249,8 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>{phase==='done' ? '關閉' : '取消'}</button>
           {phase === 'idle' && (
-            <button className="btn btn-primary" onClick={handleUpload} disabled={!file || !name.trim() || !workerConfigured()}>
-              開始上傳
+            <button className="btn btn-primary" onClick={handleUpload} disabled={!files.length || (files.length === 1 && !name.trim()) || !workerConfigured()}>
+              開始上傳{files.length > 1 ? ` ${files.length} 支` : ''}
             </button>
           )}
         </div>
