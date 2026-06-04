@@ -194,7 +194,7 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
         <div className="lesson-player-status-row">
           {isFirstWatch ? (
             <span className="lesson-player-status lesson-player-status-locked">
-              🔒 首次觀看 · 無法暫停或快轉
+              🔒 首次觀看 · 可暫停，不可快轉
             </span>
           ) : (
             <span className="lesson-player-status lesson-player-status-replay">
@@ -234,7 +234,15 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
           <div className="lesson-controls-row">
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
               {isFirstWatch ? (
-                <span className="lesson-lock-msg">🔒 播放中，無法暫停或快轉</span>
+                <>
+                  <button
+                    style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', padding:'0 4px' }}
+                    onClick={() => setPlaying(p => !p)}
+                  >
+                    {playing ? '⏸' : '▶'}
+                  </button>
+                  <span className="lesson-lock-msg">🔒 不可快轉</span>
+                </>
               ) : (
                 <button
                   style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', padding:'0 4px' }}
