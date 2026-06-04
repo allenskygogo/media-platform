@@ -1115,6 +1115,86 @@ function Spinner() {
   )
 }
 
+function splitScriptPreview(body, maxSentences = 2) {
+  const text = String(body || '').trim()
+  if (!text) return { preview: '', hidden: '' }
+
+  const sentenceEnd = /[。！？!?]\s*/g
+  let match
+  let count = 0
+  let splitAt = -1
+  while ((match = sentenceEnd.exec(text)) !== null) {
+    count += 1
+    if (count >= maxSentences) {
+      splitAt = sentenceEnd.lastIndex
+      break
+    }
+  }
+
+  if (splitAt < 0) {
+    const lines = text.split(/\n+/).map(line => line.trim()).filter(Boolean)
+    if (lines.length > maxSentences) {
+      return {
+        preview: lines.slice(0, maxSentences).join('\n'),
+        hidden: lines.slice(maxSentences).join('\n'),
+      }
+    }
+    return { preview: text, hidden: '' }
+  }
+
+  return {
+    preview: text.slice(0, splitAt).trim(),
+    hidden: text.slice(splitAt).trim(),
+  }
+}
+
+function ScriptSection({ section, index }) {
+  if (!section) return null
+  return (
+    <div key={index} className="ait-sc-sec">
+      <div className="ait-sc-heading">{section.heading}</div>
+      <div className="ait-sc-body">{section.body}</div>
+    </div>
+  )
+}
+
+function ScriptPreviewGate({ script, canSeeAll, onUpgrade, upgradeText }) {
+  const sections = Array.isArray(script) ? script : []
+  if (canSeeAll) {
+    return sections.map((sec, i) => <ScriptSection key={i} section={sec} index={i} />)
+  }
+
+  const first = sections[0] || null
+  const second = sections[1] || null
+  const secondPreview = second ? splitScriptPreview(second.body, 2) : null
+  const blurredSections = [
+    ...(secondPreview?.hidden ? [{ ...second, body: secondPreview.hidden }] : []),
+    ...sections.slice(2),
+  ]
+
+  return (
+    <>
+      {first && <ScriptSection section={first} index="first" />}
+      {second && secondPreview?.preview && (
+        <ScriptSection section={{ ...second, body: secondPreview.preview }} index="second-preview" />
+      )}
+      {blurredSections.length > 0 && (
+        <div className="ait-blur-zone">
+          <div className="ait-blur-inner">
+            {blurredSections.map((sec, i) => (
+              <ScriptSection key={i} section={sec} index={`blur-${i}`} />
+            ))}
+          </div>
+          <div className="ait-upgrade-wall">
+            <p className="ait-upgrade-wall-text">{upgradeText}</p>
+            <button className="ait-upgrade-wall-btn" onClick={onUpgrade}>立即升級解鎖</button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 // ══════════════════════════════════════════════════════
 //  TopBar
 // ══════════════════════════════════════════════════════
@@ -1335,38 +1415,12 @@ function TopicsPage() {
                 ))}
               </div>
 
-              {script.slice(0, 2).map((sec, i) => (
-                <div key={i} className="ait-sc-sec">
-                  <div className="ait-sc-heading">{sec.heading}</div>
-                  <div className="ait-sc-body">{sec.body}</div>
-                </div>
-              ))}
-
-              {script.length > 2 && (
-                canSeeAll ? (
-                  script.slice(2).map((sec, i) => (
-                    <div key={i} className="ait-sc-sec">
-                      <div className="ait-sc-heading">{sec.heading}</div>
-                      <div className="ait-sc-body">{sec.body}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="ait-blur-zone">
-                    <div className="ait-blur-inner">
-                      {script.slice(2).map((sec, i) => (
-                        <div key={i} className="ait-sc-sec">
-                          <div className="ait-sc-heading">{sec.heading}</div>
-                          <div className="ait-sc-body">{sec.body}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="ait-upgrade-wall">
-                      <p className="ait-upgrade-wall-text">頂流達人學員專屬｜掌握四大腳本公式，完整架構不再對著鏡頭不知道說什麼</p>
-                      <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>立即升級解鎖</button>
-                    </div>
-                  </div>
-                )
-              )}
+              <ScriptPreviewGate
+                script={script}
+                canSeeAll={canSeeAll}
+                onUpgrade={() => setShowModal(true)}
+                upgradeText="頂流達人學員專屬｜掌握四大腳本公式，完整架構不再對著鏡頭不知道說什麼"
+              />
             </div>
           )}
 
@@ -1871,37 +1925,12 @@ function CopyPage() {
             <div className="ait-script-loading"><Spinner /> 生成中…</div>
           ) : (
             <div className="ait-script-scroll-box-500">
-              {script.slice(0, 2).map((sec, i) => (
-                <div key={i} className="ait-sc-sec">
-                  <div className="ait-sc-heading">{sec.heading}</div>
-                  <div className="ait-sc-body">{sec.body}</div>
-                </div>
-              ))}
-              {script.length > 2 && (
-                canSeeAll ? (
-                  script.slice(2).map((sec, i) => (
-                    <div key={i} className="ait-sc-sec">
-                      <div className="ait-sc-heading">{sec.heading}</div>
-                      <div className="ait-sc-body">{sec.body}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="ait-blur-zone">
-                    <div className="ait-blur-inner">
-                      {script.slice(2).map((sec, i) => (
-                        <div key={i} className="ait-sc-sec">
-                          <div className="ait-sc-heading">{sec.heading}</div>
-                          <div className="ait-sc-body">{sec.body}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="ait-upgrade-wall">
-                      <p className="ait-upgrade-wall-text">頂流達人學員專屬｜掌握四大腳本公式，每支影片都有完整架構，不再對著鏡頭不知道說什麼</p>
-                      <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>立即升級解鎖</button>
-                    </div>
-                  </div>
-                )
-              )}
+              <ScriptPreviewGate
+                script={script}
+                canSeeAll={canSeeAll}
+                onUpgrade={() => setShowModal(true)}
+                upgradeText="頂流達人學員專屬｜掌握四大腳本公式，每支影片都有完整架構，不再對著鏡頭不知道說什麼"
+              />
             </div>
           )}
           {scriptError && <div className="ait-inline-error" style={{ margin: '12px 20px 0' }}>{scriptError}</div>}
@@ -3039,42 +3068,12 @@ function TrendingPage() {
 
                   {script && !gen && (
                     <div className="ait-trending-script">
-                      {script.slice(0, 2).map((sec, si) => (
-                        <div key={si} className="ait-sc-sec">
-                          <div className="ait-sc-heading">{sec.heading}</div>
-                          <div className="ait-sc-body">{sec.body}</div>
-                        </div>
-                      ))}
-
-                      {script.length > 2 && (
-                        canSeeAll ? (
-                          script.slice(2).map((sec, si) => (
-                            <div key={si} className="ait-sc-sec">
-                              <div className="ait-sc-heading">{sec.heading}</div>
-                              <div className="ait-sc-body">{sec.body}</div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="ait-blur-zone">
-                            <div className="ait-blur-inner">
-                              {script.slice(2).map((sec, si) => (
-                                <div key={si} className="ait-sc-sec">
-                                  <div className="ait-sc-heading">{sec.heading}</div>
-                                  <div className="ait-sc-body">{sec.body}</div>
-                                </div>
-                              ))}
-                            </div>
-                            <div className="ait-upgrade-wall">
-                              <p className="ait-upgrade-wall-text">
-                                頂流私塾學員專屬｜完整腳本架構，結合熱點生成你的爆款內容
-                              </p>
-                              <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>
-                                立即升級解鎖
-                              </button>
-                            </div>
-                          </div>
-                        )
-                      )}
+                      <ScriptPreviewGate
+                        script={script}
+                        canSeeAll={canSeeAll}
+                        onUpgrade={() => setShowModal(true)}
+                        upgradeText="頂流私塾學員專屬｜完整腳本架構，結合熱點生成你的爆款內容"
+                      />
 
                       <button className="ait-ghost-btn" style={{ marginTop: 8 }}
                         onClick={() => { setScripts(p => ({ ...p, [i]: null })); setIndustries(p => ({ ...p, [i]: '' })) }}>
