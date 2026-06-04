@@ -22,6 +22,11 @@ function workerFetch(path, options = {}) {
       throw new Error(message)
     }
     return data
+  }).catch(error => {
+    if (/Failed to fetch|NetworkError|Load failed/i.test(error?.message || '')) {
+      throw new Error('連不上影片上傳服務，請重新整理頁面後再試一次。')
+    }
+    throw error
   })
 }
 
@@ -106,6 +111,27 @@ function uploadFileToCFForm(uploadURL, file, onProgress) {
 }
 
 export async function uploadVideoToCF(name, file, onProgress) {
+  const formFirstLimit = 200 * 1024 * 1024
+  if (file.size > 0 && file.size <= formFirstLimit) {
+    let formUpload = null
+    try {
+      formUpload = await getUploadUrl(name || file.name, file.size, { uploadMethod: 'form' })
+      if (!formUpload?.result?.uploadURL || !formUpload?.result?.uid) {
+        throw new Error('無法取得上傳連結')
+      }
+      await uploadFileToCF(formUpload.result.uploadURL, file, onProgress, { tus: false })
+      return { uid: formUpload.result.uid, uploadMethod: 'form' }
+    } catch (formError) {
+      if (onProgress) onProgress(0)
+      if (formUpload?.result?.uid) {
+        await deleteVideo(formUpload.result.uid).catch(() => {})
+      }
+      if (/連不上影片上傳服務/.test(formError?.message || '')) {
+        throw formError
+      }
+    }
+  }
+
   const tusUpload = await getUploadUrl(name || file.name, file.size, { uploadMethod: 'tus' })
   if (!tusUpload?.result?.uploadURL || !tusUpload?.result?.uid) {
     throw new Error('無法取得上傳連結')
