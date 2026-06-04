@@ -6,6 +6,7 @@ export const PRICING_KEY        = 'mp_pricing'
 export const HOMEWORK_SPEC_KEY  = 'mp_homework_specs'
 export const CF_VIDEOS_KEY      = 'mp_cf_videos'
 export const VIDEO_ASSIGN_KEY   = 'mp_video_assignments' // { lessonId|'trial': cfVideoUid }
+const COURSE_DEMO_PURGE_KEY     = 'mp_demo_courses_purged_v1'
 
 export const DEFAULT_PRICING = {
   trialPrice:            980,
@@ -209,7 +210,14 @@ export function initMockData() {
     localStorage.setItem('mp_current_user', JSON.stringify(cur))
   }
 
-  if (!localStorage.getItem(COURSES_KEY))  localStorage.setItem(COURSES_KEY,  JSON.stringify(defaultCourses))
+  if (!localStorage.getItem(COURSES_KEY)) localStorage.setItem(COURSES_KEY, JSON.stringify([]))
+  if (!localStorage.getItem(COURSE_DEMO_PURGE_KEY)) {
+    const demoIds = new Set(defaultCourses.map(course => course.id))
+    const storedCourses = JSON.parse(localStorage.getItem(COURSES_KEY) || '[]')
+    const customCourses = storedCourses.filter(course => !demoIds.has(course.id))
+    localStorage.setItem(COURSES_KEY, JSON.stringify(customCourses))
+    localStorage.setItem(COURSE_DEMO_PURGE_KEY, '1')
+  }
   if (!localStorage.getItem(PROJECTS_KEY)) localStorage.setItem(PROJECTS_KEY, JSON.stringify(defaultProjects))
   if (!localStorage.getItem(BOOKINGS_KEY)) localStorage.setItem(BOOKINGS_KEY, JSON.stringify(defaultBookings))
   const storedPricing = JSON.parse(localStorage.getItem(PRICING_KEY) || 'null')
