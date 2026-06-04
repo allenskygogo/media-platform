@@ -39,6 +39,29 @@ function fmtBytes(bytes) {
   return `${(bytes / 1024 ** 3).toFixed(2)} GB`
 }
 
+function getAutoVideoName(file) {
+  return (file?.name || 'Untitled').replace(/\.[^.]+$/, '').trim() || 'Untitled'
+}
+
+function getLocalVideoDuration(file) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+    const cleanup = () => URL.revokeObjectURL(url)
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      const duration = Number.isFinite(video.duration) ? Math.round(video.duration) : 0
+      cleanup()
+      resolve(duration)
+    }
+    video.onerror = () => {
+      cleanup()
+      resolve(0)
+    }
+    video.src = url
+  })
+}
+
 const STATUS_CFG = {
   ready:      { label: '就緒', color: 'var(--success)',       bg: 'var(--success-light)' },
   queued:     { label: '排隊中', color: 'var(--advanced-text)', bg: 'var(--advanced-light)' },
@@ -63,12 +86,14 @@ function describeAssignment(videoUid, assignments, courses) {
 
 // ── Upload Modal ──────────────────────────────────────────────────────────
 function UploadModal({ courses, onUploaded, onClose }) {
-  const [file, setFile]         = useState(null)
+  const [files, setFiles]       = useState([])
   const [name, setName]         = useState('')
   const [assignTo, setAssignTo] = useState('')  // '' | 'trial' | lessonId
   const [progress, setProgress] = useState(0)
+  const [currentIndex, setCurrentIndex] = useState(0)
   const [phase, setPhase]       = useState('idle') // idle | uploading | done | error
   const [errorMsg, setErrorMsg] = useState('')
+  const [uploadedCount, setUploadedCount] = useState(0)
 
   const lessonOptions = []
   for (const c of courses) {
@@ -78,47 +103,55 @@ function UploadModal({ courses, onUploaded, onClose }) {
   }
 
   const handleFileChange = (e) => {
-    const f = e.target.files[0]
-    if (!f) return
-    setFile(f)
-    if (!name) setName(f.name.replace(/\.[^.]+$/, ''))
+    const selected = Array.from(e.target.files || []).filter(f => f.type.startsWith('video/'))
+    if (!selected.length) return
+    setFiles(selected)
+    setName(selected.length === 1 ? getAutoVideoName(selected[0]) : '')
+    if (selected.length > 1) setAssignTo('')
   }
 
   const handleUpload = async () => {
-    if (!file) return
+    if (!files.length) return
     setPhase('uploading')
     setProgress(0)
+    setCurrentIndex(0)
+    setUploadedCount(0)
     try {
-      // Step 1-2: Upload file directly to CF Stream.
-      // TUS is used first; if the browser/network rejects it, the client retries
-      // with Cloudflare's form direct-upload URL.
-      const { uid } = await uploadVideoToCF(name || file.name, file, setProgress)
-      setProgress(100)
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const displayName = files.length === 1 ? (name || getAutoVideoName(file)) : getAutoVideoName(file)
+        setCurrentIndex(i)
+        setProgress(0)
 
-      // Step 3: Poll for video details (may take a few seconds)
-      let video = null
-      for (let i = 0; i < 10; i++) {
-        await new Promise(r => setTimeout(r, 2000))
-        const detail = await getVideo(uid)
-        if (detail?.result) { video = detail.result; break }
+        const localDuration = await getLocalVideoDuration(file)
+        const { uid } = await uploadVideoToCF(displayName, file, setProgress)
+        setProgress(100)
+
+        let video = null
+        for (let j = 0; j < 10; j++) {
+          await new Promise(r => setTimeout(r, 2000))
+          const detail = await getVideo(uid)
+          if (detail?.result) { video = detail.result; break }
+        }
+
+        const hlsUrl    = video?.playback?.hls || ''
+        const subdomain = extractCustomerSubdomain(hlsUrl) || 'customer-unknown'
+        saveCFVideo({
+          uid,
+          name: displayName,
+          status: video?.status?.state || 'queued',
+          duration: Math.round(video?.duration || localDuration || 0),
+          customerSubdomain: subdomain,
+          preview: video?.thumbnail || '',
+          size: file.size,
+          uploadedAt: new Date().toISOString(),
+        })
+
+        if (files.length === 1 && assignTo) {
+          assignVideoToLesson(assignTo === 'trial' ? 'trial' : Number(assignTo), uid)
+        }
+        setUploadedCount(i + 1)
       }
-
-      // Step 4: Store locally
-      const hlsUrl    = video?.playback?.hls || ''
-      const subdomain = extractCustomerSubdomain(hlsUrl) || 'customer-unknown'
-      saveCFVideo({
-        uid,
-        name: name || file.name,
-        status: video?.status?.state || 'queued',
-        duration: Math.round(video?.duration || 0),
-        customerSubdomain: subdomain,
-        preview: video?.thumbnail || '',
-        size: file.size,
-        uploadedAt: new Date().toISOString(),
-      })
-
-      // Step 5: Assign if requested
-      if (assignTo) assignVideoToLesson(assignTo === 'trial' ? 'trial' : Number(assignTo), uid)
 
       setPhase('done')
       await onUploaded()
@@ -141,7 +174,7 @@ function UploadModal({ courses, onUploaded, onClose }) {
               <div style={{ fontSize: 48, marginBottom: 12 }}>已</div>
               <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>上傳完成！</p>
               <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>
-                影片正在 Cloudflare Stream 處理中，通常需要 1–5 分鐘。
+                已上傳 {uploadedCount || files.length} 支影片，Cloudflare Stream 通常需要 1–5 分鐘完成處理。
               </p>
             </div>
           ) : phase === 'error' ? (
@@ -154,42 +187,54 @@ function UploadModal({ courses, onUploaded, onClose }) {
               {/* File picker */}
               <div className="form-group">
                 <label className="form-label">選擇影片檔案 *</label>
-                <input type="file" accept="video/*" className="form-input"
+                <input type="file" accept="video/*" multiple className="form-input"
                   onChange={handleFileChange} disabled={phase === 'uploading'} />
-                {file && (
-                  <span className="form-hint">{file.name} · {fmtBytes(file.size)}</span>
+                {files.length > 0 && (
+                  <span className="form-hint">
+                    {files.length === 1
+                      ? `${files[0].name} · ${fmtBytes(files[0].size)}`
+                      : `已選擇 ${files.length} 支影片 · 將依檔名自動命名`}
+                  </span>
                 )}
               </div>
 
               {/* Display name */}
-              <div className="form-group">
-                <label className="form-label">顯示名稱</label>
-                <input type="text" className="form-input" value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="影片標題（選填，預設為檔名）"
-                  disabled={phase === 'uploading'} />
-              </div>
+              {files.length <= 1 && (
+                <div className="form-group">
+                  <label className="form-label">顯示名稱</label>
+                  <input type="text" className="form-input" value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="影片標題（選填，預設為檔名）"
+                    disabled={phase === 'uploading'} />
+                </div>
+              )}
 
               {/* Assignment */}
-              <div className="form-group">
-                <label className="form-label">指定到課節（選填，稍後也可以設定）</label>
-                <select className="form-input" value={assignTo}
-                  onChange={e => setAssignTo(e.target.value)}
-                  disabled={phase === 'uploading'}>
-                  <option value="">— 不指定 —</option>
-                  <option value="trial">體驗課（3 小時體驗影片）</option>
-                  {lessonOptions.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
+              {files.length <= 1 && (
+                <div className="form-group">
+                  <label className="form-label">指定到課節（選填，稍後也可以設定）</label>
+                  <select className="form-input" value={assignTo}
+                    onChange={e => setAssignTo(e.target.value)}
+                    disabled={phase === 'uploading'}>
+                    <option value="">— 不指定 —</option>
+                    <option value="trial">體驗課（3 小時體驗影片）</option>
+                    {lessonOptions.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Upload progress */}
               {phase === 'uploading' && (
                 <div style={{ marginTop: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13,
                     color: 'var(--gray-600)', marginBottom: 6 }}>
-                    <span>上傳中…</span>
+                    <span>
+                      {files.length > 1
+                        ? `上傳中 ${currentIndex + 1}/${files.length}：${files[currentIndex]?.name || ''}`
+                        : '上傳中…'}
+                    </span>
                     <span>{progress}%</span>
                   </div>
                   <div style={{ height: 8, background: 'var(--gray-200)', borderRadius: 4, overflow: 'hidden' }}>
@@ -212,8 +257,8 @@ function UploadModal({ courses, onUploaded, onClose }) {
               <button className="btn btn-secondary" onClick={onClose}
                 disabled={phase === 'uploading'}>取消</button>
               <button className="btn btn-primary"
-                disabled={!file || phase === 'uploading'} onClick={handleUpload}>
-                {phase === 'uploading' ? `上傳中 ${progress}%…` : '開始上傳'}
+                disabled={!files.length || phase === 'uploading'} onClick={handleUpload}>
+                {phase === 'uploading' ? `上傳中 ${progress}%…` : `開始上傳${files.length > 1 ? ` ${files.length} 支` : ''}`}
               </button>
             </>
           )}
@@ -304,14 +349,15 @@ export default function VideoAdmin() {
       const cfList = res?.result || []
       for (const v of cfList) {
         const hlsUrl = v.playback?.hls || ''
+        const existing = getCFVideos().find(item => item.uid === v.uid)
         saveCFVideo({
           uid: v.uid,
-          name: v.meta?.name || v.uid,
+          name: v.meta?.name || existing?.name || v.uid,
           status: v.status?.state || 'unknown',
-          duration: Math.round(v.duration || 0),
+          duration: Math.round(v.duration || existing?.duration || 0),
           customerSubdomain: extractCustomerSubdomain(hlsUrl) || 'customer-unknown',
           preview: v.thumbnail || '',
-          size: v.size || 0,
+          size: v.size || existing?.size || 0,
           uploadedAt: v.created || new Date().toISOString(),
         })
       }
