@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { getCourses, canAccessCourse } from '../../data/mockData'
+import { fetchCourseCatalog } from '../../services/courseCatalog'
 
 const CAT_EMOJI = { '影音創作': '🎬', '社群媒體': '📱', '音頻創作': '🎙️', '商業變現': '💰', '數據分析': '📊', 'AI 應用': '🤖' }
 const COURSE_LEVEL_LABEL = { basic: '體驗', standard: '達人', advanced: '私塾' }
@@ -9,7 +10,9 @@ const COURSE_LEVEL_LABEL = { basic: '體驗', standard: '達人', advanced: '私
 export default function CoursesPage() {
   const { currentUser } = useAuth()
   const navigate = useNavigate()
-  const allCourses = getCourses().filter(c => c.published)
+  const [courses, setCourses] = useState(() => getCourses())
+  const [loadError, setLoadError] = useState('')
+  const allCourses = courses.filter(c => c.published)
   const [filter, setFilter] = useState('all')
   const [search, setSearch]  = useState('')
 
@@ -23,6 +26,22 @@ export default function CoursesPage() {
 
   const accessible = (c) => canAccessCourse(currentUser.tier, c.accessLevel)
 
+  useEffect(() => {
+    let cancelled = false
+    fetchCourseCatalog()
+      .then(catalog => {
+        if (!cancelled) {
+          setCourses(catalog.courses)
+          setLoadError('')
+        }
+      })
+      .catch(err => {
+        console.error('Course catalog load failed:', err)
+        if (!cancelled) setLoadError('課程同步失敗，請重新整理後再試')
+      })
+    return () => { cancelled = true }
+  }, [])
+
   const LOCK_LABEL = {
     standard: '需頂流達人或以上',
     advanced: '需頂流私塾',
@@ -34,6 +53,7 @@ export default function CoursesPage() {
         <h1>所有課程</h1>
         <p>共 {allCourses.length} 門課程，你目前可觀看 {allCourses.filter(c => accessible(c)).length} 門</p>
       </div>
+      {loadError && <div className="auth-alert error" style={{ marginBottom: 16 }}>{loadError}</div>}
 
       <div style={{ marginBottom: 16 }}>
         <input className="form-input" placeholder="搜尋課程名稱、講師…" value={search}

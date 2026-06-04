@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   getCourses, saveCourses,
   getCFVideos, saveCFVideo, deleteCFVideoLocal,
@@ -7,6 +7,7 @@ import {
   getHomeworkSpec, saveHomeworkSpec,
 } from '../../data/mockData'
 import { getUploadUrl, uploadFileToCF, getVideo, listVideos, deleteVideo, extractCustomerSubdomain, isConfigured as workerConfigured } from '../../services/streamApi'
+import { getLocalCourseCatalog, saveCourseCatalog, seedCourseCatalogIfEmpty } from '../../services/courseCatalog'
 
 const CATEGORIES = ['影音創作', '社群媒體', '音頻創作', '商業變現', '數據分析', 'AI 應用']
 const COURSE_LEVELS = {
@@ -120,7 +121,7 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
       assignVideoToLesson(lessonId, uid)
 
       setPhase('done')
-      onSuccess?.()
+      await onSuccess?.()
     } catch(e) {
       setErrMsg(e.message || '上傳失敗')
       setPhase('error')
@@ -277,6 +278,29 @@ export default function CoursesAdmin() {
   const flash = (t) => { setMsg(t); setTimeout(() => setMsg(''), 3000) }
   const refreshCourses = () => { const c = getCourses(); setCourses(c); if (course) setCourse(c.find(x=>x.id===course?.id)||null) }
   const refreshVideos  = () => setCfVideos(getCFVideos())
+  const syncCatalog = async (catalog = getLocalCourseCatalog()) => {
+    const synced = await saveCourseCatalog(catalog)
+    setCourses(synced.courses)
+    setCfVideos(synced.cfVideos)
+    if (course) setCourse(synced.courses.find(x => x.id === course.id) || null)
+    return synced
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    seedCourseCatalogIfEmpty()
+      .then(catalog => {
+        if (cancelled) return
+        setCourses(catalog.courses)
+        setCfVideos(catalog.cfVideos)
+        if (course) setCourse(catalog.courses.find(x => x.id === course.id) || null)
+      })
+      .catch(err => {
+        console.error('Course catalog sync failed:', err)
+        if (!cancelled) flash(`課程同步失敗：${err.message}`)
+      })
+    return () => { cancelled = true }
+  }, [])
 
   // ── Course CRUD ─────────────────────────────────────────────────────────────
   const openNewCourse = () => { setEditCourseId(null); setCourseForm(EMPTY_COURSE); setShowCourseModal(true) }
@@ -285,7 +309,7 @@ export default function CoursesAdmin() {
     setCourseForm({ title:c.title, description:c.description, tier:c.tier, accessLevel:c.accessLevel, category:c.category, instructor:c.instructor, duration:c.duration, published:c.published })
     setShowCourseModal(true)
   }
-  const saveCourse = () => {
+  const saveCourse = async () => {
     if (!courseForm.title.trim() || !courseForm.instructor.trim()) return
     const payload = courseFormWithAccess(courseForm)
     let updated
@@ -297,17 +321,27 @@ export default function CoursesAdmin() {
       flash('新課程已新增')
     }
     saveCourses(updated); setCourses(updated); setShowCourseModal(false)
+    try {
+      await syncCatalog({ ...getLocalCourseCatalog(), courses: updated })
+    } catch (err) {
+      flash(`課程已存本機，但同步失敗：${err.message}`)
+    }
   }
-  const confirmDeleteCourse = () => {
+  const confirmDeleteCourse = async () => {
     const updated = courses.filter(c => c.id!==deleteId)
     saveCourses(updated); setCourses(updated); setDeleteId(null); flash('課程已刪除')
     if (course?.id === deleteId) { setView('list'); setCourse(null) }
+    try {
+      await syncCatalog({ ...getLocalCourseCatalog(), courses: updated })
+    } catch (err) {
+      flash(`課程已刪除本機，但同步失敗：${err.message}`)
+    }
   }
 
   // ── Lesson CRUD ─────────────────────────────────────────────────────────────
   const openNewLesson = () => { setEditLessonId(null); setLessonForm(EMPTY_LESSON); setShowLessonModal(true) }
   const openEditLesson = (l) => { setEditLessonId(l.id); setLessonForm({ title:l.title, duration:l.duration, free:l.free }); setShowLessonModal(true) }
-  const saveLesson = () => {
+  const saveLesson = async () => {
     if (!lessonForm.title.trim()) return
     const updated = courses.map(c => {
       if (c.id !== course.id) return c
@@ -320,8 +354,13 @@ export default function CoursesAdmin() {
     setCourse(updated.find(c=>c.id===course.id))
     setShowLessonModal(false)
     flash(editLessonId ? '課堂已更新' : '課堂已新增')
+    try {
+      await syncCatalog({ ...getLocalCourseCatalog(), courses: updated })
+    } catch (err) {
+      flash(`課堂已存本機，但同步失敗：${err.message}`)
+    }
   }
-  const deleteLesson = (lessonId) => {
+  const deleteLesson = async (lessonId) => {
     const updated = courses.map(c => {
       if (c.id !== course.id) return c
       return {...c, lessons: c.lessons.filter(l => l.id!==lessonId)}
@@ -329,6 +368,11 @@ export default function CoursesAdmin() {
     saveCourses(updated); setCourses(updated)
     setCourse(updated.find(c=>c.id===course.id))
     flash('課堂已刪除')
+    try {
+      await syncCatalog({ ...getLocalCourseCatalog(), courses: updated })
+    } catch (err) {
+      flash(`課堂已刪除本機，但同步失敗：${err.message}`)
+    }
   }
 
   // ── Enter course detail ──────────────────────────────────────────────────────
@@ -631,7 +675,11 @@ export default function CoursesAdmin() {
           lessonTitle={uploadForLesson.title}
           courseId={course?.id}
           onClose={() => setUploadForLesson(null)}
-          onSuccess={() => { refreshVideos(); flash('影片上傳完成並已綁定課堂') }}
+          onSuccess={async () => {
+            refreshVideos()
+            await syncCatalog()
+            flash('影片上傳完成並已同步給學員')
+          }}
         />
       )}
 

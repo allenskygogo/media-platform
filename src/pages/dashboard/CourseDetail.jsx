@@ -6,6 +6,7 @@ import {
   getLessonProgress, getLatestHomework, getHomeworkSpec,
 } from '../../data/mockData'
 import { getCourseProgressRecords } from '../../services/courseProgress'
+import { fetchCourseCatalog } from '../../services/courseCatalog'
 import { getHomeworkSpecsRecords, getHomeworkSubmissionsForCourse } from '../../services/homework'
 import LessonPlayer  from '../../components/LessonPlayer'
 import HomeworkPanel from '../../components/HomeworkPanel'
@@ -95,9 +96,30 @@ export default function CourseDetail() {
   const [specByLesson, setSpecByLesson] = useState({})
   const [homeworkByLesson, setHomeworkByLesson] = useState({})
   const [progressLoadError, setProgressLoadError] = useState('')
+  const [courses, setCourses] = useState(() => getCourses())
+  const [catalogReady, setCatalogReady] = useState(false)
   const [, forceRender] = useState(0) // trigger re-render after homework submit
 
-  const course = getCourses().find(c => c.id === Number(id))
+  const course = courses.find(c => c.id === Number(id))
+
+  useEffect(() => {
+    let cancelled = false
+    fetchCourseCatalog()
+      .then(catalog => {
+        if (!cancelled) {
+          setCourses(catalog.courses)
+          setCatalogReady(true)
+        }
+      })
+      .catch(err => {
+        console.error('Course catalog load failed:', err)
+        if (!cancelled) {
+          setCatalogReady(true)
+          setProgressLoadError('課程同步失敗，請重新整理後再試')
+        }
+      })
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     if (!course || !currentUser?.id) return
@@ -122,6 +144,12 @@ export default function CourseDetail() {
 
     return () => { cancelled = true }
   }, [course?.id, currentUser?.id])
+
+  if (!course && !catalogReady) return (
+    <div className="page-content">
+      <p style={{ color: 'var(--gray-400)', fontSize: 14 }}>載入課程中...</p>
+    </div>
+  )
 
   if (!course) return (
     <div className="page-content">

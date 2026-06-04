@@ -236,6 +236,16 @@ export default {
         return await handleUploadStart(request, env)
       }
 
+      // GET /api/course-catalog → shared course catalog for students/admin
+      if (path === '/api/course-catalog' && request.method === 'GET') {
+        return await handleGetCourseCatalog(env)
+      }
+
+      // PUT /api/admin/course-catalog → replace shared course catalog
+      if (path === '/api/admin/course-catalog' && request.method === 'PUT') {
+        return await handleUpdateCourseCatalog(request, env)
+      }
+
       // GET /api/videos  → list all videos in the account
       if (path === '/api/videos' && request.method === 'GET') {
         return await handleListVideos(env)
@@ -420,6 +430,23 @@ async function handleDeleteVideo(uid, env) {
     'DELETE', env
   )
   return json(res)
+}
+
+async function handleGetCourseCatalog(env) {
+  const catalog = await getCourseCatalog(env)
+  return json({ success: true, catalog })
+}
+
+async function handleUpdateCourseCatalog(request, env) {
+  await requireAdmin(request, env)
+  const body = await request.json().catch(() => ({}))
+  const catalog = {
+    courses: Array.isArray(body.courses) ? body.courses : [],
+    cfVideos: Array.isArray(body.cfVideos) ? body.cfVideos : [],
+    videoAssignments: body.videoAssignments && typeof body.videoAssignments === 'object' ? body.videoAssignments : {},
+  }
+  const saved = await upsertCourseCatalog(env, catalog)
+  return json({ success: true, catalog: saved })
 }
 
 async function handleToken(request, videoUid, env) {
@@ -1816,6 +1843,84 @@ async function getGoogleAccessToken(env) {
   const data = await response.json()
   if (!response.ok) throw new Error(data.error_description || data.error || 'Google auth failed')
   return data.access_token
+}
+
+async function getCourseCatalog(env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { courses: [], cfVideos: [], videoAssignments: {} }
+  }
+
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/course_catalog`)
+  url.searchParams.set('id', 'eq.main')
+  url.searchParams.set('select', 'courses,cf_videos,video_assignments,updated_at')
+
+  const response = await fetch(url.toString(), {
+    headers: serviceRoleHeaders(env),
+  })
+  const rows = await response.json().catch(() => [])
+  if (!response.ok) {
+    const message = rows?.message || rows?.error || 'Course catalog read failed'
+    if (message.includes('course_catalog') || message.includes('schema cache')) {
+      throw new Error('Course catalog table missing. Run the Supabase migration first.')
+    }
+    throw new Error(message)
+  }
+  const row = Array.isArray(rows) ? rows[0] : null
+
+  return {
+    courses: Array.isArray(row?.courses) ? row.courses : [],
+    cfVideos: Array.isArray(row?.cf_videos) ? row.cf_videos : [],
+    videoAssignments: row?.video_assignments && typeof row.video_assignments === 'object' ? row.video_assignments : {},
+    updatedAt: row?.updated_at || null,
+  }
+}
+
+async function upsertCourseCatalog(env, catalog) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase service key is not configured')
+  }
+
+  const payload = {
+    id: 'main',
+    courses: catalog.courses,
+    cf_videos: catalog.cfVideos,
+    video_assignments: catalog.videoAssignments,
+    updated_at: new Date().toISOString(),
+  }
+
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/course_catalog`, {
+    method: 'POST',
+    headers: {
+      ...serviceRoleHeaders(env),
+      Prefer: 'resolution=merge-duplicates,return=representation',
+    },
+    body: JSON.stringify(payload),
+  })
+  const rows = await response.json().catch(() => [])
+  if (!response.ok) {
+    const message = rows?.message || rows?.error || 'Course catalog save failed'
+    if (message.includes('course_catalog') || message.includes('schema cache')) {
+      throw new Error('Course catalog table missing. Run the Supabase migration first.')
+    }
+    throw new Error(message)
+  }
+  const row = Array.isArray(rows) ? rows[0] : null
+
+  return {
+    courses: Array.isArray(row?.courses) ? row.courses : catalog.courses,
+    cfVideos: Array.isArray(row?.cf_videos) ? row.cf_videos : catalog.cfVideos,
+    videoAssignments: row?.video_assignments && typeof row.video_assignments === 'object' ? row.video_assignments : catalog.videoAssignments,
+    updatedAt: row?.updated_at || payload.updated_at,
+  }
+}
+
+function serviceRoleHeaders(env) {
+  return {
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
 }
 
 async function requireAdmin(request, env) {

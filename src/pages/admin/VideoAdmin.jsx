@@ -19,6 +19,7 @@ import {
   isConfigured, getUploadUrl, uploadFileToCF,
   listVideos, deleteVideo, getVideo, extractCustomerSubdomain,
 } from '../../services/streamApi'
+import { fetchCourseCatalog, getLocalCourseCatalog, saveCourseCatalog } from '../../services/courseCatalog'
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 function fmtDuration(sec) {
@@ -122,7 +123,7 @@ function UploadModal({ courses, onUploaded, onClose }) {
       if (assignTo) assignVideoToLesson(assignTo === 'trial' ? 'trial' : Number(assignTo), uid)
 
       setPhase('done')
-      onUploaded()
+      await onUploaded()
     } catch (e) {
       setErrorMsg(e.message)
       setPhase('error')
@@ -262,7 +263,7 @@ function AssignModal({ video, courses, assignments, onSave, onClose }) {
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>取消</button>
-          <button className="btn btn-primary" onClick={() => { onSave(video.uid, selected); onClose() }}>
+          <button className="btn btn-primary" onClick={async () => { await onSave(video.uid, selected); onClose() }}>
             儲存
           </button>
         </div>
@@ -289,6 +290,12 @@ export default function VideoAdmin() {
   }
 
   const flash = t => { setMsg(t); setTimeout(() => setMsg(''), 3500) }
+  const syncCatalog = async () => {
+    const synced = await saveCourseCatalog(getLocalCourseCatalog())
+    setVideos(synced.cfVideos)
+    setAssignments(synced.videoAssignments)
+    return synced
+  }
 
   // Sync with CF Stream API
   const syncWithCF = async () => {
@@ -311,6 +318,7 @@ export default function VideoAdmin() {
         })
       }
       refreshLocal()
+      await syncCatalog()
       flash('已與 Cloudflare Stream 同步')
     } catch (e) {
       flash(`同步失敗：${e.message}`)
@@ -321,7 +329,15 @@ export default function VideoAdmin() {
 
   // Poll status for "processing" videos
   useEffect(() => {
-    refreshLocal()
+    fetchCourseCatalog()
+      .then(catalog => {
+        setVideos(catalog.cfVideos)
+        setAssignments(catalog.videoAssignments)
+      })
+      .catch(err => {
+        console.error('Course catalog load failed:', err)
+        refreshLocal()
+      })
     const hasProcessing = getCFVideos().some(v =>
       v.status === 'queued' || v.status === 'inprogress')
     if (hasProcessing && isConfigured()) {
@@ -337,10 +353,11 @@ export default function VideoAdmin() {
     }
     deleteCFVideoLocal(uid)
     refreshLocal()
+    try { await syncCatalog() } catch (e) { flash(`已刪除本機影片，但同步失敗：${e.message}`); return }
     flash('已刪除影片')
   }
 
-  const handleAssignSave = (videoUid, assignKey) => {
+  const handleAssignSave = async (videoUid, assignKey) => {
     // Remove old assignment for this video first
     const current = getVideoAssignments()
     Object.keys(current).forEach(k => {
@@ -352,6 +369,7 @@ export default function VideoAdmin() {
       assignVideoToLesson(target, videoUid)
     }
     refreshLocal()
+    await syncCatalog()
     flash('影片指定已更新')
   }
 
@@ -508,7 +526,7 @@ export default function VideoAdmin() {
       {showUpload && (
         <UploadModal
           courses={courses}
-          onUploaded={() => { refreshLocal(); syncWithCF() }}
+          onUploaded={async () => { refreshLocal(); await syncCatalog(); await syncWithCF() }}
           onClose={() => setShowUpload(false)}
         />
       )}
