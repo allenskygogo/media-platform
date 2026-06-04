@@ -467,6 +467,9 @@ function Footer() {
         <a href="#" className="hp-footer-link">使用條款</a>
         <a href="#" className="hp-footer-link">聯繫我們</a>
       </div>
+      <p className="hp-footer-contact">
+        聯絡 Email：raysdl.studio@gmail.com　電話：07-2367660
+      </p>
     </footer>
   )
 }

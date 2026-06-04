@@ -924,8 +924,11 @@ export default function SalesPage() {
           <nav>
             <a href="#privacy">隱私政策</a>
             <a href="#terms">使用條款</a>
-            <a href="mailto:hello@topleveltraffic.example">聯繫我們</a>
+            <a href="mailto:raysdl.studio@gmail.com">聯繫我們</a>
           </nav>
+          <p className="sp2-footer-contact">
+            聯絡 Email：raysdl.studio@gmail.com　電話：07-2367660
+          </p>
         </div>
       </footer>
 
