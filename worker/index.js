@@ -19,7 +19,7 @@
  *   ECPAY_HASH_IV                 — ECPay HashIV
  *   ECPAY_ENV                     — stage or production
  *   PUBLIC_APP_URL                — public frontend base URL
- *   WORKER_PUBLIC_URL             — public Worker base URL for ECPay ReturnURL
+ *   WORKER_PUBLIC_URL             — public Worker base URL for ECPay ReturnURL/OrderResultURL
  */
 
 const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
@@ -297,6 +297,11 @@ export default {
       // POST /api/ecpay/return → ECPay server-side payment notification
       if (path === '/api/ecpay/return' && request.method === 'POST') {
         return await handleEcpayReturn(request, env)
+      }
+
+      // POST /api/ecpay/result → ECPay client-side payment result redirect
+      if (path === '/api/ecpay/result' && request.method === 'POST') {
+        return await handleEcpayResult(request, env)
       }
 
       // GET /api/admin/orders → list checkout orders
@@ -884,7 +889,7 @@ async function handleCreateCheckoutOrder(request, env) {
     amount,
     currency: 'TWD',
     status: 'pending',
-    provider: 'manual',
+    provider: ecpayConfigured(env) ? 'ecpay' : 'manual',
     notes: 'Created from sales checkout form',
   })
   const ecpay = await buildEcpayCheckout(order, env)
@@ -950,6 +955,17 @@ async function handleEcpayReturn(request, env) {
     updated_at: new Date().toISOString(),
   })
   return new Response('1|OK', { status: 200, headers: CORS })
+}
+
+async function handleEcpayResult(request, env) {
+  const payload = await parseEcpayPayload(request)
+  const merchantTradeNo = String(payload.MerchantTradeNo || '').trim()
+  const rtnCode = String(payload.RtnCode || '').trim()
+  const query = new URLSearchParams({
+    order: merchantTradeNo,
+    status: rtnCode === '1' ? 'paid' : 'pending',
+  })
+  return Response.redirect(`${getPublicBaseUrl(env)}/checkout/result?${query.toString()}`, 303)
 }
 
 async function handleListOrders(request, env) {
@@ -1338,7 +1354,7 @@ async function buildEcpayCheckout(order, env) {
     TradeDesc: 'TOP LEVEL TRAFFIC course checkout',
     ItemName: planItemName(order.plan_id),
     ReturnURL: `${getWorkerBaseUrl(env)}/api/ecpay/return`,
-    OrderResultURL: `${getPublicBaseUrl(env)}/dashboard/profile`,
+    OrderResultURL: `${getWorkerBaseUrl(env)}/api/ecpay/result`,
     ClientBackURL: getPublicBaseUrl(env),
     ChoosePayment: env.ECPAY_CHOOSE_PAYMENT || 'Credit',
     EncryptType: '1',
