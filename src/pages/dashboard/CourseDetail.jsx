@@ -11,6 +11,7 @@ import LessonPlayer  from '../../components/LessonPlayer'
 import HomeworkPanel from '../../components/HomeworkPanel'
 
 const CAT_EMOJI = { '影音創作':'🎬', '社群媒體':'📱', '音頻創作':'🎙️', '商業變現':'💰', '數據分析':'📊', 'AI 應用':'🤖' }
+const COURSE_LEVEL_LABEL = { basic: '體驗', standard: '達人', advanced: '私塾' }
 
 // Only standard/advanced tier students get the forced-watch + homework system
 const NEEDS_HOMEWORK = ['standard', 'advanced']
@@ -216,7 +217,7 @@ export default function CourseDetail() {
               <div className="card-body">
                 <div className="course-meta" style={{ marginBottom:12 }}>
                   <span className={`badge badge-${course.tier}`}>
-                    {course.tier === 'basic' ? '🎓 基礎' : '🏆 進階'}
+                    {COURSE_LEVEL_LABEL[course.tier] || '達人'}
                   </span>
                   <span className="tag">{course.category}</span>
                 </div>

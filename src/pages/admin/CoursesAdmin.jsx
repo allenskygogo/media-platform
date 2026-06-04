@@ -9,7 +9,13 @@ import {
 import { getUploadUrl, uploadFileToCF, getVideo, listVideos, deleteVideo, extractCustomerSubdomain, isConfigured as workerConfigured } from '../../services/streamApi'
 
 const CATEGORIES = ['影音創作', '社群媒體', '音頻創作', '商業變現', '數據分析', 'AI 應用']
-const EMPTY_COURSE = { title:'', description:'', tier:'basic', category:'影音創作', instructor:'', duration:'', published:true }
+const COURSE_LEVELS = {
+  basic: { label: '體驗', accessLevel: 'trial' },
+  standard: { label: '達人', accessLevel: 'standard' },
+  advanced: { label: '私塾', accessLevel: 'advanced' },
+}
+const COURSE_LEVEL_ORDER = ['basic', 'standard', 'advanced']
+const EMPTY_COURSE = { title:'', description:'', tier:'basic', accessLevel:'trial', category:'影音創作', instructor:'', duration:'', published:true }
 const EMPTY_LESSON = { title:'', duration:'', free:false }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -24,6 +30,15 @@ function StatusBadge({ status }) {
   }
   const c = cfg[status] || cfg.none
   return <span style={{ background:c.bg, color:c.color, padding:'2px 10px', borderRadius:999, fontSize:11, fontWeight:700 }}>{c.label}</span>
+}
+
+function courseLevelLabel(tier) {
+  return COURSE_LEVELS[tier]?.label || '達人'
+}
+
+function courseFormWithAccess(form) {
+  const accessLevel = COURSE_LEVELS[form.tier]?.accessLevel || 'standard'
+  return { ...form, accessLevel }
 }
 
 function compressImage(file, maxW=1200, quality=0.8) {
@@ -267,17 +282,18 @@ export default function CoursesAdmin() {
   const openNewCourse = () => { setEditCourseId(null); setCourseForm(EMPTY_COURSE); setShowCourseModal(true) }
   const openEditCourse = (c) => {
     setEditCourseId(c.id)
-    setCourseForm({ title:c.title, description:c.description, tier:c.tier, category:c.category, instructor:c.instructor, duration:c.duration, published:c.published })
+    setCourseForm({ title:c.title, description:c.description, tier:c.tier, accessLevel:c.accessLevel, category:c.category, instructor:c.instructor, duration:c.duration, published:c.published })
     setShowCourseModal(true)
   }
   const saveCourse = () => {
     if (!courseForm.title.trim() || !courseForm.instructor.trim()) return
+    const payload = courseFormWithAccess(courseForm)
     let updated
     if (editCourseId) {
-      updated = courses.map(c => c.id===editCourseId ? {...c,...courseForm} : c)
+      updated = courses.map(c => c.id===editCourseId ? {...c,...payload} : c)
       flash('課程已更新')
     } else {
-      updated = [...courses, { ...courseForm, id:Date.now(), students:0, rating:0, ratingCount:0, createdAt:new Date().toISOString().split('T')[0], lessons:[] }]
+      updated = [...courses, { ...payload, id:Date.now(), students:0, rating:0, ratingCount:0, createdAt:new Date().toISOString().split('T')[0], lessons:[] }]
       flash('新課程已新增')
     }
     saveCourses(updated); setCourses(updated); setShowCourseModal(false)
@@ -360,31 +376,46 @@ export default function CoursesAdmin() {
         </div>
       )}
 
-      <div className="courses-admin-grid">
-        {courses.map(c => {
-          const lessons = c.lessons || []
-          const uploaded = lessons.filter(l => getVideoForLesson(l.id)).length
-          return (
-            <div key={c.id} className="course-admin-card">
-              <div className="course-admin-card-header">
-                <span className={`badge badge-${c.tier}`}>{c.tier==='basic'?'初階':'進階'}</span>
-                <span className={`badge ${c.published?'badge-published':'badge-draft'}`}>{c.published?'上架':'草稿'}</span>
-              </div>
-              <h3 className="course-admin-card-title">{c.title}</h3>
-              <p className="course-admin-card-meta">{c.instructor} · {lessons.length} 堂 · {c.duration||'—'}</p>
-              <div className="course-admin-card-stats">
-                <span>{uploaded}/{lessons.length} 已上傳</span>
-                <span>{c.students.toLocaleString()} 人</span>
-              </div>
-              <div className="course-admin-card-actions">
-                <button className="btn btn-primary btn-sm" onClick={() => enterCourse(c)}>進入課程 →</button>
-                <button className="btn btn-secondary btn-sm" onClick={() => openEditCourse(c)}>編輯</button>
-                <button className="btn btn-danger btn-sm" onClick={() => setDeleteId(c.id)}>刪除</button>
-              </div>
+      {COURSE_LEVEL_ORDER.map(level => {
+        const groupCourses = courses.filter(c => c.tier === level)
+        return (
+          <section key={level} style={{ marginBottom: 28 }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+              <h2 style={{ fontSize:16, fontWeight:800 }}>{courseLevelLabel(level)}課程</h2>
+              <span style={{ fontSize:12, color:'var(--gray-500)' }}>{groupCourses.length} 門</span>
             </div>
-          )
-        })}
-      </div>
+            {groupCourses.length === 0 ? (
+              <div className="card" style={{ padding:18, color:'var(--gray-400)', fontSize:13 }}>尚未建立{courseLevelLabel(level)}課程</div>
+            ) : (
+              <div className="courses-admin-grid">
+                {groupCourses.map(c => {
+                  const lessons = c.lessons || []
+                  const uploaded = lessons.filter(l => getVideoForLesson(l.id)).length
+                  return (
+                    <div key={c.id} className="course-admin-card">
+                      <div className="course-admin-card-header">
+                        <span className={`badge badge-${c.tier}`}>{courseLevelLabel(c.tier)}</span>
+                        <span className={`badge ${c.published?'badge-published':'badge-draft'}`}>{c.published?'上架':'草稿'}</span>
+                      </div>
+                      <h3 className="course-admin-card-title">{c.title}</h3>
+                      <p className="course-admin-card-meta">{c.instructor} · {lessons.length} 堂 · {c.duration||'—'}</p>
+                      <div className="course-admin-card-stats">
+                        <span>{uploaded}/{lessons.length} 已上傳</span>
+                        <span>{c.students.toLocaleString()} 人</span>
+                      </div>
+                      <div className="course-admin-card-actions">
+                        <button className="btn btn-primary btn-sm" onClick={() => enterCourse(c)}>進入課程 →</button>
+                        <button className="btn btn-secondary btn-sm" onClick={() => openEditCourse(c)}>編輯</button>
+                        <button className="btn btn-danger btn-sm" onClick={() => setDeleteId(c.id)}>刪除</button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        )
+      })}
 
       {/* Course Form Modal */}
       {showCourseModal && (
@@ -405,10 +436,11 @@ export default function CoursesAdmin() {
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
                 <div className="form-group">
-                  <label className="form-label">會員等級</label>
-                  <select className="form-select" value={courseForm.tier} onChange={e=>setCourseForm(f=>({...f,tier:e.target.value}))}>
-                    <option value="basic">初階</option>
-                    <option value="advanced">進階</option>
+                  <label className="form-label">課程方案</label>
+                  <select className="form-select" value={courseForm.tier} onChange={e=>setCourseForm(f=>({...f,tier:e.target.value,accessLevel:COURSE_LEVELS[e.target.value]?.accessLevel||'standard'}))}>
+                    <option value="basic">體驗</option>
+                    <option value="standard">達人</option>
+                    <option value="advanced">私塾</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -488,7 +520,7 @@ export default function CoursesAdmin() {
         <div className="card-body" style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:16 }}>
           <div>
             <div style={{ display:'flex', gap:8, marginBottom:8 }}>
-              <span className={`badge badge-${course?.tier}`}>{course?.tier==='basic'?'初階':'進階'}</span>
+              <span className={`badge badge-${course?.tier}`}>{courseLevelLabel(course?.tier)}</span>
               <span className={`badge ${course?.published?'badge-published':'badge-draft'}`}>{course?.published?'上架':'草稿'}</span>
             </div>
             <h2 style={{ fontWeight:800, fontSize:20, marginBottom:4 }}>{course?.title}</h2>
@@ -631,10 +663,11 @@ export default function CoursesAdmin() {
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
                 <div className="form-group">
-                  <label className="form-label">會員等級</label>
-                  <select className="form-select" value={courseForm.tier} onChange={e=>setCourseForm(f=>({...f,tier:e.target.value}))}>
-                    <option value="basic">初階</option>
-                    <option value="advanced">進階</option>
+                  <label className="form-label">課程方案</label>
+                  <select className="form-select" value={courseForm.tier} onChange={e=>setCourseForm(f=>({...f,tier:e.target.value,accessLevel:COURSE_LEVELS[e.target.value]?.accessLevel||'standard'}))}>
+                    <option value="basic">體驗</option>
+                    <option value="standard">達人</option>
+                    <option value="advanced">私塾</option>
                   </select>
                 </div>
                 <div className="form-group">

@@ -17,7 +17,16 @@ export const DEFAULT_PRICING = {
   tokenExpiryHours:      3,    // Cloudflare Stream signed token TTL (hours)
 }
 
-// accessLevel: 'trial' = basic+, 'standard' = standard+, 'advanced' = advanced only
+// accessLevel: 'trial' = 體驗+, 'standard' = 達人+, 'advanced' = 私塾 only
+const COURSE_ACCESS_TO_TIER = { trial: 'basic', standard: 'standard', advanced: 'advanced' }
+const COURSE_TIER_TO_ACCESS = { basic: 'trial', standard: 'standard', advanced: 'advanced' }
+
+function normalizeCourseAccess(course) {
+  const accessLevel = course.accessLevel || COURSE_TIER_TO_ACCESS[course.tier] || 'standard'
+  const tier = COURSE_ACCESS_TO_TIER[accessLevel] || course.tier || 'standard'
+  return { ...course, tier, accessLevel }
+}
+
 const defaultCourses = [
   {
     id: 1,
@@ -56,7 +65,7 @@ const defaultCourses = [
     id: 3,
     title: 'Podcast 製作與品牌建立',
     description: '從設備挑選、錄音技巧、後製剪輯到上架各大平台，打造專業 Podcast 頻道。',
-    tier: 'basic', accessLevel: 'standard',
+    tier: 'standard', accessLevel: 'standard',
     category: '音頻創作', instructor: '林建宏老師',
     duration: '2小時50分', students: 543, rating: 4.6, ratingCount: 98,
     published: true, createdAt: '2024-02-20',
@@ -224,7 +233,9 @@ export function initMockData() {
 }
 
 export function getUsers() { return JSON.parse(localStorage.getItem(USERS_KEY) || '[]') }
-export function getCourses() { return JSON.parse(localStorage.getItem(COURSES_KEY) || '[]') }
+export function getCourses() {
+  return JSON.parse(localStorage.getItem(COURSES_KEY) || '[]').map(normalizeCourseAccess)
+}
 export function getProjects() { return JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]') }
 export function getBookings() { return JSON.parse(localStorage.getItem(BOOKINGS_KEY) || '[]') }
 export function saveUsers(u) { localStorage.setItem(USERS_KEY, JSON.stringify(u)) }
@@ -237,7 +248,8 @@ const TIER_ORDER = { basic: 1, standard: 2, advanced: 3, managed: 0 }
 const ACCESS_ORDER = { trial: 1, standard: 2, advanced: 3 }
 
 export function canAccessCourse(userTier, courseAccessLevel) {
-  return (TIER_ORDER[userTier] || 0) >= (ACCESS_ORDER[courseAccessLevel] || 2)
+  const accessLevel = courseAccessLevel || COURSE_TIER_TO_ACCESS[userTier] || 'standard'
+  return (TIER_ORDER[userTier] || 0) >= (ACCESS_ORDER[accessLevel] || 2)
 }
 
 export function canAccessAI(userTier) { return userTier === 'advanced' }
