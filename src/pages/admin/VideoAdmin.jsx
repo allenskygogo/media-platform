@@ -16,7 +16,7 @@ import {
   getCourses,
 } from '../../data/mockData'
 import {
-  isConfigured, getUploadUrl, uploadFileToCF,
+  isConfigured, uploadVideoToCF,
   listVideos, deleteVideo, getVideo, extractCustomerSubdomain,
 } from '../../services/streamApi'
 import { fetchCourseCatalog, getLocalCourseCatalog, saveCourseCatalog } from '../../services/courseCatalog'
@@ -89,13 +89,11 @@ function UploadModal({ courses, onUploaded, onClose }) {
     setPhase('uploading')
     setProgress(0)
     try {
-      // Step 1: Get upload URL
-      const res = await getUploadUrl(name || file.name, file.size)
-      if (!res?.result?.uploadURL) throw new Error('無法取得上傳連結')
-      const { uploadURL, uid } = res.result
-
-      // Step 2: Upload file directly to CF
-      await uploadFileToCF(uploadURL, file, setProgress)
+      // Step 1-2: Upload file directly to CF Stream.
+      // TUS is used first; if the browser/network rejects it, the client retries
+      // with Cloudflare's form direct-upload URL.
+      const { uid } = await uploadVideoToCF(name || file.name, file, setProgress)
+      setProgress(100)
 
       // Step 3: Poll for video details (may take a few seconds)
       let video = null

@@ -376,8 +376,9 @@ async function handleUploadStart(request, env) {
   const uploadLength = Number(body.size || body.uploadLength || 0)
   const name = String(body.name || 'Untitled').trim() || 'Untitled'
   const maxDurationSeconds = Number(body.maxDurationSeconds || 3600)
+  const uploadMethod = String(body.uploadMethod || 'tus').toLowerCase()
 
-  if (uploadLength > 0) {
+  if (uploadLength > 0 && uploadMethod !== 'form') {
     const metadata = [
       ['name', name],
       ['requiresignedurls', 'true'],

@@ -31,10 +31,10 @@ function workerFetch(path, options = {}) {
  * Step 1: Ask the worker for a one-time direct-upload URL.
  * Returns { result: { uploadURL, uid } }
  */
-export function getUploadUrl(name, size) {
+export function getUploadUrl(name, size, options = {}) {
   return workerFetch('/api/upload/start', {
     method: 'POST',
-    body: JSON.stringify({ name, size }),
+    body: JSON.stringify({ name, size, ...options }),
   }).catch(error => {
     if (/Storage capacity exceeded/i.test(error.message)) {
       throw new Error('Cloudflare Stream 容量已滿，請先刪除舊影片或升級 Stream 額度後再上傳。')
@@ -48,11 +48,15 @@ export function getUploadUrl(name, size) {
  * Uses XHR so progress events work.
  * Returns a Promise that resolves when the upload is complete.
  */
-export function uploadFileToCF(uploadURL, file, onProgress) {
+export function uploadFileToCF(uploadURL, file, onProgress, options = {}) {
+  if (options.tus === false) {
+    return uploadFileToCFForm(uploadURL, file, onProgress)
+  }
+
   return new Promise((resolve, reject) => {
     const upload = new tus.Upload(file, {
       uploadUrl: uploadURL,
-      chunkSize: 25 * 1024 * 1024,
+      chunkSize: 8 * 1024 * 1024,
       retryDelays: [0, 3000, 5000, 10000, 20000],
       removeFingerprintOnSuccess: true,
       metadata: {
@@ -60,7 +64,10 @@ export function uploadFileToCF(uploadURL, file, onProgress) {
         filetype: file.type || 'video/mp4',
       },
       onError: error => {
-        reject(new Error(error?.message || '影片上傳失敗，請確認網路連線後再重試。'))
+        const status = error?.originalResponse?.getStatus?.()
+        const body = error?.originalResponse?.getBody?.()
+        const detail = [status && `HTTP ${status}`, body].filter(Boolean).join('：')
+        reject(new Error(detail || error?.message || '影片上傳失敗，請確認網路連線後再重試。'))
       },
       onProgress: (bytesUploaded, bytesTotal) => {
         if (bytesTotal > 0 && onProgress) {
@@ -72,6 +79,54 @@ export function uploadFileToCF(uploadURL, file, onProgress) {
 
     upload.start()
   })
+}
+
+function uploadFileToCFForm(uploadURL, file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    const formData = new FormData()
+    formData.append('file', file, file.name)
+
+    xhr.open('POST', uploadURL)
+    xhr.upload.onprogress = event => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(Math.round((event.loaded / event.total) * 100))
+      }
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve()
+        return
+      }
+      reject(new Error(xhr.responseText || `Cloudflare Stream 表單上傳失敗：HTTP ${xhr.status}`))
+    }
+    xhr.onerror = () => reject(new Error('影片上傳網路連線失敗，請換一個網路或重新整理後再試。'))
+    xhr.send(formData)
+  })
+}
+
+export async function uploadVideoToCF(name, file, onProgress) {
+  const tusUpload = await getUploadUrl(name || file.name, file.size, { uploadMethod: 'tus' })
+  if (!tusUpload?.result?.uploadURL || !tusUpload?.result?.uid) {
+    throw new Error('無法取得上傳連結')
+  }
+
+  try {
+    await uploadFileToCF(tusUpload.result.uploadURL, file, onProgress, { tus: true })
+    return { uid: tusUpload.result.uid, uploadMethod: 'tus' }
+  } catch (tusError) {
+    if (onProgress) onProgress(0)
+    if (tusUpload.result.uid) {
+      await deleteVideo(tusUpload.result.uid).catch(() => {})
+    }
+
+    const formUpload = await getUploadUrl(name || file.name, file.size, { uploadMethod: 'form' })
+    if (!formUpload?.result?.uploadURL || !formUpload?.result?.uid) {
+      throw tusError
+    }
+    await uploadFileToCF(formUpload.result.uploadURL, file, onProgress, { tus: false })
+    return { uid: formUpload.result.uid, uploadMethod: 'form' }
+  }
 }
 
 // ── Video library ──────────────────────────────────────────────────────────

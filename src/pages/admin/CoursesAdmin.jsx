@@ -6,7 +6,7 @@ import {
   getVideoAssignments,
   getHomeworkSpec, saveHomeworkSpec,
 } from '../../data/mockData'
-import { getUploadUrl, uploadFileToCF, getVideo, listVideos, deleteVideo, extractCustomerSubdomain, isConfigured as workerConfigured } from '../../services/streamApi'
+import { uploadVideoToCF, getVideo, listVideos, deleteVideo, extractCustomerSubdomain, isConfigured as workerConfigured } from '../../services/streamApi'
 import { getLocalCourseCatalog, saveCourseCatalog, seedCourseCatalogIfEmpty } from '../../services/courseCatalog'
 
 const CATEGORIES = ['影音創作', '社群媒體', '音頻創作', '商業變現', '數據分析', 'AI 應用']
@@ -85,14 +85,8 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
     try {
       setPhase('uploading'); setErrMsg(''); setPct(0)
 
-      // 1. Get direct upload URL from Worker
       const label = `${lessonTitle || 'Lesson'} - ${name}`
-      const res   = await getUploadUrl(label, file.size)
-      if (!res?.result?.uploadURL || !res?.result?.uid) throw new Error('無法取得上傳連結')
-      const { uploadURL, uid } = res.result
-
-      // 2. Upload file directly to CF Stream
-      await uploadFileToCF(uploadURL, file, setPct)
+      const { uid } = await uploadVideoToCF(label, file, setPct)
       setPct(100)
 
       // 3. Poll for video details (up to 30s)
