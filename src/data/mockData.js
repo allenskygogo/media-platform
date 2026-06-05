@@ -18,14 +18,29 @@ export const DEFAULT_PRICING = {
   tokenExpiryHours:      3,    // Cloudflare Stream signed token TTL (hours)
 }
 
-// accessLevel: 'trial' = 體驗+, 'standard' = 達人+, 'advanced' = 私塾 only
+// accessLevel: legacy single value. accessLevels: explicit multi-select audience.
+// 'trial' = 體驗, 'standard' = 達人, 'advanced' = 私塾.
 const COURSE_ACCESS_TO_TIER = { trial: 'basic', standard: 'standard', advanced: 'advanced' }
 const COURSE_TIER_TO_ACCESS = { basic: 'trial', standard: 'standard', advanced: 'advanced' }
+const COURSE_ACCESS_LEVELS = ['trial', 'standard', 'advanced']
+
+function normalizeCourseAccessLevels(course) {
+  if (Array.isArray(course.accessLevels)) {
+    const exactLevels = course.accessLevels.filter(level => COURSE_ACCESS_LEVELS.includes(level))
+    return exactLevels.length > 0 ? [...new Set(exactLevels)] : [COURSE_TIER_TO_ACCESS[course.tier] || 'standard']
+  }
+  const legacyAccess = course.accessLevel || COURSE_TIER_TO_ACCESS[course.tier] || 'standard'
+  const startIndex = COURSE_ACCESS_LEVELS.indexOf(legacyAccess)
+  const raw = startIndex >= 0 ? COURSE_ACCESS_LEVELS.slice(startIndex) : [legacyAccess]
+  const levels = raw.filter(level => COURSE_ACCESS_LEVELS.includes(level))
+  return levels.length > 0 ? [...new Set(levels)] : [COURSE_TIER_TO_ACCESS[course.tier] || 'standard']
+}
 
 function normalizeCourseAccess(course) {
-  const accessLevel = course.accessLevel || COURSE_TIER_TO_ACCESS[course.tier] || 'standard'
+  const accessLevels = normalizeCourseAccessLevels(course)
+  const accessLevel = accessLevels[0] || course.accessLevel || COURSE_TIER_TO_ACCESS[course.tier] || 'standard'
   const tier = COURSE_ACCESS_TO_TIER[accessLevel] || course.tier || 'standard'
-  return { ...course, tier, accessLevel }
+  return { ...course, tier, accessLevel, accessLevels }
 }
 
 const defaultCourses = [
@@ -256,8 +271,13 @@ const TIER_ORDER = { basic: 1, standard: 2, advanced: 3, managed: 0 }
 const ACCESS_ORDER = { trial: 1, standard: 2, advanced: 3 }
 
 export function canAccessCourse(userTier, courseAccessLevel) {
-  const accessLevel = courseAccessLevel || COURSE_TIER_TO_ACCESS[userTier] || 'standard'
-  return (TIER_ORDER[userTier] || 0) >= (ACCESS_ORDER[accessLevel] || 2)
+  if (Array.isArray(courseAccessLevel)) {
+    return courseAccessLevel.includes(COURSE_TIER_TO_ACCESS[userTier])
+  }
+  const allowedLevels = [courseAccessLevel || COURSE_TIER_TO_ACCESS[userTier] || 'standard']
+  const userAccessLevel = COURSE_TIER_TO_ACCESS[userTier]
+  if (userAccessLevel && allowedLevels.includes(userAccessLevel)) return true
+  return (TIER_ORDER[userTier] || 0) >= (ACCESS_ORDER[allowedLevels[0]] || 2)
 }
 
 export function canAccessAI(userTier) { return userTier === 'advanced' }

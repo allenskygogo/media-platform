@@ -6,6 +6,7 @@ import {
 import { supabase, hasSupabase, allowLocalFallback } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const PLAN_TO_TIER = {
   trial: 'basic',
@@ -42,6 +43,7 @@ const buildUserFromSupabase = (profile, membership) => {
     createdAt: toDateString(profile.created_at) || '',
     status: profile.status,
     expiresAt: toDateString(membership?.expires_at),
+    startsAt: membership?.starts_at || null,
     trialCompletedAt: membership?.trial_completed_at || null,
     courseCompletedAt: null,
     source: 'supabase',
@@ -124,10 +126,35 @@ export function AuthProvider({ children }) {
 
     if (membershipError) throw membershipError
     if (profile.role === 'student' && !membership) throw new Error('會員尚未開通，請聯絡管理員')
-    if (membership?.expires_at && new Date(membership.expires_at).getTime() < Date.now()) {
+    const activeMembership = await startMembershipIfNeeded(membership)
+    if (activeMembership?.expires_at && new Date(activeMembership.expires_at).getTime() < Date.now()) {
       throw new Error('會員效期已到期，請聯絡管理員續約')
     }
-    return buildUserFromSupabase(profile, membership)
+    return buildUserFromSupabase(profile, activeMembership)
+  }
+
+  const startMembershipIfNeeded = async (membership) => {
+    if (!membership || membership.expires_at || membership.plan_id === 'managed') return membership
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) return membership
+      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/memberships/start`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || data.success === false || !data.membership) return membership
+      return {
+        ...membership,
+        starts_at: data.membership.startsAt || membership.starts_at,
+        expires_at: data.membership.expiresAt || membership.expires_at,
+        trial_completed_at: data.membership.trialCompletedAt || membership.trial_completed_at,
+      }
+    } catch (error) {
+      console.error('Membership start failed:', error)
+      return membership
+    }
   }
 
   const login = async (email, password) => {
@@ -146,7 +173,26 @@ export function AuthProvider({ children }) {
     const user = users.find(u => u.email === email && u.password === password)
     if (!user) throw new Error('帳號或密碼錯誤')
     if (user.status === 'inactive') throw new Error('帳號已停用，請聯絡管理員')
-    return persist(user)
+    return persist(startLocalMembershipIfNeeded(user))
+  }
+
+  const startLocalMembershipIfNeeded = (user) => {
+    if (user.role !== 'student' || user.tier === 'managed' || user.expiresAt) return user
+    const days = TIER_META[user.tier]?.days
+    if (!days) return user
+    const today = new Date().toISOString().split('T')[0]
+    const users = getUsers()
+    const idx = users.findIndex(item => item.id === user.id)
+    const nextUser = {
+      ...user,
+      startsAt: new Date().toISOString(),
+      expiresAt: addDays(today, days),
+    }
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], ...nextUser }
+      saveUsers(users)
+    }
+    return nextUser
   }
 
   const logout = async () => {

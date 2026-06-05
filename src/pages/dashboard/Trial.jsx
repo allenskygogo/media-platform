@@ -271,26 +271,11 @@ export default function Trial() {
   const [error, setError]       = useState('')
 
   useEffect(() => {
-    let cancelled = false
-
-    const run = async () => {
-    // Only for basic tier
-    if (currentUser.tier !== 'basic') { navigate('/dashboard', { replace: true }); return }
-      try {
-        setError('')
-        const nextSession = await loadTrialSession(currentUser.id)
-        if (cancelled) return
-        setSession(nextSession)
-        setProgress(getTrialProgress(currentUser.id))
-      } catch (err) {
-        if (!cancelled) setError(err.message || '讀取體驗課預約資料失敗')
-      } finally {
-        if (!cancelled) setLoaded(true)
-      }
+    if (currentUser.tier !== 'basic') {
+      navigate('/dashboard', { replace: true })
+      return
     }
-
-    run()
-    return () => { cancelled = true }
+    navigate('/dashboard/trial-player', { replace: true })
   }, [currentUser])
 
   if (!loaded) return null

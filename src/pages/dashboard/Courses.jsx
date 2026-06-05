@@ -6,6 +6,19 @@ import { fetchCourseCatalog } from '../../services/courseCatalog'
 
 const CAT_EMOJI = { '影音創作': '🎬', '社群媒體': '📱', '音頻創作': '🎙️', '商業變現': '💰', '數據分析': '📊', 'AI 應用': '🤖' }
 const COURSE_LEVEL_LABEL = { basic: '體驗', standard: '達人', advanced: '私塾' }
+const ACCESS_LEVEL_LABEL = { trial: '體驗', standard: '達人', advanced: '私塾' }
+const ACCESS_LEVEL_ORDER = ['trial', 'standard', 'advanced']
+
+function courseAccessLevels(course) {
+  if (Array.isArray(course.accessLevels) && course.accessLevels.length > 0) return course.accessLevels
+  const legacyAccess = course.accessLevel || 'standard'
+  const startIndex = ACCESS_LEVEL_ORDER.indexOf(legacyAccess)
+  return startIndex >= 0 ? ACCESS_LEVEL_ORDER.slice(startIndex) : [legacyAccess]
+}
+
+function courseLevelText(course) {
+  return courseAccessLevels(course).map(level => ACCESS_LEVEL_LABEL[level]).filter(Boolean).join(' / ') || COURSE_LEVEL_LABEL[course.tier] || '達人'
+}
 
 export default function CoursesPage() {
   const { currentUser } = useAuth()
@@ -24,7 +37,7 @@ export default function CoursesPage() {
     return matchCat && matchSearch
   })
 
-  const accessible = (c) => canAccessCourse(currentUser.tier, c.accessLevel)
+  const accessible = (c) => canAccessCourse(currentUser.tier, courseAccessLevels(c))
 
   useEffect(() => {
     let cancelled = false
@@ -83,7 +96,7 @@ export default function CoursesPage() {
                 </div>
                 <div className="course-body">
                   <div className="course-meta">
-                    <span className={`badge badge-${course.tier}`}>{COURSE_LEVEL_LABEL[course.tier] || '達人'}</span>
+                    <span className={`badge badge-${course.tier}`}>{courseLevelText(course)}</span>
                     <span className="tag">{course.category}</span>
                     {!ok && <span className="tag" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }}>🔒 {LOCK_LABEL[course.accessLevel] || '需升級'}</span>}
                   </div>

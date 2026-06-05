@@ -15,8 +15,13 @@ const COURSE_LEVELS = {
   standard: { label: '達人', accessLevel: 'standard' },
   advanced: { label: '私塾', accessLevel: 'advanced' },
 }
+const ACCESS_LEVELS = [
+  { key: 'trial', tier: 'basic', label: '體驗' },
+  { key: 'standard', tier: 'standard', label: '達人' },
+  { key: 'advanced', tier: 'advanced', label: '私塾' },
+]
 const COURSE_LEVEL_ORDER = ['basic', 'standard', 'advanced']
-const EMPTY_COURSE = { title:'', description:'', tier:'basic', accessLevel:'trial', category:'影音創作', instructor:'', duration:'', published:true }
+const EMPTY_COURSE = { title:'', description:'', tier:'basic', accessLevel:'trial', accessLevels:['trial'], category:'影音創作', instructor:'', duration:'', published:true }
 const EMPTY_LESSON = { title:'', duration:'', free:false }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -37,9 +42,71 @@ function courseLevelLabel(tier) {
   return COURSE_LEVELS[tier]?.label || '達人'
 }
 
+function getCourseAccessLevels(course = {}) {
+  if (Array.isArray(course.accessLevels)) {
+    const exactLevels = course.accessLevels.filter(level => ACCESS_LEVELS.some(item => item.key === level))
+    return exactLevels.length > 0 ? [...new Set(exactLevels)] : [COURSE_LEVELS[course.tier]?.accessLevel || 'standard']
+  }
+  const legacyAccess = course.accessLevel || COURSE_LEVELS[course.tier]?.accessLevel || 'standard'
+  const keys = ACCESS_LEVELS.map(item => item.key)
+  const startIndex = keys.indexOf(legacyAccess)
+  const raw = startIndex >= 0 ? keys.slice(startIndex) : [legacyAccess]
+  const levels = raw.filter(level => ACCESS_LEVELS.some(item => item.key === level))
+  return levels.length > 0 ? [...new Set(levels)] : [COURSE_LEVELS[course.tier]?.accessLevel || 'standard']
+}
+
+function primaryTierFromAccessLevels(accessLevels = []) {
+  const first = accessLevels[0] || 'standard'
+  return ACCESS_LEVELS.find(item => item.key === first)?.tier || 'standard'
+}
+
+function courseAccessLabel(course = {}) {
+  return getCourseAccessLevels(course)
+    .map(level => ACCESS_LEVELS.find(item => item.key === level)?.label)
+    .filter(Boolean)
+    .join(' / ') || courseLevelLabel(course.tier)
+}
+
 function courseFormWithAccess(form) {
-  const accessLevel = COURSE_LEVELS[form.tier]?.accessLevel || 'standard'
-  return { ...form, accessLevel }
+  const accessLevels = getCourseAccessLevels(form)
+  const accessLevel = accessLevels[0] || 'standard'
+  const tier = primaryTierFromAccessLevels(accessLevels)
+  return { ...form, tier, accessLevel, accessLevels }
+}
+
+function CourseAccessCheckboxes({ value, onChange }) {
+  const selected = Array.isArray(value) && value.length > 0 ? value : ['standard']
+  const toggle = (level) => {
+    const next = selected.includes(level)
+      ? selected.filter(item => item !== level)
+      : [...selected, level]
+    onChange(next.length > 0 ? next : [level])
+  }
+
+  return (
+    <div style={{ display:'flex', flexWrap:'wrap', gap:10 }}>
+      {ACCESS_LEVELS.map(level => (
+        <label
+          key={level.key}
+          className="filter-chip"
+          style={{
+            display:'inline-flex',
+            alignItems:'center',
+            gap:8,
+            cursor:'pointer',
+            userSelect:'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={selected.includes(level.key)}
+            onChange={() => toggle(level.key)}
+          />
+          <span>{level.label}</span>
+        </label>
+      ))}
+    </div>
+  )
 }
 
 function compressImage(file, maxW=1200, quality=0.8) {
@@ -575,7 +642,7 @@ export default function CoursesAdmin() {
   const openNewCourse = () => { setEditCourseId(null); setCourseForm(EMPTY_COURSE); setShowCourseModal(true) }
   const openEditCourse = (c) => {
     setEditCourseId(c.id)
-    setCourseForm({ title:c.title, description:c.description, tier:c.tier, accessLevel:c.accessLevel, category:c.category, instructor:c.instructor, duration:c.duration, published:c.published })
+    setCourseForm({ title:c.title, description:c.description, tier:c.tier, accessLevel:c.accessLevel, accessLevels:getCourseAccessLevels(c), category:c.category, instructor:c.instructor, duration:c.duration, published:c.published })
     setShowCourseModal(true)
   }
   const saveCourse = async () => {
@@ -707,7 +774,7 @@ export default function CoursesAdmin() {
                   return (
                     <div key={c.id} className="course-admin-card">
                       <div className="course-admin-card-header">
-                        <span className={`badge badge-${c.tier}`}>{courseLevelLabel(c.tier)}</span>
+                        <span className={`badge badge-${c.tier}`}>{courseAccessLabel(c)}</span>
                         <span className={`badge ${c.published?'badge-published':'badge-draft'}`}>{c.published?'上架':'草稿'}</span>
                       </div>
                       <h3 className="course-admin-card-title">{c.title}</h3>
@@ -749,12 +816,11 @@ export default function CoursesAdmin() {
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
                 <div className="form-group">
-                  <label className="form-label">課程方案</label>
-                  <select className="form-select" value={courseForm.tier} onChange={e=>setCourseForm(f=>({...f,tier:e.target.value,accessLevel:COURSE_LEVELS[e.target.value]?.accessLevel||'standard'}))}>
-                    <option value="basic">體驗</option>
-                    <option value="standard">達人</option>
-                    <option value="advanced">私塾</option>
-                  </select>
+                  <label className="form-label">可觀看等級</label>
+                  <CourseAccessCheckboxes
+                    value={courseForm.accessLevels}
+                    onChange={accessLevels=>setCourseForm(f=>({...f,accessLevels,accessLevel:accessLevels[0],tier:primaryTierFromAccessLevels(accessLevels)}))}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">課程分類</label>
@@ -833,7 +899,7 @@ export default function CoursesAdmin() {
         <div className="card-body" style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:16 }}>
           <div>
             <div style={{ display:'flex', gap:8, marginBottom:8 }}>
-              <span className={`badge badge-${course?.tier}`}>{courseLevelLabel(course?.tier)}</span>
+              <span className={`badge badge-${course?.tier}`}>{courseAccessLabel(course)}</span>
               <span className={`badge ${course?.published?'badge-published':'badge-draft'}`}>{course?.published?'上架':'草稿'}</span>
             </div>
             <h2 style={{ fontWeight:800, fontSize:20, marginBottom:4 }}>{course?.title}</h2>
@@ -999,12 +1065,11 @@ export default function CoursesAdmin() {
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }}>
                 <div className="form-group">
-                  <label className="form-label">課程方案</label>
-                  <select className="form-select" value={courseForm.tier} onChange={e=>setCourseForm(f=>({...f,tier:e.target.value,accessLevel:COURSE_LEVELS[e.target.value]?.accessLevel||'standard'}))}>
-                    <option value="basic">體驗</option>
-                    <option value="standard">達人</option>
-                    <option value="advanced">私塾</option>
-                  </select>
+                  <label className="form-label">可觀看等級</label>
+                  <CourseAccessCheckboxes
+                    value={courseForm.accessLevels}
+                    onChange={accessLevels=>setCourseForm(f=>({...f,accessLevels,accessLevel:accessLevels[0],tier:primaryTierFromAccessLevels(accessLevels)}))}
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">課程分類</label>

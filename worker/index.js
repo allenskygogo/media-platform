@@ -297,6 +297,11 @@ export default {
         return await handleCreateCheckoutOrder(request, env)
       }
 
+      // POST /api/memberships/start → start current user's membership on first login
+      if (path === '/api/memberships/start' && request.method === 'POST') {
+        return await handleStartMembership(request, env)
+      }
+
       // POST /api/ecpay/return → ECPay server-side payment notification
       if (path === '/api/ecpay/return' && request.method === 'POST') {
         return await handleEcpayReturn(request, env)
@@ -792,7 +797,7 @@ async function handleProvisionStudent(request, env) {
   const password = String(body.password || '').trim()
   const planId = String(body.planId || 'creator').trim()
   const legacyTier = String(body.legacyTier || planToLegacyTier(planId)).trim()
-  const expiresAt = normalizeDate(body.expiresAt) || defaultMembershipExpiry(planId)
+  const expiresAt = normalizeDate(body.expiresAt)
 
   if (!name) return err('Missing student name', 400)
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err('Invalid email', 400)
@@ -962,7 +967,7 @@ async function handleEcpayReturn(request, env) {
           legacy_tier: updated.legacy_tier || planToLegacyTier(updated.plan_id),
           status: 'active',
           starts_at: new Date().toISOString(),
-          expires_at: defaultMembershipExpiry(updated.plan_id),
+        expires_at: null,
         })
       }
     }
@@ -1023,7 +1028,7 @@ async function handleNewebPayNotify(request, env) {
           legacy_tier: updated.legacy_tier || planToLegacyTier(updated.plan_id),
           status: 'active',
           starts_at: new Date().toISOString(),
-          expires_at: defaultMembershipExpiry(updated.plan_id),
+          expires_at: null,
         })
       }
     }
@@ -1099,7 +1104,7 @@ async function handleUpdateOrder(request, orderId, env) {
       legacy_tier: order.legacy_tier || planToLegacyTier(order.plan_id),
       status: 'active',
       starts_at: new Date().toISOString(),
-      expires_at: defaultMembershipExpiry(order.plan_id),
+      expires_at: null,
     })
   }
 
@@ -1140,6 +1145,64 @@ async function handleListStudents(request, env) {
   })
 }
 
+async function handleStartMembership(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  const user = await requireUser(request, env)
+  const membership = await getLatestActiveMembership(env, user.id)
+  if (!membership) return err('Active membership not found', 404)
+
+  if (membership.expires_at) {
+    return json({
+      success: true,
+      membership: {
+        planId: membership.plan_id,
+        legacyTier: membership.legacy_tier,
+        startsAt: membership.starts_at,
+        expiresAt: membership.expires_at,
+        trialCompletedAt: membership.trial_completed_at || null,
+      },
+    })
+  }
+
+  const days = PLAN_DURATION_DAYS[membership.plan_id]
+  if (!days) {
+    return json({
+      success: true,
+      membership: {
+        planId: membership.plan_id,
+        legacyTier: membership.legacy_tier,
+        startsAt: membership.starts_at,
+        expiresAt: null,
+        trialCompletedAt: membership.trial_completed_at || null,
+      },
+    })
+  }
+
+  const startsAt = new Date()
+  const expiresAt = new Date(startsAt)
+  expiresAt.setDate(expiresAt.getDate() + days)
+
+  const updated = await updateMembershipById(env, membership.id, {
+    starts_at: startsAt.toISOString(),
+    expires_at: expiresAt.toISOString(),
+    updated_at: startsAt.toISOString(),
+  })
+
+  return json({
+    success: true,
+    membership: {
+      planId: updated.plan_id,
+      legacyTier: updated.legacy_tier,
+      startsAt: updated.starts_at,
+      expiresAt: updated.expires_at,
+      trialCompletedAt: updated.trial_completed_at || null,
+    },
+  })
+}
+
 async function handleUpdateStudent(request, userId, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
     return err('Supabase service key is not configured', 503)
@@ -1176,7 +1239,7 @@ async function handleUpdateStudent(request, userId, env) {
       legacy_tier: legacyTier,
       status: 'active',
       starts_at: new Date().toISOString(),
-      expires_at: expiresAt || defaultMembershipExpiry(planId),
+      expires_at: expiresAt,
     })
   }
 
@@ -1730,6 +1793,39 @@ async function listLatestActiveMemberships(env, userIds) {
     if (!latest.has(membership.user_id)) latest.set(membership.user_id, membership)
   }
   return [...latest.values()]
+}
+
+async function getLatestActiveMembership(env, userId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/memberships`)
+  url.searchParams.set('user_id', `eq.${userId}`)
+  url.searchParams.set('status', 'eq.active')
+  url.searchParams.set('select', 'id,user_id,plan_id,legacy_tier,status,starts_at,expires_at,trial_completed_at')
+  url.searchParams.set('order', 'starts_at.desc')
+  url.searchParams.set('limit', '1')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to load active membership')
+  return Array.isArray(data) ? data[0] || null : null
+}
+
+async function updateMembershipById(env, membershipId, payload) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/memberships`)
+  url.searchParams.set('id', `eq.${membershipId}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'PATCH',
+    headers: supabaseServiceHeaders(env, {
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to update membership')
+  return Array.isArray(data) ? data[0] : data
 }
 
 async function getAuthUserByEmail(env, email) {

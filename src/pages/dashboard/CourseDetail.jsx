@@ -13,6 +13,8 @@ import HomeworkPanel from '../../components/HomeworkPanel'
 
 const CAT_EMOJI = { '影音創作':'🎬', '社群媒體':'📱', '音頻創作':'🎙️', '商業變現':'💰', '數據分析':'📊', 'AI 應用':'🤖' }
 const COURSE_LEVEL_LABEL = { basic: '體驗', standard: '達人', advanced: '私塾' }
+const ACCESS_LEVEL_LABEL = { trial: '體驗', standard: '達人', advanced: '私塾' }
+const ACCESS_LEVEL_ORDER = ['trial', 'standard', 'advanced']
 
 // Only standard/advanced tier students get the forced-watch + homework system
 const NEEDS_HOMEWORK = ['standard', 'advanced']
@@ -52,6 +54,17 @@ function homeworkSpecForLesson(lessonId, specByLesson) {
 
 function latestHomeworkForLesson(userId, courseId, lessonId, homeworkByLesson) {
   return homeworkByLesson[lessonId] || getLatestHomework(userId, courseId, lessonId)
+}
+
+function courseAccessLevels(course) {
+  if (Array.isArray(course?.accessLevels) && course.accessLevels.length > 0) return course.accessLevels
+  const legacyAccess = course?.accessLevel || 'standard'
+  const startIndex = ACCESS_LEVEL_ORDER.indexOf(legacyAccess)
+  return startIndex >= 0 ? ACCESS_LEVEL_ORDER.slice(startIndex) : [legacyAccess]
+}
+
+function courseLevelText(course) {
+  return courseAccessLevels(course).map(level => ACCESS_LEVEL_LABEL[level]).filter(Boolean).join(' / ') || COURSE_LEVEL_LABEL[course?.tier] || '達人'
 }
 
 function isLessonUnlockedByProgress(userId, courseId, lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson) {
@@ -162,7 +175,7 @@ export default function CourseDetail() {
     </div>
   )
 
-  const ok = canAccessCourse(currentUser.tier, course.accessLevel)
+  const ok = canAccessCourse(currentUser.tier, courseAccessLevels(course))
   if (!ok) {
     const meta = TIER_META[course.accessLevel] || TIER_META.standard
     return (
@@ -260,7 +273,7 @@ export default function CourseDetail() {
               <div className="card-body">
                 <div className="course-meta" style={{ marginBottom:12 }}>
                   <span className={`badge badge-${course.tier}`}>
-                    {COURSE_LEVEL_LABEL[course.tier] || '達人'}
+                    {courseLevelText(course)}
                   </span>
                   <span className="tag">{course.category}</span>
                 </div>

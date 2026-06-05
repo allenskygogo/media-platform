@@ -9,7 +9,7 @@ export default function PremiumHome() {
   const { currentUser } = useAuth()
   const navigate = useNavigate()
   const allCourses = getCourses().filter(c => c.published)
-  const accessible = allCourses.filter(c => canAccessCourse(currentUser.tier, c.accessLevel))
+  const accessible = allCourses.filter(c => canAccessCourse(currentUser.tier, c.accessLevels || c.accessLevel))
   const featured   = accessible.slice(0, 3)
   const meta       = TIER_META[currentUser.tier]
   const advOffer   = getAdvancedOfferStatus(currentUser)

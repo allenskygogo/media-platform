@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { getSessionBookings, getSessions, getWatchProgress, getAdvancedOfferStatus, getSystemSettings } from '../../data/mockData'
+import { getTrialProgress, TRIAL_DURATION_SEC, getAdvancedOfferStatus, getSystemSettings } from '../../data/mockData'
 import { IconClock, IconArrow, IconCheck, IconPlay, IconBook, IconAI, IconChart } from '../../components/Icons'
 import { AdvancedOfferBanner } from '../../components/CountdownBanner'
 import ManualPaymentModal from '../../components/ManualPaymentModal'
@@ -21,14 +21,6 @@ function fmtMs(ms) {
   return [h,m,s].map(n=>String(n).padStart(2,'0')).join(':')
 }
 function fmtDate(iso) { if (!iso) return ''; return new Date(iso).toLocaleDateString('zh-TW',{year:'numeric',month:'long',day:'numeric'}) }
-function fmtSessionTime(iso) { if (!iso) return ''; return new Date(iso).toLocaleDateString('zh-TW',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}) }
-function diffToSession(scheduledAt) {
-  const diff = new Date(scheduledAt).getTime() - Date.now()
-  if (diff <= 0) return '已開始'
-  const days=Math.floor(diff/86400000), hours=Math.floor((diff%86400000)/3600000)
-  if (days > 0) return `距離體驗課 ${days} 天 ${hours} 小時`
-  return `距離體驗課 ${hours} 小時 ${Math.floor((diff%3600000)/60000)} 分`
-}
 
 const HIGHLIGHTS = [
   { Icon: IconPlay,  title:'影音創作核心技術', desc:'從腳本規劃、拍攝技巧到剪輯後製，完整學習自媒體影音製作流程' },
@@ -55,12 +47,8 @@ export default function TrialHome() {
     }
   }, [])
 
-  const bookings  = getSessionBookings()
-  const myBooking = bookings.find(b => b.userId === currentUser.id)
-  const sessions  = getSessions()
-  const mySession = myBooking ? sessions.find(s=>String(s.id)===String(myBooking.sessionId)) : null
-  const watchProg = mySession ? getWatchProgress(currentUser.id, mySession.id) : null
-  const watchPct  = watchProg ? (watchProg.completed ? 100 : Math.min(100,Math.round((watchProg.currentSecond/(mySession?.durationSec||1))*100))) : 0
+  const watchProg = getTrialProgress(currentUser.id)
+  const watchPct  = watchProg ? (watchProg.completed ? 100 : Math.min(100,Math.round((watchProg.currentSecond/TRIAL_DURATION_SEC)*100))) : 0
 
   const [offerRemaining, setOfferRemaining] = useState(() => { const o=getAdvancedOfferStatus(currentUser); return o.active?o.remainingMs:0 })
   const [offerInfo] = useState(() => getAdvancedOfferStatus(currentUser))
@@ -72,11 +60,9 @@ export default function TrialHome() {
   }, [offerInfo.active, currentUser])
 
   const isCompleted = !!currentUser.trialCompletedAt
-  const isBooked    = !!myBooking && !isCompleted
 
-  let sessionLabel = '尚未預約', sessionSub = '選擇時段，開始你的體驗課'
+  let sessionLabel = '可開始上課', sessionSub = currentUser.expiresAt ? `效期至：${fmtDate(currentUser.expiresAt)}` : '效期從第一次登入開始計算'
   if (isCompleted) { sessionLabel = '體驗已完成'; sessionSub = `完成日期：${fmtDate(currentUser.trialCompletedAt)}` }
-  else if (isBooked && mySession) { sessionLabel = fmtSessionTime(mySession.scheduledAt); sessionSub = diffToSession(mySession.scheduledAt) }
 
   return (
     <div className="th2-page bg-trial">
@@ -104,9 +90,9 @@ export default function TrialHome() {
           </div>
 
           <div className="th2-ctas">
-            {!isCompleted && !isBooked && (
-              <button className="btn btn-primary" onClick={() => navigate('/dashboard/trial')}>
-                立即預約時段 <IconArrow size={12}/>
+            {!isCompleted && (
+              <button className="btn btn-primary" onClick={() => navigate('/dashboard/trial-player')}>
+                開始體驗課 <IconArrow size={12}/>
               </button>
             )}
             <button className="th2-outline-btn" onClick={() => navigate('/dashboard/profile')}>
@@ -126,10 +112,10 @@ export default function TrialHome() {
         <div className="th2-stat-card">
           <div className="th2-stat-icon"><IconClock size={16} strokeWidth={1.5}/></div>
           <p className="th2-stat-title">體驗課狀態</p>
-          <p className="th2-stat-val">{isCompleted?'已完成':isBooked?'已預約':'尚未預約'}</p>
+          <p className="th2-stat-val">{isCompleted?'已完成':'可開始'}</p>
           <p className="th2-stat-sub">{sessionSub}</p>
-          {!isCompleted && !isBooked && (
-            <button className="th2-stat-btn primary" onClick={() => navigate('/dashboard/trial')}>立即預約 <IconArrow size={11}/></button>
+          {!isCompleted && (
+            <button className="th2-stat-btn primary" onClick={() => navigate('/dashboard/trial-player')}>開始上課 <IconArrow size={11}/></button>
           )}
         </div>
         <div className="th2-stat-card">

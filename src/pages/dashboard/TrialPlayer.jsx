@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
-  getTrialSession, getTrialProgress,
+  getTrialSession, saveTrialSession, getTrialProgress,
   saveTrialProgress, completeTrialInStorage,
   TRIAL_DURATION_SEC, getTrialVideoUid, getCFVideos, getAdvancedOfferStatus,
 } from '../../data/mockData'
@@ -63,6 +63,39 @@ async function loadTrialState(userId) {
   }
 
   if (allowLocalFallback) {
+    return {
+      session: getTrialSession(userId),
+      progress: getTrialProgress(userId),
+    }
+  }
+
+  throw new Error('體驗課播放資料服務尚未設定')
+}
+
+async function ensureTrialSession(userId) {
+  const scheduledAt = new Date().toISOString()
+  if (hasSupabase && supabase) {
+    const { data, error } = await supabase
+      .from('trial_sessions')
+      .upsert(
+        { user_id: userId, scheduled_at: scheduledAt, status: 'watching' },
+        { onConflict: 'user_id' },
+      )
+      .select('user_id, scheduled_at, status, current_second, completed_at, updated_at')
+      .single()
+
+    if (error) throw error
+    return {
+      session: { userId: data.user_id, scheduledAt: data.scheduled_at, status: data.status },
+      progress: toLocalProgress(data),
+    }
+  }
+
+  if (allowLocalFallback) {
+    const existing = getTrialSession(userId)
+    if (!existing) {
+      saveTrialSession(userId, scheduledAt)
+    }
     return {
       session: getTrialSession(userId),
       progress: getTrialProgress(userId),
@@ -135,7 +168,7 @@ export default function TrialPlayer() {
     if (currentUser.tier !== 'basic') { navigate('/dashboard', { replace: true }); return }
 
       try {
-        const { session, progress: prog } = await loadTrialState(currentUser.id)
+        let { session, progress: prog } = await loadTrialState(currentUser.id)
 
         // Already completed?
         if (currentUser.expiresAt || prog?.completed) {
@@ -146,22 +179,10 @@ export default function TrialPlayer() {
           return
         }
 
-    // Must have a booked session
         if (!session) {
-          if (!cancelled) {
-            setError('你尚未預約體驗時段，請先完成預約。')
-            setReady(true)
-          }
-          return
-        }
-
-    // Must be at or past scheduled time
-        if (new Date(session.scheduledAt).getTime() > Date.now()) {
-          if (!cancelled) {
-            setError('還沒到你的預約時間，請等到預約時間再進入。')
-            setReady(true)
-          }
-          return
+          const created = await ensureTrialSession(currentUser.id)
+          session = created.session
+          prog = created.progress
         }
 
     // Resume from saved progress
@@ -254,7 +275,7 @@ export default function TrialPlayer() {
           <div className="trial-complete-emoji">🎉</div>
           <div className="trial-complete-title">恭喜完成體驗課！</div>
           <div className="trial-complete-sub">
-            你的<strong>三個月使用期限今天正式開始</strong>。<br />
+            你的<strong>三個月使用期限已啟用</strong>。<br />
             立即解鎖 YouTube 頻道與短影音爆紅公式兩門基礎課程，<br />
             開始你的自媒體之旅！
           </div>

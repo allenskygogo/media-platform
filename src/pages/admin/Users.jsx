@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getUsers, saveUsers, addDays, TIER_META } from '../../data/mockData'
+import { getUsers, saveUsers, TIER_META } from '../../data/mockData'
 import { hasSupabase, supabase, allowLocalFallback } from '../../lib/supabase'
 
 const TIERS = ['basic', 'standard', 'advanced']
@@ -130,14 +130,13 @@ export default function UsersAdmin() {
 
     const all = getUsers()
     const idx = all.findIndex(u => u.id === editUser.id)
-    const days = TIER_META[editForm.tier]?.days
     all[idx] = {
       ...all[idx],
       name: editForm.name,
       avatar: editForm.name.charAt(0),
       tier: editForm.tier,
       status: editForm.status,
-      expiresAt: editForm.expiresAt || (days ? addDays(new Date().toISOString().split('T')[0], days) : null),
+      expiresAt: editForm.expiresAt || null,
     }
     saveUsers(all)
     setUsers(all.filter(u => u.role === 'student' && u.tier !== 'managed'))
@@ -174,9 +173,6 @@ export default function UsersAdmin() {
 
   const changeTier = async (user, tier) => {
     if (hasSupabase && supabase && user.source === 'supabase') {
-      const days = TIER_META[tier]?.days
-      const today = new Date().toISOString().split('T')[0]
-      const expiresAt = days ? addDays(today, days) : null
       setUpdatingId(user.id)
       try {
         await workerJson(`/api/admin/students/${encodeURIComponent(user.id)}`, {
@@ -185,7 +181,7 @@ export default function UsersAdmin() {
             tier,
             planId: TIER_TO_PLAN_ID[tier],
             legacyTier: tier,
-            expiresAt,
+            expiresAt: null,
           }),
         })
         await loadStudents()
@@ -200,9 +196,8 @@ export default function UsersAdmin() {
 
     const all = getUsers()
     const idx = all.findIndex(u => u.id === user.id)
-    const days = TIER_META[tier]?.days
     all[idx].tier = tier
-    if (days) all[idx].expiresAt = addDays(new Date().toISOString().split('T')[0], days)
+    all[idx].expiresAt = null
     saveUsers(all)
     setUsers(all.filter(u => u.role === 'student' && u.tier !== 'managed'))
     flash(`${user.name} 已變更為 ${TIER_META[tier]?.label}`)
@@ -271,9 +266,8 @@ export default function UsersAdmin() {
     const name = provisionForm.name.trim()
     const password = provisionForm.password.trim()
     const tier = provisionForm.tier
-    const days = TIER_META[tier]?.days
     const today = new Date().toISOString().split('T')[0]
-    const expiresAt = provisionForm.expiresAt || (days ? addDays(today, days) : null)
+    const expiresAt = provisionForm.expiresAt || null
     const existingIndex = all.findIndex(u => u.email.toLowerCase() === email)
 
     if (existingIndex >= 0) {
@@ -421,7 +415,7 @@ export default function UsersAdmin() {
                     </select>
                   </td>
                   <td style={{ fontSize: 13, color: user.expiresAt && new Date(user.expiresAt) < new Date() ? 'var(--danger)' : 'var(--gray-600)' }}>
-                    {user.expiresAt || '—'}
+                    {user.expiresAt || '尚未起算'}
                   </td>
                   <td><span className={`badge badge-${user.status}`}>{user.status === 'active' ? '啟用' : '停用'}</span></td>
                   <td>
@@ -472,7 +466,7 @@ export default function UsersAdmin() {
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">效期（選填，留空自動給 1 年 / 體驗課 90 天）</label>
+                <label className="form-label">效期（選填，留空代表第一次登入才起算）</label>
                 <input className="form-input" type="date" value={provisionForm.expiresAt} onChange={e => setProvisionForm(f => ({ ...f, expiresAt: e.target.value }))} />
               </div>
             </div>
