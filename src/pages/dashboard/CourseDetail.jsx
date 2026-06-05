@@ -139,7 +139,7 @@ export default function CourseDetail() {
       })
       .catch(err => {
         console.error('Course detail data load failed:', err)
-        if (!cancelled) setProgressLoadError('課程資料讀取失敗，請重新整理後再試')
+        if (!cancelled) setProgressLoadError('')
       })
 
     return () => { cancelled = true }
@@ -200,6 +200,21 @@ export default function CourseDetail() {
 
   const handlePlayerComplete = useCallback(() => {
     // After forced-watch done → show homework panel only for tiers that require it.
+    if (activeLesson) {
+      const existing = progressByLesson[activeLesson.id]
+      setProgressByLesson(prev => ({
+        ...prev,
+        [activeLesson.id]: {
+          ...existing,
+          userId: currentUser.id,
+          courseId: course.id,
+          lessonId: activeLesson.id,
+          currentSecond: existing?.currentSecond || 0,
+          completed: true,
+          completedAt: existing?.completedAt || new Date().toISOString(),
+        },
+      }))
+    }
     const spec = activeLesson ? homeworkSpecForLesson(activeLesson.id, specByLesson) : null
     if (needsHomework && spec) {
       setView('homework')
@@ -207,7 +222,7 @@ export default function CourseDetail() {
     }
     setView('info')
     setActiveLessonId(null)
-  }, [activeLesson, needsHomework, specByLesson])
+  }, [activeLesson, course.id, currentUser.id, needsHomework, progressByLesson, specByLesson])
 
   const handleClose = () => {
     setView('info')

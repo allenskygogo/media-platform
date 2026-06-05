@@ -16,32 +16,49 @@ function normalizeProgress(row) {
 }
 
 export async function getCourseProgressRecords(userId, courseId, lessonIds = []) {
+  const localRecords = lessonIds
+    .map(lessonId => getLessonProgress(userId, courseId, lessonId))
+    .filter(Boolean)
+
   if (hasSupabase && supabase) {
-    const query = supabase
-      .from('course_progress')
-      .select('user_id, course_id, lesson_id, current_second, completed, completed_at, watch_count, updated_at')
-      .eq('user_id', userId)
-      .eq('course_id', courseId)
+    try {
+      const query = supabase
+        .from('course_progress')
+        .select('user_id, course_id, lesson_id, current_second, completed, completed_at, watch_count, updated_at')
+        .eq('user_id', userId)
+        .eq('course_id', courseId)
 
-    if (lessonIds.length > 0) {
-      query.in('lesson_id', lessonIds)
+      if (lessonIds.length > 0) {
+        query.in('lesson_id', lessonIds)
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+      const remoteRecords = (data || []).map(normalizeProgress)
+      const byLesson = new Map(localRecords.map(record => [String(record.lessonId), record]))
+      for (const record of remoteRecords) {
+        const local = byLesson.get(String(record.lessonId))
+        if (!local || new Date(record.updatedAt || 0) >= new Date(local.updatedAt || 0)) {
+          byLesson.set(String(record.lessonId), record)
+        }
+      }
+      return [...byLesson.values()]
+    } catch (error) {
+      console.error('Remote course progress load failed:', error)
+      return localRecords
     }
-
-    const { data, error } = await query
-    if (error) throw error
-    return (data || []).map(normalizeProgress)
   }
 
   if (!allowLocalFallback) {
-    throw new Error('Course progress storage is not configured')
+    return localRecords
   }
 
-  return lessonIds
-    .map(lessonId => getLessonProgress(userId, courseId, lessonId))
-    .filter(Boolean)
+  return localRecords
 }
 
 export async function saveCourseProgressRecord(userId, courseId, lessonId, currentSecond, completed = false) {
+  const localRecord = saveLessonProgress(userId, Number(courseId), Number(lessonId), currentSecond, completed)
+
   if (hasSupabase && supabase) {
     const now = new Date().toISOString()
     const basePayload = {
@@ -59,7 +76,10 @@ export async function saveCourseProgressRecord(userId, courseId, lessonId, curre
         .select('user_id, course_id, lesson_id, current_second, completed, completed_at, watch_count, updated_at')
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('Remote course progress save failed:', error)
+        return localRecord
+      }
       return normalizeProgress(data)
     }
 
@@ -71,7 +91,10 @@ export async function saveCourseProgressRecord(userId, courseId, lessonId, curre
       .eq('lesson_id', lessonId)
       .maybeSingle()
 
-    if (existingError) throw existingError
+    if (existingError) {
+      console.error('Remote course progress lookup failed:', existingError)
+      return localRecord
+    }
 
     const payload = {
       ...basePayload,
@@ -86,13 +109,16 @@ export async function saveCourseProgressRecord(userId, courseId, lessonId, curre
       .select('user_id, course_id, lesson_id, current_second, completed, completed_at, watch_count, updated_at')
       .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Remote course progress completion save failed:', error)
+      return localRecord
+    }
     return normalizeProgress(data)
   }
 
   if (!allowLocalFallback) {
-    throw new Error('Course progress storage is not configured')
+    return localRecord
   }
 
-  return saveLessonProgress(userId, courseId, lessonId, currentSecond, completed)
+  return localRecord
 }

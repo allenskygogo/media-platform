@@ -170,6 +170,23 @@ export default function StreamPlayer({
           })
       }
 
+      const completeLesson = () => {
+        if (doneRef.current) return
+        doneRef.current = true
+        const finalSecond = player.duration || player.currentTime || maxRef.current || 99999
+        if (userId && courseId && lessonId) {
+          persistProgress(finalSecond, true)
+            .then(() => {
+              if (isForced) onComplete?.()
+            })
+            .catch(() => {
+              if (isForced) onComplete?.()
+            })
+          return
+        }
+        if (isForced) onComplete?.()
+      }
+
       // Progress tracking & auto-save
       player.addEventListener('timeupdate', () => {
         const ct = player.currentTime || 0
@@ -189,21 +206,15 @@ export default function StreamPlayer({
           lastSavedSecondRef.current = second
           persistProgress(second, false).catch(() => {})
         }
+        const duration = player.duration || 0
+        if (isForced && duration > 0 && ct >= duration - 2) {
+          completeLesson()
+        }
       })
 
       // Completion
       player.addEventListener('ended', () => {
-        if (doneRef.current) return
-        doneRef.current = true
-        if (userId && courseId && lessonId) {
-          persistProgress(player.duration || 99999, true)
-            .then(() => {
-              if (isForced) onComplete?.()
-            })
-            .catch(() => {})
-          return
-        }
-        if (isForced) onComplete?.()
+        completeLesson()
       })
 
       // Forced-mode controls
