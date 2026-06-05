@@ -82,6 +82,154 @@ function getLocalVideoDuration(file) {
   })
 }
 
+function formatLessonDuration(seconds) {
+  if (!seconds) return ''
+  const minutes = Math.max(1, Math.round(seconds / 60))
+  return `${minutes}分鐘`
+}
+
+function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
+  const [files, setFiles] = useState([])
+  const [phase, setPhase] = useState('idle')
+  const [pct, setPct] = useState(0)
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [uploadedCount, setUploadedCount] = useState(0)
+  const [errMsg, setErrMsg] = useState('')
+
+  const handleFiles = selectedFiles => {
+    const selected = Array.from(selectedFiles || []).filter(f => f.type.startsWith('video/'))
+    if (selected.length) setFiles(selected)
+  }
+
+  const handleUpload = async () => {
+    if (!files.length) return
+    setPhase('uploading')
+    setErrMsg('')
+    setPct(0)
+    setCurrentIndex(0)
+    setUploadedCount(0)
+
+    const newLessons = []
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const title = getAutoVideoName(file)
+        setCurrentIndex(i)
+        setPct(0)
+
+        const localDuration = await getLocalVideoDuration(file)
+        const { uid } = await uploadVideoToCF(title, file, setPct)
+        setPct(100)
+
+        let video = null
+        for (let j = 0; j < 10; j++) {
+          await new Promise(r => setTimeout(r, 3000))
+          const vRes = await getVideo(uid)
+          if (vRes?.result) { video = vRes.result; break }
+        }
+
+        const hlsUrl = video?.playback?.hls || ''
+        const duration = Math.round(video?.duration || localDuration || 0)
+        const lesson = {
+          id: Date.now() + i,
+          title,
+          duration: formatLessonDuration(duration),
+          free: false,
+        }
+        newLessons.push(lesson)
+
+        saveCFVideo({
+          uid,
+          name: title,
+          status: video?.status?.state || 'pendingupload',
+          readyToStream: video?.readyToStream || false,
+          duration,
+          size: file.size,
+          created: new Date().toISOString(),
+          customerSubdomain: extractCustomerSubdomain(hlsUrl) || 'customer-unknown',
+          hlsUrl,
+        })
+        assignVideoToLesson(lesson.id, uid)
+        setUploadedCount(i + 1)
+      }
+
+      const updated = courses.map(item => {
+        if (item.id !== course.id) return item
+        return { ...item, lessons: [...(item.lessons || []), ...newLessons] }
+      })
+      saveCourses(updated)
+      setPhase('done')
+      await onSuccess?.(updated)
+    } catch (e) {
+      setErrMsg(e.message || '批量上傳失敗')
+      setPhase('error')
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth:520 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">批量上傳影片並建立課堂</h2>
+          <button className="modal-close" onClick={onClose}>×</button>
+        </div>
+        <div className="modal-body">
+          {phase === 'idle' && (
+            <>
+              <div className="form-group">
+                <label className="form-label">選擇影片檔案 *</label>
+                <input type="file" accept="video/*" multiple className="form-input"
+                  onChange={e => handleFiles(e.target.files)} />
+                {files.length > 0 && (
+                  <span className="form-hint">
+                    已選擇 {files.length} 支影片，會依檔名建立課堂並自動綁定影片
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+
+          {phase === 'uploading' && (
+            <div style={{ textAlign:'center', padding:'24px 0' }}>
+              <div style={{ fontSize:32, marginBottom:12 }}>⬆️</div>
+              <p style={{ fontWeight:700, marginBottom:12 }}>
+                上傳中 {currentIndex + 1}/{files.length}：{files[currentIndex]?.name || ''} {pct}%
+              </p>
+              <div className="upload-progress-bar">
+                <div className="upload-progress-fill" style={{ width:`${pct}%` }} />
+              </div>
+              <p style={{ fontSize:12, color:'var(--gray-400)', marginTop:8 }}>請勿關閉此視窗</p>
+            </div>
+          )}
+
+          {phase === 'done' && (
+            <div style={{ textAlign:'center', padding:'24px 0' }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>已</div>
+              <p style={{ fontWeight:700 }}>已建立 {uploadedCount || files.length} 堂課並完成影片綁定</p>
+            </div>
+          )}
+
+          {phase === 'error' && (
+            <div style={{ textAlign:'center', padding:'24px 0' }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>錯誤</div>
+              <p style={{ color:'var(--danger)', fontWeight:700 }}>{errMsg}</p>
+              <button className="btn btn-secondary" style={{ marginTop:12 }} onClick={() => setPhase('idle')}>重試</button>
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onClose}>{phase === 'done' ? '關閉' : '取消'}</button>
+          {phase === 'idle' && (
+            <button className="btn btn-primary" onClick={handleUpload} disabled={!files.length || !workerConfigured()}>
+              開始批量上傳{files.length ? ` ${files.length} 支` : ''}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Upload Modal ──────────────────────────────────────────────────────────────
 function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
   const [files, setFiles]   = useState([])
@@ -308,6 +456,7 @@ export default function CoursesAdmin() {
 
   // Upload / homework modals
   const [uploadForLesson,   setUploadForLesson]   = useState(null)
+  const [showBatchUpload,   setShowBatchUpload]   = useState(false)
   const [homeworkForLesson, setHomeworkForLesson]  = useState(null)
 
   // Delete confirm
@@ -615,9 +764,12 @@ export default function CoursesAdmin() {
       {/* Lessons table */}
       <div className="card">
         <div className="card-body">
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, marginBottom:16 }}>
             <h3 style={{ fontWeight:700, fontSize:16 }}>課堂管理 <span style={{ color:'var(--gray-400)', fontWeight:400 }}>（{lessons.length} 堂）</span></h3>
-            <button className="btn btn-primary btn-sm" onClick={openNewLesson}>＋ 新增課堂</button>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => setShowBatchUpload(true)}>批量上傳建課堂</button>
+              <button className="btn btn-primary btn-sm" onClick={openNewLesson}>＋ 新增課堂</button>
+            </div>
           </div>
 
           {lessons.length === 0 ? (
@@ -704,6 +856,22 @@ export default function CoursesAdmin() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Batch upload and create lessons */}
+      {showBatchUpload && (
+        <BatchLessonUploadModal
+          course={course}
+          courses={courses}
+          onClose={() => setShowBatchUpload(false)}
+          onSuccess={async updated => {
+            setCourses(updated)
+            setCourse(updated.find(c => c.id === course.id) || null)
+            refreshVideos()
+            await syncCatalog({ ...getLocalCourseCatalog(), courses: updated })
+            flash('批量課堂與影片已建立')
+          }}
+        />
       )}
 
       {/* Upload Modal */}
