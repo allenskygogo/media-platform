@@ -8,6 +8,7 @@ create table if not exists public.profiles (
   email text unique not null,
   role text not null default 'student',
   status text not null default 'active',
+  last_login_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -17,6 +18,7 @@ alter table public.profiles
   add column if not exists email text,
   add column if not exists role text not null default 'student',
   add column if not exists status text not null default 'active',
+  add column if not exists last_login_at timestamptz,
   add column if not exists created_at timestamptz not null default now(),
   add column if not exists updated_at timestamptz not null default now();
 
@@ -45,6 +47,7 @@ alter table public.memberships
   add column if not exists updated_at timestamptz not null default now();
 
 create index if not exists profiles_role_status_idx on public.profiles(role, status);
+create index if not exists profiles_last_login_at_idx on public.profiles(last_login_at desc);
 create index if not exists memberships_user_status_starts_idx on public.memberships(user_id, status, starts_at desc);
 
 alter table public.profiles enable row level security;

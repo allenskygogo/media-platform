@@ -54,6 +54,18 @@ export default function UsersAdmin() {
   }, [])
 
   const toDateValue = (value) => value ? String(value).split('T')[0] : ''
+  const formatDateTime = (value) => {
+    if (!value) return '尚無紀錄'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '尚無紀錄'
+    return date.toLocaleString('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
 
   const getAdminToken = async () => {
     const { data: sessionData } = await supabase.auth.getSession()
@@ -386,14 +398,14 @@ export default function UsersAdmin() {
                 <th style={{ width: 42 }}>
                   <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAllFiltered} disabled={!filtered.length || loading || deleting} />
                 </th>
-                <th>學員</th><th>電子郵件</th><th>會員等級</th><th>效期</th><th>狀態</th><th>操作</th>
+                <th>學員</th><th>電子郵件</th><th>會員等級</th><th>效期</th><th>上次登入</th><th>狀態</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>讀取正式會員中...</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>讀取正式會員中...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>沒有符合條件的學員</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>沒有符合條件的學員</td></tr>
               ) : filtered.map(user => (
                 <tr key={user.id}>
                   <td>
@@ -416,6 +428,9 @@ export default function UsersAdmin() {
                   </td>
                   <td style={{ fontSize: 13, color: user.expiresAt && new Date(user.expiresAt) < new Date() ? 'var(--danger)' : 'var(--gray-600)' }}>
                     {user.expiresAt || '尚未起算'}
+                  </td>
+                  <td style={{ fontSize: 13, color: user.lastLoginAt ? 'var(--gray-600)' : 'var(--gray-400)', whiteSpace: 'nowrap' }}>
+                    {formatDateTime(user.lastLoginAt)}
                   </td>
                   <td><span className={`badge badge-${user.status}`}>{user.status === 'active' ? '啟用' : '停用'}</span></td>
                   <td>

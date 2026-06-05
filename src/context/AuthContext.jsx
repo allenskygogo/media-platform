@@ -42,6 +42,7 @@ const buildUserFromSupabase = (profile, membership) => {
     avatar: name.charAt(0),
     createdAt: toDateString(profile.created_at) || '',
     status: profile.status,
+    lastLoginAt: profile.last_login_at || null,
     expiresAt: toDateString(membership?.expires_at),
     startsAt: membership?.starts_at || null,
     trialCompletedAt: membership?.trial_completed_at || null,
@@ -105,13 +106,7 @@ export function AuthProvider({ children }) {
   }
 
   const fetchSupabaseUser = async (userId) => {
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, display_name, email, role, status, created_at')
-      .eq('id', userId)
-      .maybeSingle()
-
-    if (profileError) throw profileError
+    const profile = await fetchProfile(userId)
     if (!profile) throw new Error('找不到會員資料，請聯絡管理員')
     if (profile.status === 'inactive') throw new Error('帳號已停用，請聯絡管理員')
 
@@ -131,6 +126,22 @@ export function AuthProvider({ children }) {
       throw new Error('會員效期已到期，請聯絡管理員續約')
     }
     return buildUserFromSupabase(profile, activeMembership)
+  }
+
+  const fetchProfile = async (userId) => {
+    const query = (select) => supabase
+      .from('profiles')
+      .select(select)
+      .eq('id', userId)
+      .maybeSingle()
+
+    const { data, error } = await query('id, display_name, email, role, status, created_at, last_login_at')
+    if (!error) return data
+    if (!String(error.message || '').includes('last_login_at')) throw error
+
+    const fallback = await query('id, display_name, email, role, status, created_at')
+    if (fallback.error) throw fallback.error
+    return fallback.data ? { ...fallback.data, last_login_at: null } : null
   }
 
   const startMembershipIfNeeded = async (membership) => {
@@ -157,12 +168,30 @@ export function AuthProvider({ children }) {
     }
   }
 
+  const recordLastLogin = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) return null
+      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/auth/last-login`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json().catch(() => ({}))
+      return response.ok && data.success !== false ? data.lastLoginAt || null : null
+    } catch (error) {
+      console.error('Last login record failed:', error)
+      return null
+    }
+  }
+
   const login = async (email, password) => {
     if (hasSupabase && supabase) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw new Error('帳號或密碼錯誤')
+      const lastLoginAt = await recordLastLogin()
       const user = await fetchSupabaseUser(data.user.id)
-      return persist(user)
+      return persist({ ...user, lastLoginAt: lastLoginAt || user.lastLoginAt })
     }
 
     if (!allowLocalFallback) {
@@ -173,7 +202,19 @@ export function AuthProvider({ children }) {
     const user = users.find(u => u.email === email && u.password === password)
     if (!user) throw new Error('帳號或密碼錯誤')
     if (user.status === 'inactive') throw new Error('帳號已停用，請聯絡管理員')
-    return persist(startLocalMembershipIfNeeded(user))
+    return persist(recordLocalLastLogin(startLocalMembershipIfNeeded(user)))
+  }
+
+  const recordLocalLastLogin = (user) => {
+    if (user.role !== 'student') return user
+    const users = getUsers()
+    const idx = users.findIndex(item => item.id === user.id)
+    const nextUser = { ...user, lastLoginAt: new Date().toISOString() }
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], ...nextUser }
+      saveUsers(users)
+    }
+    return nextUser
   }
 
   const startLocalMembershipIfNeeded = (user) => {

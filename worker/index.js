@@ -302,6 +302,11 @@ export default {
         return await handleStartMembership(request, env)
       }
 
+      // POST /api/auth/last-login → record current user's successful login time
+      if (path === '/api/auth/last-login' && request.method === 'POST') {
+        return await handleRecordLastLogin(request, env)
+      }
+
       // POST /api/ecpay/return → ECPay server-side payment notification
       if (path === '/api/ecpay/return' && request.method === 'POST') {
         return await handleEcpayReturn(request, env)
@@ -1120,11 +1125,17 @@ async function handleListStudents(request, env) {
   const profiles = await listStudentProfiles(env)
   const memberships = await listLatestActiveMemberships(env, profiles.map(profile => profile.id))
   const membershipByUserId = Object.fromEntries(memberships.map(item => [item.user_id, item]))
+  const authUsers = await listAuthUsers(env).catch(error => {
+    console.error('Failed to list auth users for last login:', error)
+    return []
+  })
+  const authUserById = Object.fromEntries(authUsers.map(user => [user.id, user]))
 
   return json({
     success: true,
     students: profiles.map(profile => {
       const membership = membershipByUserId[profile.id] || null
+      const authUser = authUserById[profile.id] || null
       const name = profile.display_name || profile.email?.split('@')[0] || '學員'
       return {
         id: profile.id,
@@ -1134,6 +1145,7 @@ async function handleListStudents(request, env) {
         status: profile.status,
         avatar: name.charAt(0),
         createdAt: profile.created_at || null,
+        lastLoginAt: authUser?.last_sign_in_at || profile.last_login_at || null,
         planId: membership?.plan_id || null,
         legacyTier: membership?.legacy_tier || null,
         tier: membership?.plan_id ? planToLegacyTier(membership.plan_id) : membership?.legacy_tier || 'basic',
@@ -1201,6 +1213,29 @@ async function handleStartMembership(request, env) {
       trialCompletedAt: updated.trial_completed_at || null,
     },
   })
+}
+
+async function handleRecordLastLogin(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  const user = await requireUser(request, env)
+  const now = new Date().toISOString()
+
+  try {
+    await updateProfile(env, user.id, {
+      last_login_at: now,
+      updated_at: now,
+    })
+  } catch (error) {
+    if (isMissingColumn(error, 'last_login_at')) {
+      return json({ success: true, lastLoginAt: null, warning: 'last_login_at column is not migrated yet' })
+    }
+    throw error
+  }
+
+  return json({ success: true, lastLoginAt: now })
 }
 
 async function handleUpdateStudent(request, userId, env) {
@@ -1762,6 +1797,23 @@ async function getProfileById(env, userId) {
 async function listStudentProfiles(env) {
   const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
   url.searchParams.set('role', 'eq.student')
+  url.searchParams.set('select', 'id,display_name,email,role,status,created_at,last_login_at')
+  url.searchParams.set('order', 'created_at.desc')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    if (isMissingColumn(data, 'last_login_at')) return await listStudentProfilesWithoutLastLogin(env)
+    throw new Error(data.message || 'Failed to list student profiles')
+  }
+  return Array.isArray(data) ? data : []
+}
+
+async function listStudentProfilesWithoutLastLogin(env) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
+  url.searchParams.set('role', 'eq.student')
   url.searchParams.set('select', 'id,display_name,email,role,status,created_at')
   url.searchParams.set('order', 'created_at.desc')
 
@@ -1770,7 +1822,7 @@ async function listStudentProfiles(env) {
   })
   const data = await response.json().catch(() => [])
   if (!response.ok) throw new Error(data.message || 'Failed to list student profiles')
-  return Array.isArray(data) ? data : []
+  return (Array.isArray(data) ? data : []).map(profile => ({ ...profile, last_login_at: null }))
 }
 
 async function listLatestActiveMemberships(env, userIds) {
@@ -1843,6 +1895,31 @@ async function getAuthUserByEmail(env, email) {
 
   const users = Array.isArray(data) ? data : data.users || []
   return users.find(user => String(user.email || '').toLowerCase() === email) || null
+}
+
+async function listAuthUsers(env) {
+  const users = []
+  let page = 1
+  const perPage = 1000
+
+  while (page <= 10) {
+    const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users`)
+    url.searchParams.set('page', String(page))
+    url.searchParams.set('per_page', String(perPage))
+
+    const response = await fetch(url.toString(), {
+      headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.msg || data.message || 'Failed to list Supabase auth users')
+
+    const batch = Array.isArray(data) ? data : data.users || []
+    users.push(...batch)
+    if (batch.length < perPage) break
+    page += 1
+  }
+
+  return users
 }
 
 async function createSupabaseAuthUser(env, payload) {
@@ -2058,6 +2135,11 @@ async function updateOrder(env, orderId, payload) {
 function isMissingOrdersTable(data) {
   const message = String(data?.message || data?.error || '')
   return data?.code === 'PGRST205' || message.includes("public.orders") || message.includes("'orders'")
+}
+
+function isMissingColumn(data, column) {
+  const message = String(data?.message || data?.error || data || '')
+  return data?.code === 'PGRST204' || message.includes(column)
 }
 
 async function insertMembership(env, payload) {
