@@ -67,7 +67,14 @@ function getLocalVideoDuration(file) {
   return new Promise(resolve => {
     const url = URL.createObjectURL(file)
     const video = document.createElement('video')
-    const cleanup = () => URL.revokeObjectURL(url)
+    const timer = window.setTimeout(() => {
+      cleanup()
+      resolve(0)
+    }, 8000)
+    const cleanup = () => {
+      window.clearTimeout(timer)
+      URL.revokeObjectURL(url)
+    }
     video.preload = 'metadata'
     video.onloadedmetadata = () => {
       const duration = Number.isFinite(video.duration) ? Math.round(video.duration) : 0
@@ -95,6 +102,7 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [uploadedCount, setUploadedCount] = useState(0)
   const [errMsg, setErrMsg] = useState('')
+  const [uploadStep, setUploadStep] = useState('')
 
   const handleFiles = selectedFiles => {
     const selected = Array.from(selectedFiles || []).filter(f => f.type.startsWith('video/'))
@@ -108,6 +116,7 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
     setPct(0)
     setCurrentIndex(0)
     setUploadedCount(0)
+    setUploadStep('準備讀取影片資訊')
 
     let workingCourses = courses
     try {
@@ -116,10 +125,17 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
         const title = getAutoVideoName(file)
         setCurrentIndex(i)
         setPct(0)
+        setUploadStep('讀取影片分鐘數')
 
         const localDuration = await getLocalVideoDuration(file)
-        const { uid } = await uploadVideoToCF(title, file, setPct)
+        setUploadStep('建立上傳連結')
+        const progressWithStep = value => {
+          setUploadStep('上傳到 Cloudflare Stream')
+          setPct(value)
+        }
+        const { uid } = await uploadVideoToCF(title, file, progressWithStep)
         setPct(100)
+        setUploadStep('等待 Cloudflare 處理影片')
 
         let video = null
         for (let j = 0; j < 10; j++) {
@@ -154,6 +170,7 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
         })
         saveCourses(workingCourses)
         setUploadedCount(i + 1)
+        setUploadStep('已保存課堂')
       }
 
       setPhase('done')
@@ -197,6 +214,7 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
               <p style={{ fontWeight:700, marginBottom:12 }}>
                 上傳中 {currentIndex + 1}/{files.length}：{files[currentIndex]?.name || ''} {pct}%
               </p>
+              <p style={{ fontSize:12, color:'var(--gray-400)', marginBottom:10 }}>{uploadStep || '準備上傳'}</p>
               <div className="upload-progress-bar">
                 <div className="upload-progress-fill" style={{ width:`${pct}%` }} />
               </div>
@@ -241,6 +259,7 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
   const [errMsg, setErrMsg] = useState('')
   const [currentIndex, setCurrentIndex] = useState(0)
   const [uploadedCount, setUploadedCount] = useState(0)
+  const [uploadStep, setUploadStep] = useState('')
   const dropRef = useRef()
 
   const handleFiles = (selectedFiles) => {
@@ -259,7 +278,7 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
   const handleUpload = async () => {
     if (!files.length) return
     try {
-      setPhase('uploading'); setErrMsg(''); setPct(0); setCurrentIndex(0); setUploadedCount(0)
+      setPhase('uploading'); setErrMsg(''); setPct(0); setCurrentIndex(0); setUploadedCount(0); setUploadStep('準備讀取影片資訊')
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
@@ -267,10 +286,17 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
         const label = `${lessonTitle || 'Lesson'} - ${displayName}`
         setCurrentIndex(i)
         setPct(0)
+        setUploadStep('讀取影片分鐘數')
 
         const localDuration = await getLocalVideoDuration(file)
-        const { uid } = await uploadVideoToCF(label, file, setPct)
+        setUploadStep('建立上傳連結')
+        const progressWithStep = value => {
+          setUploadStep('上傳到 Cloudflare Stream')
+          setPct(value)
+        }
+        const { uid } = await uploadVideoToCF(label, file, progressWithStep)
         setPct(100)
+        setUploadStep('等待 Cloudflare 處理影片')
 
         let video = null
         for (let j = 0; j < 10; j++) {
@@ -294,6 +320,7 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
 
         if (i === 0) assignVideoToLesson(lessonId, uid)
         setUploadedCount(i + 1)
+        setUploadStep('已保存影片')
       }
 
       setPhase('done')
@@ -374,6 +401,7 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
                   ? `上傳中 ${currentIndex + 1}/${files.length}：${files[currentIndex]?.name || ''} ${pct}%`
                   : `上傳中… ${pct}%`}
               </p>
+              <p style={{ fontSize:12, color:'var(--gray-400)', marginBottom:10 }}>{uploadStep || '準備上傳'}</p>
               <div className="upload-progress-bar">
                 <div className="upload-progress-fill" style={{ width:`${pct}%` }} />
               </div>

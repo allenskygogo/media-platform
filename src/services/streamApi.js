@@ -59,7 +59,26 @@ export function uploadFileToCF(uploadURL, file, onProgress, options = {}) {
   }
 
   return new Promise((resolve, reject) => {
-    const upload = new tus.Upload(file, {
+    let settled = false
+    let upload = null
+    const fail = error => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(firstProgressTimer)
+      upload?.abort?.().catch?.(() => {})
+      reject(error)
+    }
+    const done = () => {
+      if (settled) return
+      settled = true
+      window.clearTimeout(firstProgressTimer)
+      resolve()
+    }
+    const firstProgressTimer = window.setTimeout(() => {
+      fail(new Error('上傳連線超時：超過 2 分鐘仍停在 0%，請確認網路穩定後重新上傳。'))
+    }, 120000)
+
+    upload = new tus.Upload(file, {
       uploadUrl: uploadURL,
       chunkSize: 8 * 1024 * 1024,
       retryDelays: [0, 3000, 5000, 10000, 20000],
@@ -72,14 +91,15 @@ export function uploadFileToCF(uploadURL, file, onProgress, options = {}) {
         const status = error?.originalResponse?.getStatus?.()
         const body = error?.originalResponse?.getBody?.()
         const detail = [status && `HTTP ${status}`, body].filter(Boolean).join('：')
-        reject(new Error(detail || error?.message || '影片上傳失敗，請確認網路連線後再重試。'))
+        fail(new Error(detail || error?.message || '影片上傳失敗，請確認網路連線後再重試。'))
       },
       onProgress: (bytesUploaded, bytesTotal) => {
+        if (bytesUploaded > 0) window.clearTimeout(firstProgressTimer)
         if (bytesTotal > 0 && onProgress) {
           onProgress(Math.round((bytesUploaded / bytesTotal) * 100))
         }
       },
-      onSuccess: () => resolve(),
+      onSuccess: () => done(),
     })
 
     upload.start()
@@ -93,6 +113,7 @@ function uploadFileToCFForm(uploadURL, file, onProgress) {
     formData.append('file', file, file.name)
 
     xhr.open('POST', uploadURL)
+    xhr.timeout = 600000
     xhr.upload.onprogress = event => {
       if (event.lengthComputable && onProgress) {
         onProgress(Math.round((event.loaded / event.total) * 100))
@@ -106,6 +127,7 @@ function uploadFileToCFForm(uploadURL, file, onProgress) {
       reject(new Error(xhr.responseText || `Cloudflare Stream 表單上傳失敗：HTTP ${xhr.status}`))
     }
     xhr.onerror = () => reject(new Error('影片上傳網路連線失敗，請換一個網路或重新整理後再試。'))
+    xhr.ontimeout = () => reject(new Error('上傳連線超時：超過 10 分鐘沒有完成，請確認網路穩定後重新上傳。'))
     xhr.send(formData)
   })
 }
