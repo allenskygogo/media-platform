@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { getSessionBookings, getSessions, getWatchProgress, getAdvancedOfferStatus, getSystemSettings } from '../../data/mockData'
 import { IconClock, IconArrow, IconCheck, IconPlay, IconBook, IconAI, IconChart } from '../../components/Icons'
+import { AdvancedOfferBanner } from '../../components/CountdownBanner'
 
 function fmtMs(ms) {
   if (ms <= 0) return '00:00:00'
@@ -105,6 +106,10 @@ export default function TrialHome() {
 
       </div>
 
+      {offerInfo.active && offerRemaining > 0 && (
+        <AdvancedOfferBanner offer={{ ...offerInfo, remainingMs: offerRemaining }} />
+      )}
+
       {/* 3 stat cards */}
       <div className="th2-stats">
         <div className="th2-stat-card">
@@ -122,8 +127,10 @@ export default function TrialHome() {
           {offerInfo.active && offerRemaining > 0 ? (
             <>
               <p className="th2-countdown">{fmtMs(offerRemaining)}</p>
-              <p className="th2-stat-sub">限時特惠，過期恢復原價</p>
-              <button className="th2-stat-btn primary" onClick={() => navigate('/dashboard/profile')}>立即升級 <IconArrow size={11}/></button>
+              <p className="th2-stat-sub">達人班 $29,800，立即省 1 萬，可分期辦理</p>
+              <button className="th2-stat-btn primary" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+                私訊 @xgfx <IconArrow size={11}/>
+              </button>
             </>
           ) : (
             <>
@@ -135,8 +142,8 @@ export default function TrialHome() {
         <div className="th2-stat-card">
           <div className="th2-stat-icon"><IconBook size={16} strokeWidth={1.5}/></div>
           <p className="th2-stat-title">頂流達人方案</p>
-          <p className="th2-stat-val">完成體驗後查看</p>
-          <p className="th2-stat-sub">含所有基礎課程 + 社群成長工具</p>
+          <p className="th2-stat-val">$29,800</p>
+          <p className="th2-stat-sub">體驗完課 24H 內優惠，立即省 1 萬</p>
           <button className="th2-stat-btn" disabled>即將開放</button>
         </div>
       </div>

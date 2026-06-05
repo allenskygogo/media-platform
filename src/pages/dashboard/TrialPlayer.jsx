@@ -4,11 +4,12 @@ import { useAuth } from '../../context/AuthContext'
 import {
   getTrialSession, getTrialProgress,
   saveTrialProgress, completeTrialInStorage,
-  TRIAL_DURATION_SEC, getTrialVideoUid, getCFVideos,
+  TRIAL_DURATION_SEC, getTrialVideoUid, getCFVideos, getAdvancedOfferStatus,
 } from '../../data/mockData'
 import { getPricing } from '../../data/mockData'
 import { supabase, hasSupabase, allowLocalFallback } from '../../lib/supabase'
 import StreamPlayer from '../../components/StreamPlayer'
+import { AdvancedOfferBanner } from '../../components/CountdownBanner'
 
 // ── Lesson scenes over 3 hours ──────────────────────────────────────────────
 const SCENES = [
@@ -101,7 +102,7 @@ async function completeTrial(userId) {
     const row = Array.isArray(data) ? data[0] : data
     return {
       expiresAt: toDateString(row?.expires_at),
-      trialCompletedAt: toDateString(row?.trial_completed_at) || new Date().toISOString(),
+      trialCompletedAt: row?.trial_completed_at || new Date().toISOString(),
     }
   }
 
@@ -223,6 +224,7 @@ export default function TrialPlayer() {
   const progress = Math.min(100, (currentSec / TRIAL_DURATION_SEC) * 100)
   const scene    = [...SCENES].reverse().find(s => currentSec >= s.at) || SCENES[0]
   const remaining = Math.max(0, TRIAL_DURATION_SEC - currentSec)
+  const advancedOffer = getAdvancedOfferStatus(currentUser)
 
   if (!ready) return (
     <div className="page-content">
@@ -247,6 +249,7 @@ export default function TrialPlayer() {
   if (completed) return (
     <div className="page-content">
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
+        {advancedOffer.active && <AdvancedOfferBanner offer={advancedOffer} />}
         <div className="trial-complete-card">
           <div className="trial-complete-emoji">🎉</div>
           <div className="trial-complete-title">恭喜完成體驗課！</div>
@@ -266,14 +269,14 @@ export default function TrialPlayer() {
             <div style={{ fontSize: 40, flexShrink: 0 }}>⭐</div>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 800, fontSize: 16, color: 'var(--gray-900)', marginBottom: 4 }}>
-                查看頂流達人，解鎖完整系統課程
+                達人班優惠 $29,800，立即省 1 萬
               </p>
               <p style={{ fontSize: 13, color: 'var(--gray-500)', lineHeight: 1.6 }}>
-                頂流達人包含完整自媒體獲客系統課程，有效期 1 年。
+                可分期辦理。24H 內私訊官方客服 @xgfx，優惠結束後自動消失。
               </p>
             </div>
-            <button className="btn btn-primary btn-sm" disabled>
-              即將開放
+            <button className="btn btn-primary btn-sm" onClick={() => navigate('/dashboard')}>
+              查看優惠
             </button>
           </div>
         </div>

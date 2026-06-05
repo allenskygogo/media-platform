@@ -42,7 +42,7 @@ const buildUserFromSupabase = (profile, membership) => {
     createdAt: toDateString(profile.created_at) || '',
     status: profile.status,
     expiresAt: toDateString(membership?.expires_at),
-    trialCompletedAt: toDateString(membership?.trial_completed_at),
+    trialCompletedAt: membership?.trial_completed_at || null,
     courseCompletedAt: null,
     source: 'supabase',
     planId,

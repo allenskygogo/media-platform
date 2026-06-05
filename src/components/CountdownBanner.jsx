@@ -1,4 +1,14 @@
 import { useState, useEffect } from 'react'
+import ManualPaymentModal from './ManualPaymentModal'
+
+const ADVANCED_OFFER_PRICE = 29800
+const ADVANCED_OFFER_PLAN = '頂流達人班 24H 限時優惠'
+const ADVANCED_OFFER_MESSAGE = [
+  '你好，我剛看完體驗課，想了解「頂流達人班 24H 限時優惠」。',
+  '優惠價：NT$29,800',
+  '優惠內容：立即省 1 萬，可分期辦理',
+  '我想私訊官方客服 @xgfx，請協助我了解付款與開通方式。',
+].join('\n')
 
 function fmtCountdown(ms) {
   if (ms <= 0) return '00:00:00'
@@ -24,26 +34,43 @@ function useCountdown(targetMs) {
 
 /** Banner for the 24h creator plan upgrade prompt after trial completion. */
 export function AdvancedOfferBanner({ offer }) {
+  const [showLineModal, setShowLineModal] = useState(false)
   const deadline  = Date.now() + offer.remainingMs
   const remaining = useCountdown(deadline)
   if (remaining <= 0) return null
 
   return (
-    <div className="offer-banner offer-banner-advanced">
-      <div className="offer-banner-inner">
-        <div className="offer-banner-text">
-          <strong>恭喜完成體驗課！可評估升級頂流達人</strong>
-          <span>從 AI 選題體驗，進入完整自媒體獲客系統課。</span>
+    <>
+      <div className="offer-banner offer-banner-advanced offer-banner-hot">
+        <div className="offer-banner-inner">
+          <div className="offer-banner-emoji">🔥</div>
+          <div className="offer-banner-text">
+            <strong>達人班優惠 $29,800｜立即省 1 萬</strong>
+            <span>可分期辦理。24H 內私訊官方客服 @xgfx，優惠倒數結束後自動消失。</span>
+          </div>
+          <div className="offer-banner-countdown">
+            <span className="offer-countdown-label">優惠剩餘</span>
+            <span className="offer-countdown-clock">{fmtCountdown(remaining)}</span>
+          </div>
+          <button className="btn btn-sm offer-banner-btn" onClick={() => setShowLineModal(true)}>
+            私訊官方客服 @xgfx
+          </button>
         </div>
-        <div className="offer-banner-countdown">
-          <span className="offer-countdown-label">優惠剩餘</span>
-          <span className="offer-countdown-clock">{fmtCountdown(remaining)}</span>
-        </div>
-        <button className="btn btn-sm offer-banner-btn" disabled>
-          即將開放
-        </button>
       </div>
-    </div>
+      {showLineModal && (
+        <ManualPaymentModal
+          planName={ADVANCED_OFFER_PLAN}
+          amount={ADVANCED_OFFER_PRICE}
+          title="私訊官方客服 @xgfx"
+          kicker="24H Upgrade Offer"
+          description="請先複製優惠詢問文字，再前往 Line@ 貼給客服，我們會協助說明分期與開通方式。"
+          messageLabel="請複製這段文字貼到 Line@"
+          customMessage={ADVANCED_OFFER_MESSAGE}
+          primaryLabel="複製並前往 Line@"
+          onClose={() => setShowLineModal(false)}
+        />
+      )}
+    </>
   )
 }
 
