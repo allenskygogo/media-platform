@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getUsers, TIER_META } from '../../data/mockData'
+import { hasSupabase, supabase } from '../../lib/supabase'
 
 const ACTIVITY_MESSAGES_KEY = 'mp_activity_messages'
 const ACTIVITY_SEND_LOG_KEY = 'mp_activity_send_logs'
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const ACTIVITY_TYPES = [
   { key: 'offline_class', label: '實體課程' },
@@ -86,6 +88,7 @@ function targetStudents(users, audience) {
 
 export default function TrialAdmin() {
   const [users, setUsers] = useState(() => getUsers())
+  const [loadingUsers, setLoadingUsers] = useState(false)
   const [messages, setMessages] = useState(() => readJson(ACTIVITY_MESSAGES_KEY, []))
   const [sendLogs, setSendLogs] = useState(() => readJson(ACTIVITY_SEND_LOG_KEY, []))
   const [form, setForm] = useState(DEFAULT_FORM)
@@ -97,7 +100,32 @@ export default function TrialAdmin() {
   const latestLogs = sendLogs.slice(0, 8)
 
   useEffect(() => {
-    const sync = () => setUsers(getUsers())
+    const loadStudents = async () => {
+      if (!hasSupabase || !supabase) {
+        setUsers(getUsers())
+        return
+      }
+      setLoadingUsers(true)
+      try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData?.session?.access_token
+        if (!token) throw new Error('Missing admin token')
+        const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/admin/students`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok || data.success === false) throw new Error(data.error || 'Failed to load students')
+        setUsers(data.students || [])
+      } catch (error) {
+        console.error('Activity students load failed:', error)
+        setUsers(getUsers())
+      } finally {
+        setLoadingUsers(false)
+      }
+    }
+
+    loadStudents()
+    const sync = () => loadStudents()
     window.addEventListener('storage', sync)
     return () => window.removeEventListener('storage', sync)
   }, [])
@@ -192,7 +220,7 @@ export default function TrialAdmin() {
       <div className="page-actions" style={{ marginBottom: 24 }}>
         <div className="page-heading" style={{ margin: 0 }}>
           <h1>活動管理</h1>
-          <p>建立實體課程、線上活動、優惠公告，之後可接 Email、Line OA 或簡訊一鍵發送。</p>
+          <p>{loadingUsers ? '讀取正式學員中...' : '建立實體課程、線上活動、優惠公告，之後可接 Email、Line OA 或簡訊一鍵發送。'}</p>
         </div>
         <button className="btn btn-primary" onClick={sendActivity}>
           一鍵發送活動資訊

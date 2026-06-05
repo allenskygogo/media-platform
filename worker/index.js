@@ -2399,12 +2399,52 @@ async function getCourseCatalog(env) {
   }
   const row = Array.isArray(rows) ? rows[0] : null
 
+  const courses = Array.isArray(row?.courses) ? row.courses : []
+
   return {
-    courses: Array.isArray(row?.courses) ? row.courses : [],
+    courses: await withCourseStudentCounts(env, courses),
     cfVideos: Array.isArray(row?.cf_videos) ? row.cf_videos : [],
     videoAssignments: row?.video_assignments && typeof row.video_assignments === 'object' ? row.video_assignments : {},
     updatedAt: row?.updated_at || null,
   }
+}
+
+async function withCourseStudentCounts(env, courses) {
+  try {
+    const profiles = await listStudentProfiles(env)
+    const memberships = await listLatestActiveMemberships(env, profiles.map(profile => profile.id))
+    const profileById = Object.fromEntries(profiles.map(profile => [profile.id, profile]))
+    const students = memberships
+      .map(membership => ({
+        profile: profileById[membership.user_id],
+        tier: membership.plan_id ? planToLegacyTier(membership.plan_id) : membership.legacy_tier || 'basic',
+      }))
+      .filter(item => item.profile?.status !== 'inactive' && item.tier !== 'managed')
+
+    return courses.map(course => {
+      const accessLevels = getCourseAccessLevels(course)
+      const allowedTiers = accessLevels.map(courseAccessLevelToTier).filter(Boolean)
+      return {
+        ...course,
+        students: students.filter(student => allowedTiers.includes(student.tier)).length,
+      }
+    })
+  } catch (error) {
+    console.error('Course student count enrichment failed:', error)
+    return courses
+  }
+}
+
+function getCourseAccessLevels(course = {}) {
+  if (Array.isArray(course.accessLevels) && course.accessLevels.length > 0) return course.accessLevels
+  const order = ['trial', 'standard', 'advanced']
+  const legacyAccess = course.accessLevel || ({ basic: 'trial', standard: 'standard', advanced: 'advanced' }[course.tier]) || 'standard'
+  const startIndex = order.indexOf(legacyAccess)
+  return startIndex >= 0 ? order.slice(startIndex) : [legacyAccess]
+}
+
+function courseAccessLevelToTier(accessLevel) {
+  return { trial: 'basic', standard: 'standard', advanced: 'advanced' }[accessLevel] || ''
 }
 
 async function upsertCourseCatalog(env, catalog) {

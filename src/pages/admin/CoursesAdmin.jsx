@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import {
   getCourses, saveCourses,
+  getUsers,
   getCFVideos, saveCFVideo, deleteCFVideoLocal,
   getVideoForLesson, assignVideoToLesson,
   getVideoAssignments,
@@ -8,6 +9,9 @@ import {
 } from '../../data/mockData'
 import { uploadVideoToCF, getVideo, listVideos, deleteVideo, extractCustomerSubdomain, isConfigured as workerConfigured } from '../../services/streamApi'
 import { getLocalCourseCatalog, saveCourseCatalog, seedCourseCatalogIfEmpty } from '../../services/courseCatalog'
+import { hasSupabase, supabase } from '../../lib/supabase'
+
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const CATEGORIES = ['影音創作', '社群媒體', '音頻創作', '商業變現', '數據分析', 'AI 應用']
 const COURSE_LEVELS = {
@@ -65,6 +69,17 @@ function courseAccessLabel(course = {}) {
     .map(level => ACCESS_LEVELS.find(item => item.key === level)?.label)
     .filter(Boolean)
     .join(' / ') || courseLevelLabel(course.tier)
+}
+
+function courseStudentCount(course, students) {
+  const accessLevels = getCourseAccessLevels(course)
+  const accessTiers = accessLevels.map(level => ACCESS_LEVELS.find(item => item.key === level)?.tier).filter(Boolean)
+  return students.filter(student => (
+    student.role === 'student' &&
+    student.status !== 'inactive' &&
+    student.tier !== 'managed' &&
+    accessTiers.includes(student.tier)
+  )).length
 }
 
 function courseFormWithAccess(form) {
@@ -589,6 +604,7 @@ function HomeworkModal({ lessonId, lessonTitle, onClose }) {
 export default function CoursesAdmin() {
   const [courses,     setCourses]     = useState(getCourses)
   const [cfVideos,    setCfVideos]    = useState(getCFVideos)
+  const [students,    setStudents]    = useState(() => getUsers().filter(u => u.role === 'student' && u.tier !== 'managed'))
   const [view,        setView]        = useState('list')      // 'list' | 'detail'
   const [course,      setCourse]      = useState(null)        // selected course
   const [msg,         setMsg]         = useState('')
@@ -614,6 +630,26 @@ export default function CoursesAdmin() {
   const flash = (t) => { setMsg(t); setTimeout(() => setMsg(''), 3000) }
   const refreshCourses = () => { const c = getCourses(); setCourses(c); if (course) setCourse(c.find(x=>x.id===course?.id)||null) }
   const refreshVideos  = () => setCfVideos(getCFVideos())
+  const loadStudents = async () => {
+    if (!hasSupabase || !supabase) {
+      setStudents(getUsers().filter(u => u.role === 'student' && u.tier !== 'managed'))
+      return
+    }
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      if (!token) throw new Error('Missing admin token')
+      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/admin/students`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || data.success === false) throw new Error(data.error || 'Failed to load students')
+      setStudents((data.students || []).filter(u => u.role === 'student' && u.tier !== 'managed'))
+    } catch (error) {
+      console.error('Course student count load failed:', error)
+      setStudents(getUsers().filter(u => u.role === 'student' && u.tier !== 'managed'))
+    }
+  }
   const syncCatalog = async (catalog = getLocalCourseCatalog()) => {
     const synced = await saveCourseCatalog(catalog)
     setCourses(synced.courses)
@@ -636,6 +672,10 @@ export default function CoursesAdmin() {
         if (!cancelled) flash(`課程同步失敗：${err.message}`)
       })
     return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    loadStudents()
   }, [])
 
   // ── Course CRUD ─────────────────────────────────────────────────────────────
@@ -781,7 +821,7 @@ export default function CoursesAdmin() {
                       <p className="course-admin-card-meta">{c.instructor} · {lessons.length} 堂 · {c.duration||'—'}</p>
                       <div className="course-admin-card-stats">
                         <span>{uploaded}/{lessons.length} 已上傳</span>
-                        <span>{c.students.toLocaleString()} 人</span>
+                        <span>{courseStudentCount(c, students).toLocaleString()} 人</span>
                       </div>
                       <div className="course-admin-card-actions">
                         <button className="btn btn-primary btn-sm" onClick={() => enterCourse(c)}>進入課程 →</button>
