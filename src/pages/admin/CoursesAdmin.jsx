@@ -95,6 +95,66 @@ function formatLessonDuration(seconds) {
   return `${minutes}分鐘`
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function normalizeVideoTitle(value = '') {
+  return String(value).replace(/\.[^.]+$/, '').trim()
+}
+
+async function pollStreamVideo(uid, attempts = 60, delayMs = 5000) {
+  let latest = null
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const response = await getVideo(uid)
+      if (response?.result) {
+        latest = response.result
+        if (latest.readyToStream || latest.status?.state === 'ready') return latest
+      }
+    } catch (error) {
+      console.warn('Stream video polling failed:', error)
+    }
+    await sleep(delayMs)
+  }
+  return latest
+}
+
+async function findUploadedStreamVideo(title, file) {
+  const normalizedTitle = normalizeVideoTitle(title)
+  const response = await listVideos()
+  const videos = Array.isArray(response?.result) ? response.result : []
+  return videos.find(video => {
+    const remoteName = normalizeVideoTitle(video.meta?.name || video.name || '')
+    if (remoteName !== normalizedTitle) return false
+    if (!file?.size || !video.size) return true
+    return Math.abs(Number(video.size) - Number(file.size)) < 1024 * 1024
+  }) || null
+}
+
+function makeCFVideoRecord({ uid, title, file, localDuration, video }) {
+  const hlsUrl = video?.playback?.hls || ''
+  return {
+    uid,
+    name: title,
+    status: video?.status?.state || 'pendingupload',
+    readyToStream: video?.readyToStream || false,
+    duration: Math.round(video?.duration || localDuration || 0),
+    size: video?.size || file?.size || 0,
+    created: video?.created || new Date().toISOString(),
+    customerSubdomain: extractCustomerSubdomain(hlsUrl) || 'customer-unknown',
+    hlsUrl,
+  }
+}
+
+async function saveCourseCatalogQuietly(courses) {
+  try {
+    await saveCourseCatalog({ ...getLocalCourseCatalog(), courses })
+  } catch (error) {
+    console.warn('Course catalog background sync failed:', error)
+  }
+}
+
 function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
   const [files, setFiles] = useState([])
   const [phase, setPhase] = useState('idle')
@@ -133,18 +193,21 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
           setUploadStep('上傳到 Cloudflare Stream')
           setPct(value)
         }
-        const { uid } = await uploadVideoToCF(title, file, progressWithStep)
+        let uid = null
+        try {
+          const uploadResult = await uploadVideoToCF(title, file, progressWithStep)
+          uid = uploadResult.uid
+        } catch (uploadError) {
+          setUploadStep('前端連線中斷，反查 Cloudflare')
+          const recovered = await findUploadedStreamVideo(title, file)
+          if (!recovered?.uid) throw uploadError
+          uid = recovered.uid
+        }
         setPct(100)
         setUploadStep('等待 Cloudflare 處理影片')
 
-        let video = null
-        for (let j = 0; j < 10; j++) {
-          await new Promise(r => setTimeout(r, 3000))
-          const vRes = await getVideo(uid)
-          if (vRes?.result) { video = vRes.result; break }
-        }
+        const video = await pollStreamVideo(uid)
 
-        const hlsUrl = video?.playback?.hls || ''
         const duration = Math.round(video?.duration || localDuration || 0)
         const lesson = {
           id: Date.now() + i,
@@ -152,23 +215,14 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
           duration: formatLessonDuration(duration),
           free: false,
         }
-        saveCFVideo({
-          uid,
-          name: title,
-          status: video?.status?.state || 'pendingupload',
-          readyToStream: video?.readyToStream || false,
-          duration,
-          size: file.size,
-          created: new Date().toISOString(),
-          customerSubdomain: extractCustomerSubdomain(hlsUrl) || 'customer-unknown',
-          hlsUrl,
-        })
+        saveCFVideo(makeCFVideoRecord({ uid, title, file, localDuration, video }))
         assignVideoToLesson(lesson.id, uid)
         workingCourses = workingCourses.map(item => {
           if (item.id !== course.id) return item
           return { ...item, lessons: [...(item.lessons || []), lesson] }
         })
         saveCourses(workingCourses)
+        await saveCourseCatalogQuietly(workingCourses)
         setUploadedCount(i + 1)
         setUploadStep('已保存課堂')
       }
@@ -294,31 +348,25 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
           setUploadStep('上傳到 Cloudflare Stream')
           setPct(value)
         }
-        const { uid } = await uploadVideoToCF(label, file, progressWithStep)
+        let uid = null
+        try {
+          const uploadResult = await uploadVideoToCF(label, file, progressWithStep)
+          uid = uploadResult.uid
+        } catch (uploadError) {
+          setUploadStep('前端連線中斷，反查 Cloudflare')
+          const recovered = await findUploadedStreamVideo(label, file)
+          if (!recovered?.uid) throw uploadError
+          uid = recovered.uid
+        }
         setPct(100)
         setUploadStep('等待 Cloudflare 處理影片')
 
-        let video = null
-        for (let j = 0; j < 10; j++) {
-          await new Promise(r => setTimeout(r, 3000))
-          const vRes = await getVideo(uid)
-          if (vRes?.result) { video = vRes.result; break }
-        }
+        const video = await pollStreamVideo(uid)
 
-        const hlsUrl = video?.playback?.hls || ''
-        const record = {
-          uid, name: label,
-          status: video?.status?.state || 'pendingupload',
-          readyToStream: video?.readyToStream || false,
-          duration: Math.round(video?.duration || localDuration || 0),
-          size: file.size,
-          created: new Date().toISOString(),
-          customerSubdomain: extractCustomerSubdomain(hlsUrl) || 'customer-unknown',
-          hlsUrl,
-        }
-        saveCFVideo(record)
+        saveCFVideo(makeCFVideoRecord({ uid, title: label, file, localDuration, video }))
 
         if (i === 0) assignVideoToLesson(lessonId, uid)
+        await saveCourseCatalogQuietly(getCourses())
         setUploadedCount(i + 1)
         setUploadStep('已保存影片')
       }
