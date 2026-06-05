@@ -4,6 +4,16 @@ import { useAuth } from '../../context/AuthContext'
 import { getSessionBookings, getSessions, getWatchProgress, getAdvancedOfferStatus, getSystemSettings } from '../../data/mockData'
 import { IconClock, IconArrow, IconCheck, IconPlay, IconBook, IconAI, IconChart } from '../../components/Icons'
 import { AdvancedOfferBanner } from '../../components/CountdownBanner'
+import ManualPaymentModal from '../../components/ManualPaymentModal'
+
+const ADVANCED_OFFER_PRICE = 29800
+const ADVANCED_OFFER_PLAN = '頂流達人班 24H 限時優惠'
+const ADVANCED_OFFER_MESSAGE = [
+  '你好，我想了解「頂流達人班」升級方案。',
+  '優惠價：NT$29,800',
+  '優惠內容：體驗完課 24H 內優惠，立即省 1 萬，可分期辦理',
+  '我想聯繫官方帳號 @xgfx，請協助我了解付款與開通方式。',
+].join('\n')
 
 function fmtMs(ms) {
   if (ms <= 0) return '00:00:00'
@@ -29,6 +39,7 @@ const HIGHLIGHTS = [
 export default function TrialHome() {
   const { currentUser } = useAuth()
   const navigate = useNavigate()
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false)
 
   useEffect(() => {
     const { bgImages } = getSystemSettings()
@@ -128,7 +139,7 @@ export default function TrialHome() {
             <>
               <p className="th2-countdown">{fmtMs(offerRemaining)}</p>
               <p className="th2-stat-sub">達人班 $29,800，立即省 1 萬，可分期辦理</p>
-              <button className="th2-stat-btn primary" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+              <button className="th2-stat-btn primary" onClick={() => setShowUpgradeModal(true)}>
                 私訊 @xgfx <IconArrow size={11}/>
               </button>
             </>
@@ -144,7 +155,9 @@ export default function TrialHome() {
           <p className="th2-stat-title">頂流達人方案</p>
           <p className="th2-stat-val">$29,800</p>
           <p className="th2-stat-sub">體驗完課 24H 內優惠，立即省 1 萬</p>
-          <button className="th2-stat-btn" disabled>即將開放</button>
+          <button className="th2-stat-btn primary" onClick={() => setShowUpgradeModal(true)}>
+            聯繫官方帳號 @xgfx
+          </button>
         </div>
       </div>
 
@@ -164,6 +177,19 @@ export default function TrialHome() {
           </div>
         ))}
       </div>
+      {showUpgradeModal && (
+        <ManualPaymentModal
+          planName={ADVANCED_OFFER_PLAN}
+          amount={ADVANCED_OFFER_PRICE}
+          title="聯繫官方帳號 @xgfx"
+          kicker="Upgrade Contact"
+          description="請先複製升級詢問文字，再前往 Line@ 貼給客服，我們會協助說明分期與開通方式。"
+          messageLabel="請複製這段文字貼到 Line@"
+          customMessage={ADVANCED_OFFER_MESSAGE}
+          primaryLabel="複製並前往 Line@"
+          onClose={() => setShowUpgradeModal(false)}
+        />
+      )}
     </div>
   )
 }
