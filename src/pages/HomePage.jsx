@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { openLineOfficial } from '../utils/manualPayment'
+import ManualPaymentModal from '../components/ManualPaymentModal'
+
+const TRIAL_PRICE = 980
+const TRIAL_PLAN_NAME = '自媒體獲客-定位體驗課'
 
 // ─────────────────────────────────────────────────
 //  Local mock — no API call needed
@@ -67,7 +70,7 @@ function HomeNav() {
 // ─────────────────────────────────────────────────
 //  Section 1 — Static Hero Banner
 // ─────────────────────────────────────────────────
-function HeroSection() {
+function HeroSection({ onPurchase }) {
   return (
     <>
       {/* ── 560px visual banner ── */}
@@ -90,7 +93,7 @@ function HeroSection() {
 
         <div className="hp-hero-btns">
           <Link to="/trial-login" className="hp-btn-primary hp-btn-lg">免費體驗 AI 工具</Link>
-          <button type="button" className="hp-btn-ghost hp-btn-lg" onClick={openLineOfficial}>Line@ 匯款購買</button>
+          <button type="button" className="hp-btn-ghost hp-btn-lg" onClick={onPurchase}>Line@ 匯款購買</button>
         </div>
       </section>
 
@@ -123,7 +126,7 @@ function HeroSection() {
 // ─────────────────────────────────────────────────
 //  Section 2 — AI Demo
 // ─────────────────────────────────────────────────
-function AIDemoSection() {
+function AIDemoSection({ onPurchase }) {
   const [industry, setIndustry] = useState('')
   const [topics, setTopics] = useState([])
   const [loading, setLoading] = useState(false)
@@ -211,7 +214,7 @@ function AIDemoSection() {
             <p className="hp-ai-unlock-price">
               方案起售 <strong>$980</strong> · 含 AI 工具全功能
             </p>
-            <button type="button" className="hp-btn-primary" onClick={openLineOfficial}>Line@ 匯款購買</button>
+            <button type="button" className="hp-btn-primary" onClick={onPurchase}>Line@ 匯款購買</button>
             <Link to="/trial-login" className="hp-ai-unlock-trial">先免費試用 &rarr;</Link>
           </div>
         </div>
@@ -433,7 +436,7 @@ function ResultsSection() {
 // ─────────────────────────────────────────────────
 //  Section 7 — Final CTA + Footer
 // ─────────────────────────────────────────────────
-function FinalCTA() {
+function FinalCTA({ onPurchase }) {
   return (
     <section className="hp-final-cta">
       <div className="hp-final-cta-glow" />
@@ -441,7 +444,7 @@ function FinalCTA() {
         <h2 className="hp-final-cta-title">現在就開始打造你的頂級流量</h2>
         <p className="hp-final-cta-desc">加入 1,200+ 位創作者，用 AI 加速你的自媒體成長</p>
         <div className="hp-final-cta-btns">
-          <button type="button" className="hp-btn-primary hp-btn-lg" onClick={openLineOfficial}>
+          <button type="button" className="hp-btn-primary hp-btn-lg" onClick={onPurchase}>
             Line@ 匯款購買 · 方案起售 $980
           </button>
           <Link to="/trial-login" className="hp-btn-ghost hp-btn-lg">
@@ -479,17 +482,26 @@ function Footer() {
 //  Root export — no auth dependency
 // ─────────────────────────────────────────────────
 export default function HomePage() {
+  const [showManualPayment, setShowManualPayment] = useState(false)
+
   return (
     <div className="hp-root">
       <HomeNav />
-      <HeroSection />
-      <AIDemoSection />
+      <HeroSection onPurchase={() => setShowManualPayment(true)} />
+      <AIDemoSection onPurchase={() => setShowManualPayment(true)} />
       <PainPointsSection />
       <CourseStagesSection />
       <AIFeaturesSection />
       <ResultsSection />
-      <FinalCTA />
+      <FinalCTA onPurchase={() => setShowManualPayment(true)} />
       <Footer />
+      {showManualPayment && (
+        <ManualPaymentModal
+          planName={TRIAL_PLAN_NAME}
+          amount={TRIAL_PRICE}
+          onClose={() => setShowManualPayment(false)}
+        />
+      )}
     </div>
   )
 }

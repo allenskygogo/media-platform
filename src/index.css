@@ -3522,6 +3522,12 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   margin: 0;
   line-height: 1.7;
 }
+.manual-payment-message {
+  margin-top: 10px;
+  min-height: 170px;
+  resize: vertical;
+  white-space: pre-wrap;
+}
 
 /* ── Misc ── */
 .empty-state { text-align: center; padding: 60px 24px; color: var(--gray-400); }

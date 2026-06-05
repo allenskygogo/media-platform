@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import BrandLogo from '../components/BrandLogo'
+import ManualPaymentModal from '../components/ManualPaymentModal'
 import { initPixel, fbq } from '../utils/fbPixel'
 import { callAI } from '../services/aiService'
-import { openLineOfficial } from '../utils/manualPayment'
 
 const REGISTER_NOTICE = '目前僅開放已購買體驗課的學員註冊，請先購買體驗課後再完成會員註冊。'
 const TRIAL_PRICE = 980
+const TRIAL_PLAN_NAME = '自媒體獲客-定位體驗課'
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 // Replace with a public image path or URL when the final hero visual is ready.
 const heroBgImage = ''
@@ -468,6 +469,7 @@ export default function SalesPage() {
   const scrollRef = useRef(false)
   const [showLogin, setShowLogin] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
+  const [showManualPayment, setShowManualPayment] = useState(false)
   const [industry, setIndustry] = useState('健身')
   const [topics, setTopics] = useState(() => makeTopics('健身'))
   const [generatingTopics, setGeneratingTopics] = useState(false)
@@ -513,7 +515,7 @@ export default function SalesPage() {
 
   const handlePurchaseClick = () => {
     fbq.initiateCheckout()
-    openLineOfficial()
+    setShowManualPayment(true)
   }
 
   return (
@@ -935,6 +937,13 @@ export default function SalesPage() {
 
       {showLogin && <SalesLoginModal onClose={() => setShowLogin(false)} />}
       {showCheckout && <SalesCheckoutModal onClose={() => setShowCheckout(false)} />}
+      {showManualPayment && (
+        <ManualPaymentModal
+          planName={TRIAL_PLAN_NAME}
+          amount={TRIAL_PRICE}
+          onClose={() => setShowManualPayment(false)}
+        />
+      )}
     </div>
   )
 }
