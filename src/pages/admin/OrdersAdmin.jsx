@@ -36,8 +36,12 @@ export default function OrdersAdmin() {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(false)
   const [updatingId, setUpdatingId] = useState('')
+  const [selectedIds, setSelectedIds] = useState([])
+  const [deleting, setDeleting] = useState(false)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
+  const selectedOrders = orders.filter(order => selectedIds.includes(order.id))
+  const allSelected = orders.length > 0 && orders.every(order => selectedIds.includes(order.id))
 
   const flash = (text) => {
     setErr('')
@@ -85,6 +89,7 @@ export default function OrdersAdmin() {
     try {
       const data = await workerJson('/api/admin/orders')
       setOrders(data.orders || [])
+      setSelectedIds(ids => ids.filter(id => (data.orders || []).some(order => order.id === id)))
     } catch (error) {
       flashError(normalizeOrderError(error))
     } finally {
@@ -112,6 +117,39 @@ export default function OrdersAdmin() {
     }
   }
 
+  const toggleSelected = (orderId) => {
+    setSelectedIds(ids => ids.includes(orderId) ? ids.filter(id => id !== orderId) : [...ids, orderId])
+  }
+
+  const toggleSelectAll = () => {
+    setSelectedIds(allSelected ? [] : orders.map(order => order.id))
+  }
+
+  const deleteOrders = async (target) => {
+    const targets = Array.isArray(target) ? target : [target]
+    if (targets.length === 0) return
+    const label = targets.length === 1
+      ? `確定刪除訂單「${targets[0].orderNumber}」？此操作只會刪除訂單紀錄，不會刪除學員帳號。`
+      : `確定刪除 ${targets.length} 筆訂單？此操作只會刪除訂單紀錄，不會刪除學員帳號。`
+    if (!confirm(label)) return
+
+    setDeleting(true)
+    setUpdatingId(targets.length === 1 ? targets[0].id : '__bulk_delete__')
+    try {
+      for (const order of targets) {
+        await workerJson(`/api/admin/orders/${encodeURIComponent(order.id)}`, { method: 'DELETE' })
+      }
+      await loadOrders()
+      setSelectedIds(ids => ids.filter(id => !targets.some(order => order.id === id)))
+      flash(targets.length === 1 ? `已刪除訂單 ${targets[0].orderNumber}` : `已刪除 ${targets.length} 筆訂單`)
+    } catch (error) {
+      flashError(normalizeOrderError(error))
+    } finally {
+      setDeleting(false)
+      setUpdatingId('')
+    }
+  }
+
   return (
     <div>
       <div className="page-actions" style={{ marginBottom: 24 }}>
@@ -119,7 +157,14 @@ export default function OrdersAdmin() {
           <h1>訂單管理</h1>
           <p>{loading ? '讀取訂單中...' : `共 ${orders.length} 筆訂單`}</p>
         </div>
-        <button className="btn btn-secondary" onClick={loadOrders} disabled={loading}>重新整理</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {selectedOrders.length > 0 && (
+            <button className="btn btn-danger" onClick={() => deleteOrders(selectedOrders)} disabled={deleting}>
+              {deleting ? '刪除中...' : `刪除已選 ${selectedOrders.length} 筆`}
+            </button>
+          )}
+          <button className="btn btn-secondary" onClick={loadOrders} disabled={loading}>重新整理</button>
+        </div>
       </div>
 
       {msg && <div className="auth-alert success" style={{ marginBottom: 16 }}>{msg}</div>}
@@ -130,6 +175,9 @@ export default function OrdersAdmin() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: 42 }}>
+                  <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} disabled={!orders.length || loading || deleting} />
+                </th>
                 <th>訂單</th>
                 <th>學員</th>
                 <th>方案</th>
@@ -141,11 +189,14 @@ export default function OrdersAdmin() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>讀取訂單中...</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>讀取訂單中...</td></tr>
               ) : orders.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>目前沒有訂單</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>目前沒有訂單</td></tr>
               ) : orders.map(order => (
                 <tr key={order.id}>
+                  <td>
+                    <input type="checkbox" checked={selectedIds.includes(order.id)} onChange={() => toggleSelected(order.id)} disabled={deleting || updatingId === order.id} />
+                  </td>
                   <td>
                     <div style={{ fontWeight: 700 }}>{order.orderNumber}</div>
                     <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{order.provider}</div>
@@ -160,7 +211,7 @@ export default function OrdersAdmin() {
                   <td><span className={`badge badge-${order.status}`}>{STATUS_LABEL[order.status] || order.status}</span></td>
                   <td style={{ fontSize: 13, color: 'var(--gray-500)' }}>{dateText(order.createdAt)}</td>
                   <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       {order.status === 'pending' && (
                         <>
                           <button className="btn btn-success btn-sm" disabled={updatingId === order.id} onClick={() => updateStatus(order, 'paid')}>
@@ -177,6 +228,9 @@ export default function OrdersAdmin() {
                           恢復待付款
                         </button>
                       )}
+                      <button className="btn btn-danger btn-sm" disabled={deleting || updatingId === order.id} onClick={() => deleteOrders(order)}>
+                        刪除
+                      </button>
                     </div>
                   </td>
                 </tr>

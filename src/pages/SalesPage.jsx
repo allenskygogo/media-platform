@@ -10,6 +10,17 @@ const REGISTER_NOTICE = '目前僅開放已購買體驗課的學員註冊，請�
 const TRIAL_PRICE = 980
 const TRIAL_PLAN_NAME = '自媒體獲客-定位體驗課'
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
+
+function normalizeTaiwanMobilePhone(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  let digits = raw.replace(/[^\d+]/g, '')
+  if (digits.startsWith('+886')) digits = `0${digits.slice(4)}`
+  else if (digits.startsWith('886')) digits = `0${digits.slice(3)}`
+  digits = digits.replace(/\D/g, '')
+  return /^09\d{8}$/.test(digits) ? digits : ''
+}
+
 // Replace with a public image path or URL when the final hero visual is ready.
 const heroBgImage = ''
 const heroPersonImages = {
@@ -303,6 +314,11 @@ function SalesCheckoutModal({ onClose }) {
       setError('登入密碼至少需要 6 碼。')
       return
     }
+    const normalizedPhone = normalizeTaiwanMobilePhone(form.phone)
+    if (!normalizedPhone) {
+      setError('請輸入有效的台灣手機號碼（例：0912-345-678）。')
+      return
+    }
 
     setLoading(true)
     setError('')
@@ -314,7 +330,7 @@ function SalesCheckoutModal({ onClose }) {
         body: JSON.stringify({
           name: form.name,
           email: form.email,
-          phone: form.phone,
+          phone: normalizedPhone,
           password: form.password,
           planId: 'trial',
         }),

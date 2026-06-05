@@ -338,6 +338,12 @@ export default {
         return await handleUpdateOrder(request, orderId, env)
       }
 
+      // DELETE /api/admin/orders/:id → delete a checkout order record
+      if (path.startsWith('/api/admin/orders/') && request.method === 'DELETE') {
+        const orderId = decodeURIComponent(path.slice('/api/admin/orders/'.length))
+        return await handleDeleteOrder(request, orderId, env)
+      }
+
       // POST /api/admin/students/provision → manually open access for an offline purchaser
       if (path === '/api/admin/students/provision' && request.method === 'POST') {
         return await handleProvisionStudent(request, env)
@@ -869,7 +875,7 @@ async function handleCreateCheckoutOrder(request, env) {
   const body = await request.json().catch(() => ({}))
   const name = String(body.name || '').trim()
   const email = String(body.email || '').trim().toLowerCase()
-  const phone = String(body.phone || '').trim()
+  const phone = normalizeTaiwanMobilePhone(body.phone)
   const password = String(body.password || '').trim()
   const planId = String(body.planId || 'trial').trim()
   const legacyTier = planToLegacyTier(planId)
@@ -877,28 +883,24 @@ async function handleCreateCheckoutOrder(request, env) {
 
   if (!name) return err('Missing customer name', 400)
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err('Invalid email', 400)
-  if (!phone) return err('Missing phone', 400)
+  if (!phone) return err('請輸入有效的台灣手機號碼（例：0912-345-678）', 400)
   if (password.length < 6) return err('Password must be at least 6 characters', 400)
   if (!amount || !['trial', 'creator', 'master'].includes(planId)) return err('Invalid checkout plan', 400)
 
   const existingProfile = await getProfileByEmail(env, email)
-  let authUser = existingProfile?.id ? { id: existingProfile.id, email } : await getAuthUserByEmail(env, email)
+  const existingAuthUser = existingProfile?.id ? { id: existingProfile.id, email } : await getAuthUserByEmail(env, email)
+  const existingOrder = await getOrderByEmail(env, email)
 
-  if (authUser?.id) {
-    authUser = await updateSupabaseAuthUser(env, authUser.id, {
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { display_name: name, phone },
-    })
-  } else {
-    authUser = await createSupabaseAuthUser(env, {
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { display_name: name, phone },
-    })
+  if (existingProfile?.id || existingAuthUser?.id || existingOrder?.id) {
+    return err('此 Email 已申請過，請直接登入或聯繫客服協助。', 409)
   }
+
+  const authUser = await createSupabaseAuthUser(env, {
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { display_name: name, phone },
+  })
 
   await upsertProfile(env, {
     id: authUser.id,
@@ -1114,6 +1116,25 @@ async function handleUpdateOrder(request, orderId, env) {
   }
 
   return json({ success: true, order: mapOrder(order) })
+}
+
+async function handleDeleteOrder(request, orderId, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+  if (!/^[0-9a-f-]{36}$/i.test(orderId)) return err('Invalid order id', 400)
+
+  const order = await getOrderById(env, orderId)
+  if (!order) return err('Order not found', 404)
+
+  await deleteOrder(env, orderId)
+  return json({
+    success: true,
+    deletedId: orderId,
+    deletedOrderNumber: order.order_number,
+  })
 }
 
 async function handleListStudents(request, env) {
@@ -2110,6 +2131,24 @@ async function getOrderByTradeNo(env, merchantTradeNo) {
   return Array.isArray(data) ? data[0] || null : null
 }
 
+async function getOrderByEmail(env, email) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/orders`)
+  url.searchParams.set('customer_email', `eq.${email}`)
+  url.searchParams.set('select', 'id,order_number,user_id,customer_name,customer_email,customer_phone,plan_id,legacy_tier,amount,currency,status,provider,provider_trade_no,paid_at,notes,created_at,updated_at')
+  url.searchParams.set('order', 'created_at.desc')
+  url.searchParams.set('limit', '1')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    if (isMissingOrdersTable(data)) return null
+    throw new Error(data.message || 'Failed to read order by email')
+  }
+  return Array.isArray(data) ? data[0] || null : null
+}
+
 async function updateOrder(env, orderId, payload) {
   const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/orders`)
   url.searchParams.set('id', `eq.${orderId}`)
@@ -2130,6 +2169,33 @@ async function updateOrder(env, orderId, payload) {
     throw new Error(data.message || 'Failed to update order')
   }
   return Array.isArray(data) ? data[0] : data
+}
+
+async function deleteOrder(env, orderId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/orders`)
+  url.searchParams.set('id', `eq.${orderId}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'DELETE',
+    headers: supabaseServiceHeaders(env, { Prefer: 'return=minimal' }),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    if (isMissingOrdersTable(data)) {
+      throw new Error('訂單資料表尚未建立，請先在 Supabase SQL Editor 執行 orders migration。')
+    }
+    throw new Error(data.message || 'Failed to delete order')
+  }
+}
+
+function normalizeTaiwanMobilePhone(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  let digits = raw.replace(/[^\d+]/g, '')
+  if (digits.startsWith('+886')) digits = `0${digits.slice(4)}`
+  else if (digits.startsWith('886')) digits = `0${digits.slice(3)}`
+  digits = digits.replace(/\D/g, '')
+  return /^09\d{8}$/.test(digits) ? digits : ''
 }
 
 function isMissingOrdersTable(data) {
