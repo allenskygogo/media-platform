@@ -11918,6 +11918,36 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   .ait-copy-hint {
     margin-left: auto;
   }
+  .ait-copy-topic-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    gap: 10px 8px;
+    padding: 14px;
+  }
+  .ait-copy-topic-text {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    min-width: 0;
+    font-size: 15px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+  .ait-copy-topic-card .ait-element-chip,
+  .ait-copy-topic-card .ait-traffic-tag {
+    grid-row: 2;
+    justify-self: start;
+    margin-left: 0;
+  }
+  .ait-copy-topic-save-btn,
+  .ait-copy-topic-select-btn {
+    grid-row: 3;
+    justify-content: center;
+    width: 100%;
+    min-height: 42px;
+    padding: 0 10px;
+    border-radius: 10px;
+  }
   .ait-chat-wrap {
     min-height: auto;
   }
