@@ -30,6 +30,7 @@ const NAV_TOOLS = [
 
 const SAVED_TOPICS_FALLBACK_KEY = 'mp_saved_topics'
 const PRACTICE_FALLBACK_KEY = 'mp_topic_practices'
+const SCRIPT_DRAFTS_FALLBACK_KEY = 'mp_script_drafts'
 const AI_PRACTICE_PASS_SCORE = 75
 
 const STATS = [
@@ -1618,6 +1619,9 @@ function CopyPage() {
   const { currentUser } = useAuth()
   const canSeeAll = deriveAITier(currentUser) !== 'trial'
   const skipAutoGenerateRef = useRef(false)
+  const copyStateCacheRef = useRef({})
+  const scriptCacheRef = useRef({})
+  const activeScriptRequestRef = useRef('')
 
   // Step 1 — idea
   const [idea, setIdea] = useState('')
@@ -1644,6 +1648,66 @@ function CopyPage() {
   const [savedTopics, setSavedTopics] = useState([])
   const [savingTopic, setSavingTopic] = useState('')
   const [topicLibraryError, setTopicLibraryError] = useState('')
+  const [scriptDrafts, setScriptDrafts] = useState([])
+
+  const getTopicStateKey = (type = scriptType, round = topicRound, ideaText = idea.trim()) =>
+    [currentUser?.id || 'guest', ideaText, type || '', round].join('::')
+
+  const getScriptCacheKey = (topic, type = scriptType, ideaText = idea.trim()) =>
+    [currentUser?.id || 'guest', ideaText, type || '', topic?.text || ''].join('::')
+
+  const saveCurrentWorkspaceState = () => {
+    if (!scriptType || !idea.trim()) return
+    const key = getTopicStateKey()
+    copyStateCacheRef.current[key] = {
+      copyTopics,
+      selectedTopicIdx,
+      script,
+      scriptError,
+      practice,
+      practiceSubmitted,
+      practiceEvaluation,
+      practiceError,
+      shootFormat,
+    }
+  }
+
+  const hasUnfinishedScript = () => Boolean(script || practice.trim() || generatingScript)
+
+  const saveScriptDraft = (reason = 'abandoned') => {
+    if (!hasUnfinishedScript()) return
+    try {
+      const selectedTopic = selectedTopicIdx !== null ? copyTopics?.[selectedTopicIdx] : null
+      const all = JSON.parse(localStorage.getItem(SCRIPT_DRAFTS_FALLBACK_KEY) || '[]')
+      const draft = {
+        id: `draft-${Date.now()}`,
+        user_id: currentUser?.id || 'guest',
+        idea: idea.trim(),
+        script_type: scriptType,
+        script_type_label: SCRIPT_TYPES.find(s => s.id === scriptType)?.label || scriptType,
+        topic_text: selectedTopic?.text || '',
+        element: selectedTopic?.element || '',
+        traffic: selectedTopic?.traffic || '',
+        script,
+        practice,
+        shoot_format: shootFormat,
+        reason,
+        created_at: new Date().toISOString(),
+      }
+      const nextDrafts = [draft, ...all].slice(0, 50)
+      localStorage.setItem(SCRIPT_DRAFTS_FALLBACK_KEY, JSON.stringify(nextDrafts))
+      setScriptDrafts(nextDrafts.filter(item => String(item.user_id || 'guest') === String(currentUser?.id || 'guest')).slice(0, 4))
+    } catch (_) {
+      // Draft persistence should never block navigation.
+    }
+  }
+
+  const confirmAbandonCurrentScript = () => {
+    if (!hasUnfinishedScript()) return true
+    const ok = window.confirm('內容還未完成，確定要放棄嗎？\n\n確認退出後未完成的創作腳本將自動放入草稿箱')
+    if (ok) saveScriptDraft('abandoned')
+    return ok
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -1679,12 +1743,35 @@ function CopyPage() {
     return () => { cancelled = true }
   }, [currentUser?.id, currentUser?.source])
 
+  useEffect(() => {
+    try {
+      const all = JSON.parse(localStorage.getItem(SCRIPT_DRAFTS_FALLBACK_KEY) || '[]')
+      const userKey = String(currentUser?.id || 'guest')
+      setScriptDrafts(all.filter(item => String(item.user_id || 'guest') === userKey).slice(0, 4))
+    } catch (_) {
+      setScriptDrafts([])
+    }
+  }, [currentUser?.id])
+
   // Generate topics when scriptType is selected
   useEffect(() => {
     if (!scriptType || !idea.trim()) { setCopyTopics(null); return }
     if (!canUseScriptType(scriptType, currentUser)) { setCopyTopics(null); return }
     if (skipAutoGenerateRef.current) {
       skipAutoGenerateRef.current = false
+      return
+    }
+    const cachedState = copyStateCacheRef.current[getTopicStateKey(scriptType, topicRound, idea.trim())]
+    if (cachedState) {
+      setCopyTopics(cachedState.copyTopics)
+      setSelectedTopicIdx(cachedState.selectedTopicIdx)
+      setScript(cachedState.script)
+      setScriptError(cachedState.scriptError || '')
+      setPractice(cachedState.practice || '')
+      setPracticeSubmitted(Boolean(cachedState.practiceSubmitted))
+      setPracticeEvaluation(cachedState.practiceEvaluation || null)
+      setPracticeError(cachedState.practiceError || '')
+      setShootFormat(cachedState.shootFormat || null)
       return
     }
     let cancelled = false
@@ -1717,7 +1804,27 @@ function CopyPage() {
     return () => { cancelled = true }
   }, [scriptType, topicRound, idea, currentUser])
 
+  useEffect(() => {
+    if (!scriptType || !idea.trim() || !copyTopics) return
+    saveCurrentWorkspaceState()
+  }, [
+    scriptType,
+    topicRound,
+    idea,
+    copyTopics,
+    selectedTopicIdx,
+    script,
+    scriptError,
+    practice,
+    practiceSubmitted,
+    practiceEvaluation,
+    practiceError,
+    shootFormat,
+  ])
+
   const handleRefreshTopics = () => {
+    saveCurrentWorkspaceState()
+    if (!confirmAbandonCurrentScript()) return
     setTopicRound(r => r + 1)
     setSelectedTopicIdx(null)
     setScript(null)
@@ -1729,10 +1836,30 @@ function CopyPage() {
     setShootFormat(null)
   }
 
+  const handleIdeaChange = event => {
+    const nextIdea = event.target.value
+    if (nextIdea === idea) return
+    if (hasUnfinishedScript()) {
+      saveCurrentWorkspaceState()
+      if (!confirmAbandonCurrentScript()) return
+    }
+    setIdea(nextIdea)
+  }
+
   const generateScriptForTopic = async (topic, nextScriptType = scriptType, sourceIdea = idea.trim()) => {
     if (!topic?.text || !nextScriptType) return
     if (!canUseScriptType(nextScriptType, currentUser)) return
 
+    const cacheKey = getScriptCacheKey(topic, nextScriptType, sourceIdea)
+    const cachedScript = scriptCacheRef.current[cacheKey]
+    if (cachedScript) {
+      setScript(cachedScript.script)
+      setScriptError(cachedScript.scriptError || '')
+      setGeneratingScript(false)
+      return
+    }
+
+    activeScriptRequestRef.current = cacheKey
     setGeneratingScript(true)
     setScriptError('')
 
@@ -1765,17 +1892,30 @@ function CopyPage() {
             : '請優先依照已上傳的腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
       }
       const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
-      setScript(normalizeScriptResult(result, topic.text, nextScriptType))
+      const normalizedScript = normalizeScriptResult(result, topic.text, nextScriptType)
+      scriptCacheRef.current[cacheKey] = { script: normalizedScript, scriptError: '' }
+      if (activeScriptRequestRef.current === cacheKey) {
+        setScript(normalizedScript)
+      }
     } catch (error) {
-      setScript((MOCK_SCRIPTS[nextScriptType] || MOCK_SCRIPTS.knowledge)(topic.text))
-      setScriptError(error.message || 'AI 腳本生成暫時失敗，已先顯示本機備援腳本。')
+      const fallbackScript = (MOCK_SCRIPTS[nextScriptType] || MOCK_SCRIPTS.knowledge)(topic.text)
+      const fallbackError = error.message || 'AI 腳本生成暫時失敗，已先顯示本機備援腳本。'
+      scriptCacheRef.current[cacheKey] = { script: fallbackScript, scriptError: fallbackError }
+      if (activeScriptRequestRef.current === cacheKey) {
+        setScript(fallbackScript)
+        setScriptError(fallbackError)
+      }
     } finally {
-      setGeneratingScript(false)
+      if (activeScriptRequestRef.current === cacheKey) setGeneratingScript(false)
     }
   }
 
   const handleSelectTopic = idx => {
     const topic = copyTopics?.[idx]
+    if (!topic) return
+    if (selectedTopicIdx === idx && (script || generatingScript)) return
+    saveCurrentWorkspaceState()
+    if (!confirmAbandonCurrentScript()) return
     setSelectedTopicIdx(idx); setScript(null); setPractice(''); setPracticeSubmitted(false); setPracticeEvaluation(null); setPracticeError(''); setScriptError(''); setShootFormat(null)
     generateScriptForTopic(topic)
   }
@@ -1783,6 +1923,8 @@ function CopyPage() {
   const handleSelectSavedTopic = item => {
     const nextScriptType = item.script_type || scriptType || 'knowledge'
     if (!canUseScriptType(nextScriptType, currentUser)) return
+    saveCurrentWorkspaceState()
+    if (!confirmAbandonCurrentScript()) return
     const topic = {
       element: item.element || '人群',
       text: item.topic_text,
@@ -1801,6 +1943,35 @@ function CopyPage() {
     setScriptError('')
     setShootFormat(null)
     generateScriptForTopic(topic, nextScriptType, item.industry || item.topic_text)
+  }
+
+  const handleSelectDraft = draft => {
+    saveCurrentWorkspaceState()
+    if (!confirmAbandonCurrentScript()) return
+    const nextScriptType = draft.script_type || 'knowledge'
+    const topic = {
+      element: draft.element || '草稿',
+      text: draft.topic_text || draft.idea || '未命名草稿',
+      traffic: draft.traffic || 'medium',
+      draftId: draft.id,
+    }
+    const nextIdea = draft.idea || draft.topic_text || ''
+    const cacheKey = getScriptCacheKey(topic, nextScriptType, nextIdea)
+    if (draft.script) {
+      scriptCacheRef.current[cacheKey] = { script: draft.script, scriptError: '' }
+    }
+    skipAutoGenerateRef.current = true
+    setIdea(nextIdea)
+    setScriptType(nextScriptType)
+    setCopyTopics([topic])
+    setSelectedTopicIdx(0)
+    setScript(draft.script || null)
+    setPractice(draft.practice || '')
+    setPracticeSubmitted(false)
+    setPracticeEvaluation(null)
+    setPracticeError('')
+    setScriptError('')
+    setShootFormat(draft.shoot_format || null)
   }
 
   const isTopicSaved = topicText => savedTopics.some(item => item.topic_text === topicText)
@@ -2000,7 +2171,7 @@ function CopyPage() {
           rows={5}
           placeholder="例如：健身教練想吸引上班族，主題是三個月養成運動習慣；或輸入餐飲、美業、親子教育..."
           value={idea}
-          onChange={e => setIdea(e.target.value)}
+          onChange={handleIdeaChange}
         />
         <p style={{ fontSize: 12, color: 'var(--gray-500)', margin: 0 }}>系統會先產生選題，再引導你完成腳本練習</p>
       </div>
@@ -2016,6 +2187,23 @@ function CopyPage() {
               <button key={item.id} className="ait-topic-library-item" onClick={() => handleSelectSavedTopic(item)}>
                 <span className="ait-topic-library-title">{item.topic_text}</span>
                 <span className="ait-topic-library-meta">{item.script_type ? SCRIPT_TYPES.find(s => s.id === item.script_type)?.label : '未選腳本'}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {scriptDrafts.length > 0 && (
+        <div className="ait-card ait-topic-library">
+          <div className="ait-topic-library-hd">
+            <span>草稿箱</span>
+            <small>確認退出後，未完成腳本會先保存在這裡</small>
+          </div>
+          <div className="ait-topic-library-list">
+            {scriptDrafts.map(item => (
+              <button key={item.id} className="ait-topic-library-item" onClick={() => handleSelectDraft(item)}>
+                <span className="ait-topic-library-title">{item.topic_text || item.idea || '未命名草稿'}</span>
+                <span className="ait-topic-library-meta">{item.script_type_label || SCRIPT_TYPES.find(s => s.id === item.script_type)?.label || '未選腳本'}</span>
               </button>
             ))}
           </div>
@@ -2039,6 +2227,9 @@ function CopyPage() {
                 disabled={locked}
                 onClick={() => {
                   if (locked) return
+                  if (id === scriptType) return
+                  saveCurrentWorkspaceState()
+                  if (!confirmAbandonCurrentScript()) return
                   setScriptType(id); setSelectedTopicIdx(null); setScript(null); setScriptError('')
                 }}>
                 <Icon size={22} strokeWidth={1.5} /><span>{label}</span>{locked && <ComingSoonLabel />}
