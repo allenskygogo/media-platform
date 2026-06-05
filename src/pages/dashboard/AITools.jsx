@@ -81,6 +81,29 @@ const TOPIC_SETS = [
   ],
 ]
 
+const PROCESS_TOPIC_SETS = [
+  [
+    { element: '過程展示', traffic: 'high',   tpl: '紀錄我做一個{ind}專案的完整過程' },
+    { element: '測評產品', traffic: 'high',   tpl: '對比五款{ind}工具，哪一款最適合新手' },
+    { element: '任務挑戰', traffic: 'high',   tpl: '挑戰一天完成一個可落地的{ind}成果' },
+    { element: '事件體驗', traffic: 'medium', tpl: '當一天{ind}新手，體驗從零學起的真實感受' },
+    { element: '過程展示', traffic: 'medium', tpl: '公開我幫客戶規劃{ind}方案的全流程' },
+    { element: '測評產品', traffic: 'medium', tpl: '實測三種{ind}方法，哪一種最快看到效果' },
+    { element: '任務挑戰', traffic: 'medium', tpl: '限時三小時完成一份{ind}交付，結果會怎樣' },
+    { element: '事件體驗', traffic: 'medium', tpl: '第一次跟著學員視角做{ind}，我發現最卡的是這裡' },
+  ],
+  [
+    { element: '過程展示', traffic: 'high',   tpl: '帶你看我從接需求到交付{ind}的每一步' },
+    { element: '測評產品', traffic: 'high',   tpl: '便宜和高價{ind}設備實測，差別真的有那麼大嗎' },
+    { element: '任務挑戰', traffic: 'high',   tpl: '挑戰用最低成本做出一套{ind}成果' },
+    { element: '事件體驗', traffic: 'medium', tpl: '我去體驗一堂{ind}課，看看新手到底會卡在哪' },
+    { element: '過程展示', traffic: 'medium', tpl: '一支{ind}作品從想法到完成，我實際怎麼做' },
+    { element: '測評產品', traffic: 'medium', tpl: '我把熱門{ind}工具全部試一遍，最推薦的是這個' },
+    { element: '任務挑戰', traffic: 'medium', tpl: '挑戰一天幫企業完成三套可執行的{ind}方案' },
+    { element: '事件體驗', traffic: 'medium', tpl: '角色互換：我當學員重新學一次{ind}，才知道哪裡最難' },
+  ],
+]
+
 function buildTopics(industry, round) {
   const set = TOPIC_SETS[round % TOPIC_SETS.length]
   return set.map(t => ({
@@ -745,8 +768,8 @@ const PLANNING_TOPIC_SETS = {
     ['我跟{ind}行業裡最頂尖的人吃了一頓飯', '為了做好{ind}，我做了一個很難的決定', '那段沒有收入做{ind}的日子，怎麼撐過來的', '我在{ind}領域遇過最難纏的客戶', '{ind}路上遇到貴人，改變了我的整個方向', '做{ind}讓我意識到，自己原來是這樣的人', '因為{ind}認識了一個朋友，後來成為合夥人', '我的{ind}事業幾乎崩掉的那一天', '一個陌生人的一句話，讓我在{ind}堅持下來', '做{ind}最後悔和最正確的決定，分別是什麼'],
   ],
   process: [
-    ['我的{ind}一天是怎麼過的，全程記錄', '從想法到成品，我做{ind}的完整流程', '我準備一場{ind}直播需要多少工作量', '{ind}訂單成交的全過程，真實拍攝', '我如何在{ind}做選題，完整流程公開', '從0到第一個{ind}客戶，我做了什麼', '我如何在{ind}管理我的時間和精力', '一個{ind}爆款的誕生，完整紀錄過程', '月收入翻倍的那個月，我在{ind}做了什麼', '我的{ind}工作空間，怎麼設計的'],
-    ['新手做{ind}的第一週，全程記錄', '{ind}直播前一小時，我在準備什麼', '我是怎麼在{ind}找到第一批核心粉絲的', '做{ind}最忙的一天，是什麼感覺', '我如何同時管理{ind}帳號和正職工作', '一個{ind}項目失敗的全程記錄', '拿到{ind}大客戶那一天，我做了什麼', '我的{ind}月結算，每一分錢怎麼來的', '做{ind}賺到人生第一個10萬的過程', '{ind}從副業到主業的轉型全記錄'],
+    ['紀錄我做一個{ind}專案的完整過程', '對比五款{ind}工具，哪一款最適合新手', '挑戰一天完成一個可落地的{ind}成果', '當一天{ind}新手，體驗從零學起的真實感受', '公開我幫客戶規劃{ind}方案的全流程', '實測三種{ind}方法，哪一種最快看到效果', '限時三小時完成一份{ind}交付，結果會怎樣', '第一次跟著學員視角做{ind}，我發現最卡的是這裡'],
+    ['帶你看我從接需求到交付{ind}的每一步', '便宜和高價{ind}設備實測，差別真的有那麼大嗎', '挑戰用最低成本做出一套{ind}成果', '我去體驗一堂{ind}課，看看新手到底會卡在哪', '一支{ind}作品從想法到完成，我實際怎麼做', '我把熱門{ind}工具全部試一遍，最推薦的是這個', '挑戰一天幫企業完成三套可執行的{ind}方案', '角色互換：我當學員重新學一次{ind}，才知道哪裡最難'],
   ],
 }
 
@@ -848,6 +871,14 @@ function buildStoryTopics(idea, round) {
 function buildCopyTopics(idea, round, scriptType) {
   if (scriptType === 'opinion') return buildOpinionTopics(idea, round)
   if (scriptType === 'story') return buildStoryTopics(idea, round)
+  if (scriptType === 'process') {
+    const keyword = idea.slice(0, 12) || '你的主題'
+    return PROCESS_TOPIC_SETS[round % PROCESS_TOPIC_SETS.length].map(t => ({
+      element: t.element,
+      text:    t.tpl.replace(/{ind}/g, keyword),
+      traffic: t.traffic,
+    }))
+  }
   const set = TOPIC_SETS[round % TOPIC_SETS.length].slice(0, 5)
   const keyword = idea.slice(0, 8) || '你的主題'
   return set.map(t => ({
@@ -1555,7 +1586,9 @@ function CopyPage() {
             ? '請先依照說觀點選題邏輯產生可拍攝選題：先確認寫作對象 TA，再找 TA 最常衝突的人物關係，再找具體衝突事件，最後輸出明確觀點句。觀點句要優先使用否定句或強立場句，例如「千萬不要 + 行為」、「建議你不要 + 行為」、「真正懂的人，不會 + 行為」、「如果你是【身份】，一定不要 + 行為」、「【身份】最容易吃虧的，就是 + 錯誤行為」、「很多人以為【常識】，但其實【反常識觀點】」。不要做成知識解析題，不要牽強硬套，人物關係與衝突事件必須自然合理。'
             : scriptType === 'story'
               ? '請先依照說故事選題邏輯產生可拍攝選題。每一題都必須圍繞三種素材之一：自己達成的成就、你幫別人達成的成就、你用價值觀解決的衝突事件。選題要能自然接出困境與轉機，不能是知識解析、技巧清單、觀點評論或泛泛經驗談。優先使用「沒想到我一個【身份】，靠【事情】做到【成果】，只不過【阻礙】」、「我幫一個【對象】，從【低點】做到【成果】，中間差點卡在【困境】」、「那天我遇到【不公平事件】，我沒有選擇【常見反應】，而是【行動】」這種故事開場。'
-              : '請先產生可拍攝的爆款選題，再讓學員進入腳本練習流程。',
+              : scriptType === 'process'
+                ? '請先依照曬過程選題邏輯產生可拍攝選題。曬過程只有四個腳本方向：過程展示、測評產品、任務挑戰、事件體驗。8 個選題必須四種方向各至少 2 題，元素欄位請直接填「過程展示」「測評產品」「任務挑戰」「事件體驗」。過程展示要拍進貨、諮詢、服務、售後、接需求到交付等完整流程；測評產品要做對比測評、極限測評、化驗測評或工具設備比較；任務挑戰要有高/低成本、限時間/地點、一天內、三小時內等限制；事件體驗要有新奇體驗、奇葩規則、角色互換或當一天某身份。以短影音教學為例：紀錄我給學員訂製進階客腳本全過程；對比五款拍攝設備，哪款最適合新手；挑戰一天幫企業打造三套可落地的短影音；當一天短影音新手，體驗學員從零學起的真實感受。'
+                : '請先產生可拍攝的爆款選題，再讓學員進入腳本練習流程。',
         }
         const result = await callAI('topics', payload, deriveAITier(currentUser), currentUser?.id)
         if (!cancelled) setCopyTopics(normalizeGeneratedTopics(result, idea.trim(), topicRound, scriptType))
