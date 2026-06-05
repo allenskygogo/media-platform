@@ -109,7 +109,7 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
     setCurrentIndex(0)
     setUploadedCount(0)
 
-    const newLessons = []
+    let workingCourses = courses
     try {
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
@@ -136,8 +136,6 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
           duration: formatLessonDuration(duration),
           free: false,
         }
-        newLessons.push(lesson)
-
         saveCFVideo({
           uid,
           name: title,
@@ -150,28 +148,32 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
           hlsUrl,
         })
         assignVideoToLesson(lesson.id, uid)
+        workingCourses = workingCourses.map(item => {
+          if (item.id !== course.id) return item
+          return { ...item, lessons: [...(item.lessons || []), lesson] }
+        })
+        saveCourses(workingCourses)
         setUploadedCount(i + 1)
       }
 
-      const updated = courses.map(item => {
-        if (item.id !== course.id) return item
-        return { ...item, lessons: [...(item.lessons || []), ...newLessons] }
-      })
-      saveCourses(updated)
       setPhase('done')
-      await onSuccess?.(updated)
+      await onSuccess?.(workingCourses)
     } catch (e) {
       setErrMsg(e.message || '批量上傳失敗')
       setPhase('error')
     }
   }
 
+  const closeIfAllowed = () => {
+    if (phase !== 'uploading') onClose()
+  }
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={closeIfAllowed}>
       <div className="modal" style={{ maxWidth:520 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">批量上傳影片並建立課堂</h2>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={closeIfAllowed} disabled={phase === 'uploading'}>×</button>
         </div>
         <div className="modal-body">
           {phase === 'idle' && (
@@ -218,7 +220,7 @@ function BatchLessonUploadModal({ course, courses, onClose, onSuccess }) {
           )}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>{phase === 'done' ? '關閉' : '取消'}</button>
+          <button className="btn btn-secondary" onClick={closeIfAllowed} disabled={phase === 'uploading'}>{phase === 'done' ? '關閉' : '取消'}</button>
           {phase === 'idle' && (
             <button className="btn btn-primary" onClick={handleUpload} disabled={!files.length || !workerConfigured()}>
               開始批量上傳{files.length ? ` ${files.length} 支` : ''}
@@ -302,12 +304,16 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
     }
   }
 
+  const closeIfAllowed = () => {
+    if (phase !== 'uploading') onClose()
+  }
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={closeIfAllowed}>
       <div className="modal" style={{ maxWidth:520 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2 className="modal-title">上傳影片 — {lessonTitle}</h2>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={closeIfAllowed} disabled={phase === 'uploading'}>×</button>
         </div>
         <div className="modal-body">
           {!workerConfigured() && (
@@ -395,7 +401,7 @@ function UploadModal({ lessonId, lessonTitle, courseId, onClose, onSuccess }) {
           )}
         </div>
         <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>{phase==='done' ? '關閉' : '取消'}</button>
+          <button className="btn btn-secondary" onClick={closeIfAllowed} disabled={phase === 'uploading'}>{phase==='done' ? '關閉' : '取消'}</button>
           {phase === 'idle' && (
             <button className="btn btn-primary" onClick={handleUpload} disabled={!files.length || (files.length === 1 && !name.trim()) || !workerConfigured()}>
               開始上傳{files.length > 1 ? ` ${files.length} 支` : ''}
