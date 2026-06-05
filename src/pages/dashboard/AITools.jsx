@@ -127,13 +127,18 @@ const SCRIPT_TYPES = [
 
 const PUBLIC_AI_TOOL_IDS = new Set(['topics'])
 const PUBLIC_SCRIPT_TYPE_IDS = new Set(['knowledge', 'opinion'])
+const FULL_AI_TEST_EMAILS = new Set(['test-ai-pay@xgfx-tw.com'])
 
-function isPublicAITool(id) {
-  return PUBLIC_AI_TOOL_IDS.has(id)
+function hasFullAITestAccess(user) {
+  return FULL_AI_TEST_EMAILS.has(String(user?.email || '').trim().toLowerCase())
 }
 
-function isPublicScriptType(id) {
-  return PUBLIC_SCRIPT_TYPE_IDS.has(id)
+function canUseAITool(id, user) {
+  return PUBLIC_AI_TOOL_IDS.has(id) || hasFullAITestAccess(user)
+}
+
+function canUseScriptType(id, user) {
+  return PUBLIC_SCRIPT_TYPE_IDS.has(id) || hasFullAITestAccess(user)
 }
 
 function ComingSoonLabel() {
@@ -1097,6 +1102,7 @@ async function getSupabaseSessionToken() {
 
 // ── Tier helper ───────────────────────────────────────
 function deriveAITier(user) {
+  if (hasFullAITestAccess(user)) return 'advanced'
   const tier = user?.tier || 'basic'
   if (tier === 'advanced' || tier === 'managed') return 'advanced'
   if (tier === 'standard') return 'standard'
@@ -1293,7 +1299,7 @@ function TopicsPage() {
 
   const handleGenerateScript = async () => {
     if (!scriptType || !shootFormat || selected.length === 0) return
-    if (!isPublicScriptType(scriptType)) return
+    if (!canUseScriptType(scriptType, currentUser)) return
     setGeneratingScript(true); setScript(null)
     await new Promise(r => setTimeout(r, 1100))
     const firstTopic = topics[selected[0]]
@@ -1360,7 +1366,7 @@ function TopicsPage() {
           <div className="ait-step-hd"><span className="ait-step-badge">2</span><span className="ait-step-title">選擇腳本類型</span></div>
           <div className="ait-option-grid">
             {SCRIPT_TYPES.map(({ id, label, Icon }) => {
-              const locked = !isPublicScriptType(id)
+              const locked = !canUseScriptType(id, currentUser)
               return (
               <button key={id} className={`ait-option-btn${scriptType === id ? ' selected' : ''}`}
                 disabled={locked}
@@ -1510,7 +1516,7 @@ function CopyPage() {
   // Generate topics when scriptType is selected
   useEffect(() => {
     if (!scriptType || !idea.trim()) { setCopyTopics(null); return }
-    if (!isPublicScriptType(scriptType)) { setCopyTopics(null); return }
+    if (!canUseScriptType(scriptType, currentUser)) { setCopyTopics(null); return }
     if (skipAutoGenerateRef.current) {
       skipAutoGenerateRef.current = false
       return
@@ -1557,7 +1563,7 @@ function CopyPage() {
 
   const generateScriptForTopic = async (topic, nextScriptType = scriptType, sourceIdea = idea.trim()) => {
     if (!topic?.text || !nextScriptType) return
-    if (!isPublicScriptType(nextScriptType)) return
+    if (!canUseScriptType(nextScriptType, currentUser)) return
 
     setGeneratingScript(true)
     setScriptError('')
@@ -1604,7 +1610,7 @@ function CopyPage() {
 
   const handleSelectSavedTopic = item => {
     const nextScriptType = item.script_type || scriptType || 'knowledge'
-    if (!isPublicScriptType(nextScriptType)) return
+    if (!canUseScriptType(nextScriptType, currentUser)) return
     const topic = {
       element: item.element || '人群',
       text: item.topic_text,
@@ -1855,7 +1861,7 @@ function CopyPage() {
           </div>
           <div className="ait-option-grid">
             {SCRIPT_TYPES.map(({ id, label, Icon }) => {
-              const locked = !isPublicScriptType(id)
+              const locked = !canUseScriptType(id, currentUser)
               return (
               <button key={id} className={`ait-option-btn${scriptType === id ? ' selected' : ''}`}
                 disabled={locked}
@@ -3766,6 +3772,7 @@ function PlanningPage() {
 // ══════════════════════════════════════════════════════
 
 export default function AITools() {
+  const { currentUser } = useAuth()
   const [activeId, setActiveId] = useState('topics')
 
   return (
@@ -3778,7 +3785,7 @@ export default function AITools() {
           <div className="ait-nav-header">AI 工具箱</div>
           <div className="ait-nav-list">
             {NAV_TOOLS.map(({ id, label, Icon }) => {
-              const locked = !isPublicAITool(id)
+              const locked = !canUseAITool(id, currentUser)
               return (
               <button
                 key={id}
