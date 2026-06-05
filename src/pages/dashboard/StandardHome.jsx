@@ -88,8 +88,8 @@ export default function StandardHome() {
               <div className="sh2-upgrade-desc">頂流私塾包含 AI 工具、一對一輔導、高階商業變現課程</div>
             </div>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={() => navigate('/dashboard/profile')}>
-            查看方案 <IconArrow size={12}/>
+          <button className="btn btn-primary btn-sm" disabled>
+            即將開放
           </button>
         </div>
       )}

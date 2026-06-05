@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import BrandLogo from '../components/BrandLogo'
 import { initPixel, fbq } from '../utils/fbPixel'
 import { callAI } from '../services/aiService'
+import { openLineOfficial } from '../utils/manualPayment'
 
 const REGISTER_NOTICE = '目前僅開放已購買體驗課的學員註冊，請先購買體驗課後再完成會員註冊。'
 const TRIAL_PRICE = 980
@@ -512,7 +513,7 @@ export default function SalesPage() {
 
   const handlePurchaseClick = () => {
     fbq.initiateCheckout()
-    setShowCheckout(true)
+    openLineOfficial()
   }
 
   return (
@@ -807,7 +808,7 @@ export default function SalesPage() {
                 <h3>還有 5 個爆款選題等你解鎖</h3>
                 <p>購買 自媒體獲客-定位體驗課，解鎖完整 8 個選題 + 腳本預覽 + 課程教學</p>
                 <button className="sp2-btn sp2-btn-primary" onClick={handlePurchaseClick}>
-                  購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE} 立即解鎖
+                  Line@ 匯款購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
                 </button>
                 <small>每天免費試用 3 次，明天可以再來</small>
               </div>
@@ -905,7 +906,7 @@ export default function SalesPage() {
             <div className="sp2-price">自媒體獲客-定位體驗課 ${TRIAL_PRICE} 起，完課後可升級享早鳥優惠</div>
             <div className="sp2-final-actions">
               <button className="sp2-btn sp2-btn-primary sp2-btn-lg" onClick={handlePurchaseClick}>
-                立即購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
+                Line@ 匯款購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
               </button>
               <button className="sp2-btn sp2-btn-outline sp2-btn-lg" onClick={() => scrollToSection('#ai-tools')}>
                 先免費試用 AI →

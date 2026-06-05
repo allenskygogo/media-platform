@@ -272,8 +272,8 @@ export default function TrialPlayer() {
                 頂流達人包含完整自媒體獲客系統課程，有效期 1 年。
               </p>
             </div>
-            <button className="btn btn-primary btn-sm" onClick={() => navigate('/pricing')}>
-              查看方案
+            <button className="btn btn-primary btn-sm" disabled>
+              即將開放
             </button>
           </div>
         </div>

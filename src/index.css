@@ -3381,6 +3381,7 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
 .auth-divider { text-align: center; font-size: 13px; color: var(--gray-500); margin-top: 4px; }
 .auth-link { color: var(--grad-blue); font-weight: 600; cursor: pointer; }
 .auth-link:hover { color: var(--grad-purple); }
+.auth-link[aria-disabled="true"] { color: var(--gray-500); cursor: default; }
 .auth-link-button {
   border: 0;
   background: transparent;
@@ -10855,6 +10856,14 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   transition: opacity 0.15s;
 }
 .ait-upgrade-wall-btn:hover { opacity: 0.88; }
+.ait-upgrade-wall-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ait-plan-cta:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 
 /* ──────────────────────────────────────────────────────
    爆款文案 — Practice block

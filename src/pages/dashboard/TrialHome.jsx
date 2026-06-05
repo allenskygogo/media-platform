@@ -137,7 +137,7 @@ export default function TrialHome() {
           <p className="th2-stat-title">頂流達人方案</p>
           <p className="th2-stat-val">完成體驗後查看</p>
           <p className="th2-stat-sub">含所有基礎課程 + 社群成長工具</p>
-          <button className="th2-stat-btn" onClick={() => navigate('/dashboard/profile')}>查看方案 <IconArrow size={11}/></button>
+          <button className="th2-stat-btn" disabled>即將開放</button>
         </div>
       </div>
 

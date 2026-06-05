@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getSessionState, getElapsedSec, getWatchProgress, saveWatchProgress } from '../data/mockData'
 
@@ -56,7 +55,6 @@ function fmt(s) {
 // ── Component ───────────────────────────────────────────────────────────────
 export default function SimulatedPlayer({ session }) {
   const { currentUser } = useAuth()
-  const navigate        = useNavigate()
 
   // ── Core state ──
   const [sessionState, setSessionState] = useState(() => getSessionState(session))
@@ -258,9 +256,9 @@ export default function SimulatedPlayer({ session }) {
                   <button
                     className="btn btn-outline"
                     style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.08)' }}
-                    onClick={() => navigate('/pricing')}
+                    disabled
                   >
-                    查看頂流達人 →
+                    即將開放
                   </button>
                 </div>
               </div>
@@ -327,8 +325,8 @@ export default function SimulatedPlayer({ session }) {
         {completed && !isReplay && sessionState === 'ended' && (
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
             <button className="btn btn-primary" onClick={startReplay}>▶ 回放課程</button>
-            <button className="btn btn-secondary" onClick={() => navigate('/pricing')}>
-              查看頂流達人
+            <button className="btn btn-secondary" disabled>
+              即將開放
             </button>
           </div>
         )}

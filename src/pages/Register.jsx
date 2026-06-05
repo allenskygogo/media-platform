@@ -12,9 +12,9 @@ export default function Register() {
         </div>
 
         <div className="auth-form">
-          <Link to="/#schedule" className="btn btn-primary btn-lg btn-block">
-            前往購買體驗課
-          </Link>
+          <button type="button" className="btn btn-primary btn-lg btn-block" disabled>
+            購買體驗課即將開放
+          </button>
           <Link to="/login" className="btn btn-secondary btn-lg btn-block">
             已有帳號，前往登入
           </Link>

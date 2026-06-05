@@ -317,8 +317,7 @@ function PlanComparisonModal({ currentPlan, onClose }) {
   const getUpgradeAction = (plan) => {
     if (currentPlan?.id === plan.id) return { label: '目前方案', disabled: true }
     if (currentPlan && plan.level < currentPlan.level) return { label: '已包含', disabled: true }
-    if (planPriceDetails[plan.id]?.kind === 'quote') return { label: '申請專案評估', disabled: false }
-    return { label: '選擇升級', disabled: false }
+    return { label: '即將開放', disabled: true }
   }
 
   return (
@@ -504,8 +503,8 @@ export default function Profile() {
                     ? '從 AI 選題體驗，升級到完整自媒體獲客系統課。'
                     : nextPlan.coreValue}
                 </p>
-                <button className="btn btn-primary btn-block btn-lg" onClick={() => setShowPlanModal(true)}>
-                  查看升級方案
+                <button className="btn btn-primary btn-block btn-lg" disabled>
+                  升級即將開放
                 </button>
               </div>
             </div>

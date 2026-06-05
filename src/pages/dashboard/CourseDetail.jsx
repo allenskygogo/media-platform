@@ -175,7 +175,7 @@ export default function CourseDetail() {
             <p style={{ color:'var(--gray-500)', fontSize:14, maxWidth:360 }}>
               《{course.title}》需要「{meta.label}」以上方案才能觀看。
             </p>
-            <button className="btn btn-primary btn-lg" onClick={() => navigate('/pricing')}>查看升級方案</button>
+            <button className="btn btn-primary btn-lg" disabled>升級即將開放</button>
           </div>
         </div>
       </div>

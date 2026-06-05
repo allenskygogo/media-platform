@@ -1187,7 +1187,7 @@ function ScriptPreviewGate({ script, canSeeAll, onUpgrade, upgradeText }) {
           </div>
           <div className="ait-upgrade-wall">
             <p className="ait-upgrade-wall-text">{upgradeText}</p>
-            <button className="ait-upgrade-wall-btn" onClick={onUpgrade}>立即升級解鎖</button>
+            <button className="ait-upgrade-wall-btn" disabled>即將開放</button>
           </div>
         </div>
       )}
@@ -1238,7 +1238,7 @@ function UpgradeModal({ onClose }) {
               <div className="ait-plan-name">{plan.name}</div>
               <div className="ait-plan-period">{plan.note}</div>
               {!plan.current && (
-                <button className="ait-plan-cta">查看方案</button>
+                <button className="ait-plan-cta" disabled>即將開放</button>
               )}
             </div>
           ))}
@@ -2144,8 +2144,8 @@ function AnalysisPage() {
                 <p className="ait-upgrade-wall-text">
                   頂流達人學員專屬｜完整拆解爆款邏輯，複製成功公式到你的帳號
                 </p>
-                <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>
-                  立即升級解鎖
+                <button className="ait-upgrade-wall-btn" disabled>
+                  即將開放
                 </button>
               </div>
             </div>
@@ -2289,8 +2289,8 @@ function SocialPage() {
                   <p className="ait-upgrade-wall-text">
                     頂流達人學員專屬｜一鍵生成 IG、FB、Threads 完整貼文，附 hashtag 策略
                   </p>
-                  <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>
-                    立即升級解鎖
+                  <button className="ait-upgrade-wall-btn" disabled>
+                    即將開放
                   </button>
                 </div>
               </div>
@@ -2498,8 +2498,8 @@ function LivestreamPage() {
                 <p className="ait-upgrade-wall-text">
                   頂流私塾學員專屬｜完整六大話術腳本，逼單、挽留、下播全套腳本一次到位
                 </p>
-                <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>
-                  立即升級解鎖
+                <button className="ait-upgrade-wall-btn" disabled>
+                  即將開放
                 </button>
               </div>
             </div>
@@ -2641,8 +2641,8 @@ function BenchmarkPage() {
                   <p className="ait-upgrade-wall-text">
                     頂流私塾學員專屬｜完整5大爆款規律分析加拍攝方向建議
                   </p>
-                  <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>
-                    立即升級解鎖
+                  <button className="ait-upgrade-wall-btn" disabled>
+                    即將開放
                   </button>
                 </div>
               </div>
@@ -2963,8 +2963,8 @@ function MaterialPage() {
             <p className="ait-upgrade-wall-text">
               頂流私塾學員專屬｜建立專屬靈感庫，隨時查看並管理你的爆款素材
             </p>
-            <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>
-              立即升級解鎖
+            <button className="ait-upgrade-wall-btn" disabled>
+              即將開放
             </button>
           </div>
         </div>
@@ -3190,8 +3190,8 @@ function ChatPage({ onGoToTopics }) {
             <span>今日次數已用完，升級解鎖更多次數</span>
             <button className="ait-upgrade-wall-btn"
               style={{ padding: '0 16px', height: 32, fontSize: 12 }}
-              onClick={() => setShowModal(true)}>
-              升級
+              disabled>
+              即將開放
             </button>
           </div>
         )}
@@ -3366,7 +3366,7 @@ function PlanningPage() {
             </div>
             <div className="ait-upgrade-wall">
               <p className="ait-upgrade-wall-text">頂流私塾專屬｜從帳號定位到三個月策略，完整規劃你的自媒體成長路徑</p>
-              <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>立即升級解鎖</button>
+              <button className="ait-upgrade-wall-btn" disabled>即將開放</button>
             </div>
           </div>
         )}
@@ -3529,7 +3529,7 @@ function PlanningPage() {
                             </div>
                             <div className="ait-upgrade-wall">
                               <p className="ait-upgrade-wall-text">頂流私塾專屬｜從帳號定位到三個月策略，完整規劃你的自媒體成長路徑</p>
-                              <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>立即升級解鎖</button>
+                              <button className="ait-upgrade-wall-btn" disabled>即將開放</button>
                             </div>
                           </div>
                         )}
@@ -3667,7 +3667,7 @@ function PlanningPage() {
                               </div>
                               <div className="ait-upgrade-wall">
                                 <p className="ait-upgrade-wall-text">頂流私塾專屬｜從帳號定位到三個月策略，完整規劃你的自媒體成長路徑</p>
-                                <button className="ait-upgrade-wall-btn" onClick={() => setShowModal(true)}>立即升級解鎖</button>
+                                <button className="ait-upgrade-wall-btn" disabled>即將開放</button>
                               </div>
                             </div>
                           )

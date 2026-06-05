@@ -54,7 +54,7 @@ export default function Login() {
 
         <p className="auth-divider" style={{ marginTop: 20 }}>
           還沒有帳號？<Link to="/register" className="auth-link">立即註冊</Link>
-          &nbsp;·&nbsp;<Link to="/pricing" className="auth-link">查看方案</Link>
+          &nbsp;·&nbsp;<span className="auth-link" aria-disabled="true">方案即將開放</span>
         </p>
 
       </div>

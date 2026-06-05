@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { openLineOfficial } from '../utils/manualPayment'
 
 // ─────────────────────────────────────────────────
 //  Local mock — no API call needed
@@ -89,7 +90,7 @@ function HeroSection() {
 
         <div className="hp-hero-btns">
           <Link to="/trial-login" className="hp-btn-primary hp-btn-lg">免費體驗 AI 工具</Link>
-          <Link to="/pricing" className="hp-btn-ghost hp-btn-lg">查看課程方案</Link>
+          <button type="button" className="hp-btn-ghost hp-btn-lg" onClick={openLineOfficial}>Line@ 匯款購買</button>
         </div>
       </section>
 
@@ -210,7 +211,7 @@ function AIDemoSection() {
             <p className="hp-ai-unlock-price">
               方案起售 <strong>$980</strong> · 含 AI 工具全功能
             </p>
-            <Link to="/pricing" className="hp-btn-primary">立即解鎖完整功能</Link>
+            <button type="button" className="hp-btn-primary" onClick={openLineOfficial}>Line@ 匯款購買</button>
             <Link to="/trial-login" className="hp-ai-unlock-trial">先免費試用 &rarr;</Link>
           </div>
         </div>
@@ -440,9 +441,9 @@ function FinalCTA() {
         <h2 className="hp-final-cta-title">現在就開始打造你的頂級流量</h2>
         <p className="hp-final-cta-desc">加入 1,200+ 位創作者，用 AI 加速你的自媒體成長</p>
         <div className="hp-final-cta-btns">
-          <Link to="/pricing" className="hp-btn-primary hp-btn-lg">
-            立即加入 · 方案起售 $980
-          </Link>
+          <button type="button" className="hp-btn-primary hp-btn-lg" onClick={openLineOfficial}>
+            Line@ 匯款購買 · 方案起售 $980
+          </button>
           <Link to="/trial-login" className="hp-btn-ghost hp-btn-lg">
             先免費試用 AI 工具
           </Link>
