@@ -7382,7 +7382,28 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   .ph2-page, .sh2-page, .th2-page { padding: 16px; }
   .mg2-content { padding: 16px; }
   .ph2-stats { grid-template-columns: repeat(2,1fr); }
-  .sh2-stats { grid-template-columns: 1fr 1fr; }
+  .sh2-stats { grid-template-columns: 1fr; }
+  .sh2-stat-card {
+    min-height: 0;
+    padding: 24px;
+  }
+  .sh2-stat-icon {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 18px;
+  }
+  .sh2-stat-val {
+    font-size: 30px;
+    margin-bottom: 8px;
+  }
+  .sh2-stat-label {
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+  .sh2-stat-sub {
+    font-size: 13px;
+    line-height: 1.6;
+  }
   .th2-stats { grid-template-columns: 1fr; }
   .ph2-features { grid-template-columns: 1fr; }
   .ph2-course-grid { grid-template-columns: 1fr; }
