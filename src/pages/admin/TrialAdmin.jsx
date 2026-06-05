@@ -1,390 +1,363 @@
-import { useState, useEffect } from 'react'
-import {
-  getUsers, saveUsers,
-  getTrialSession, getTrialProgress,
-  saveTrialProgress, completeTrialInStorage,
-  addDays,
-  getReminderLog, recordReminder, nextReminderTemplate,
-  REMINDER_TEMPLATES, makeAutoLoginToken,
-} from '../../data/mockData'
+import { useEffect, useMemo, useState } from 'react'
+import { getUsers, TIER_META } from '../../data/mockData'
 
-function getStatus(user) {
-  const prog    = getTrialProgress(user.id)
-  const session = getTrialSession(user.id)
+const ACTIVITY_MESSAGES_KEY = 'mp_activity_messages'
+const ACTIVITY_SEND_LOG_KEY = 'mp_activity_send_logs'
 
-  if (user.expiresAt || prog?.completed) {
-    const dateStr = prog?.completedAt
-      ? new Date(prog.completedAt).toLocaleDateString('zh-TW')
-      : user.expiresAt
-    return { key: 'completed', label: '已完成', color: 'var(--success)', sub: dateStr }
-  }
-  if (prog && !prog.completed) {
-    const m = Math.floor(prog.currentSecond / 60)
-    return { key: 'watching', label: '觀看中', color: 'var(--primary)', sub: `已看 ${m} 分` }
-  }
-  if (session) {
-    const dt = new Date(session.scheduledAt)
-    const str = dt.toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })
-    return { key: 'booked', label: '已預約', color: 'var(--advanced-text)', sub: str }
-  }
-  return { key: 'none', label: '未預約', color: 'var(--gray-400)', sub: '' }
+const ACTIVITY_TYPES = [
+  { key: 'offline_class', label: '實體課程' },
+  { key: 'online_event', label: '線上活動' },
+  { key: 'workshop', label: '工作坊' },
+  { key: 'offer', label: '優惠通知' },
+  { key: 'announcement', label: '一般公告' },
+]
+
+const AUDIENCES = [
+  { key: 'all', label: '全部學員' },
+  { key: 'basic', label: '體驗課會員' },
+  { key: 'standard', label: '頂流達人' },
+  { key: 'advanced', label: '頂流私塾' },
+]
+
+const DEFAULT_FORM = {
+  title: '',
+  type: 'offline_class',
+  audience: 'all',
+  date: '',
+  location: '',
+  body: '',
+  ctaText: '立即回覆報名',
+  ctaUrl: '',
 }
 
-function renderTemplate(tpl, user) {
-  const loginToken = makeAutoLoginToken(user.id, user.email)
-  const loginUrl = `${window.location.origin}/trial-login?uid=${user.id}&t=${loginToken}`
-  return {
-    subject: tpl.subject.replace(/{{姓名}}/g, user.name),
-    body: tpl.body
-      .replace(/{{姓名}}/g, user.name)
-      .replace(/{{按鈕：立即預約觀看時段}}/g, `[ 立即預約觀看時段 ]\n${loginUrl}`),
+function readJson(key, fallback) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || 'null')
+    return value ?? fallback
+  } catch {
+    return fallback
   }
 }
 
-// ── Template badge ──────────────────────────────────────────────────────────
-function TplBadge({ tplKey }) {
-  if (!tplKey) return <span style={{ color: 'var(--gray-300)', fontSize: 12 }}>—</span>
-  const colors = { A: 'var(--primary)', B: 'var(--advanced-text)', C: '#d97706' }
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      width: 24, height: 24, borderRadius: '50%', fontSize: 12, fontWeight: 800,
-      background: colors[tplKey] || 'var(--gray-300)', color: '#fff',
-    }}>{tplKey}</span>
-  )
+function writeJson(key, value) {
+  localStorage.setItem(key, JSON.stringify(value))
 }
 
-// ── Email preview modal ─────────────────────────────────────────────────────
-function PreviewModal({ user, tplKey, onClose }) {
-  if (!user || !tplKey) return null
-  const tpl = REMINDER_TEMPLATES[tplKey]
-  const { subject, body } = renderTemplate(tpl, user)
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">信件預覽 — 範本 {tplKey}</h2>
-          <button className="modal-close" onClick={onClose}>×</button>
-        </div>
-        <div className="modal-body">
-          <div style={{ marginBottom: 16 }}>
-            <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--gray-400)', marginBottom: 4 }}>主旨</p>
-            <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--gray-900)', padding: '10px 14px', background: 'var(--gray-50)', borderRadius: 8, border: '1px solid var(--gray-200)' }}>
-              {subject}
-            </p>
-          </div>
-          <div>
-            <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--gray-400)', marginBottom: 4 }}>內容</p>
-            <pre style={{
-              fontSize: 13, lineHeight: 1.8, color: 'var(--gray-700)',
-              padding: '14px 16px', background: 'var(--gray-50)',
-              borderRadius: 8, border: '1px solid var(--gray-200)',
-              whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit',
-            }}>
-              {body}
-            </pre>
-          </div>
-        </div>
-        <div className="modal-footer">
-          <button className="btn btn-secondary" onClick={onClose}>關閉</button>
-        </div>
-      </div>
-    </div>
-  )
+function formatDateTime(value) {
+  if (!value) return '未設定'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
-// ── Main component ──────────────────────────────────────────────────────────
+function getActivityTypeLabel(type) {
+  return ACTIVITY_TYPES.find(item => item.key === type)?.label || '活動'
+}
+
+function getAudienceLabel(audience) {
+  return AUDIENCES.find(item => item.key === audience)?.label || '全部學員'
+}
+
+function buildMessage(form) {
+  const lines = [
+    `【${getActivityTypeLabel(form.type)}】${form.title || '活動通知'}`,
+    form.date ? `時間：${formatDateTime(form.date)}` : null,
+    form.location ? `地點：${form.location}` : null,
+    '',
+    form.body || '活動內容待補充。',
+    '',
+    form.ctaText ? `行動：${form.ctaText}` : null,
+    form.ctaUrl ? `連結：${form.ctaUrl}` : null,
+  ]
+  return lines.filter(line => line !== null).join('\n')
+}
+
+function targetStudents(users, audience) {
+  const students = users.filter(user => user.role === 'student' && user.tier !== 'managed' && user.status !== 'inactive')
+  if (audience === 'all') return students
+  return students.filter(user => user.tier === audience)
+}
+
 export default function TrialAdmin() {
-  const [students, setStudents] = useState([])
-  const [editUser, setEditUser] = useState(null)
-  const [editExpiry, setEditExpiry] = useState('')
-  const [previewUser, setPreviewUser] = useState(null)
-  const [previewTpl, setPreviewTpl]   = useState(null)
-  const [msg, setMsg]  = useState('')
-  const [, tick]       = useState(0)
+  const [users, setUsers] = useState(() => getUsers())
+  const [messages, setMessages] = useState(() => readJson(ACTIVITY_MESSAGES_KEY, []))
+  const [sendLogs, setSendLogs] = useState(() => readJson(ACTIVITY_SEND_LOG_KEY, []))
+  const [form, setForm] = useState(DEFAULT_FORM)
+  const [selectedId, setSelectedId] = useState('')
+  const [msg, setMsg] = useState('')
 
-  const refresh = () => {
-    setStudents(getUsers().filter(u => u.role === 'student' && u.tier === 'basic'))
-  }
+  const selectedMessage = messages.find(item => String(item.id) === String(selectedId)) || null
+  const recipients = useMemo(() => targetStudents(users, form.audience), [users, form.audience])
+  const latestLogs = sendLogs.slice(0, 8)
 
   useEffect(() => {
-    refresh()
-    const t = setInterval(() => tick(n => n + 1), 10000)
-    return () => clearInterval(t)
+    const sync = () => setUsers(getUsers())
+    window.addEventListener('storage', sync)
+    return () => window.removeEventListener('storage', sync)
   }, [])
 
-  const flash = (t) => { setMsg(t); setTimeout(() => setMsg(''), 3500) }
-
-  // ── Actions ───────────────────────────────────────────────────────────────
-  const manualComplete = (user) => {
-    completeTrialInStorage(user.id)
-    refresh()
-    flash(`${user.name} 已手動標記為完成，期限設為今天起 90 天`)
+  const flash = (text) => {
+    setMsg(text)
+    setTimeout(() => setMsg(''), 3500)
   }
 
-  const openEdit = (user) => {
-    setEditUser(user)
-    setEditExpiry(user.expiresAt || '')
+  const updateForm = (key) => (event) => {
+    setForm(prev => ({ ...prev, [key]: event.target.value }))
   }
 
-  const saveExpiry = () => {
-    const all = getUsers()
-    const idx = all.findIndex(u => u.id === editUser.id)
-    all[idx].expiresAt = editExpiry || null
-    saveUsers(all)
-    refresh()
-    setEditUser(null)
-    flash(`${editUser.name} 的使用期限已更新`)
+  const saveMessage = () => {
+    if (!form.title.trim()) {
+      flash('請先填寫活動標題')
+      return
+    }
+    if (!form.body.trim()) {
+      flash('請先填寫活動內容')
+      return
+    }
+
+    const nextMessage = {
+      ...form,
+      id: selectedMessage?.id || Date.now(),
+      updatedAt: new Date().toISOString(),
+      createdAt: selectedMessage?.createdAt || new Date().toISOString(),
+    }
+    const next = selectedMessage
+      ? messages.map(item => item.id === selectedMessage.id ? nextMessage : item)
+      : [nextMessage, ...messages]
+    setMessages(next)
+    writeJson(ACTIVITY_MESSAGES_KEY, next)
+    setSelectedId(String(nextMessage.id))
+    flash(selectedMessage ? '活動訊息已更新' : '活動訊息已建立')
   }
 
-  // Send reminder to a single student
-  const sendReminder = (user) => {
-    const tplKey = nextReminderTemplate(user.id)
-    recordReminder(user.id, tplKey)
-    refresh()
-    flash(`已模擬發送信件 ${tplKey} 給 ${user.name}`)
+  const loadMessage = (id) => {
+    setSelectedId(id)
+    const item = messages.find(message => String(message.id) === String(id))
+    if (item) {
+      const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...nextForm } = item
+      setForm({ ...DEFAULT_FORM, ...nextForm })
+    }
   }
 
-  // Send today's reminder to all non-completed students
-  const sendAllReminders = () => {
-    const pending = students.filter(u => getStatus(u).key !== 'completed')
-    if (pending.length === 0) { flash('目前沒有待發提醒的學員'); return }
-    pending.forEach(u => {
-      const tplKey = nextReminderTemplate(u.id)
-      recordReminder(u.id, tplKey)
-    })
-    refresh()
-    flash(`已模擬發送今日提醒給 ${pending.length} 位學員`)
+  const resetForm = () => {
+    setSelectedId('')
+    setForm(DEFAULT_FORM)
   }
 
-  // Preview modal helpers
-  const openPreview = (user) => {
-    setPreviewUser(user)
-    setPreviewTpl(nextReminderTemplate(user.id))
-  }
+  const sendActivity = () => {
+    if (!form.title.trim() || !form.body.trim()) {
+      flash('請先填寫活動標題與內容')
+      return
+    }
+    if (recipients.length === 0) {
+      flash('目前沒有符合條件的收件學員')
+      return
+    }
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
-  const pct = (prog) => {
-    if (!prog) return 0
-    return Math.round((prog.currentSecond / 10800) * 100)
-  }
+    const activity = selectedMessage || {
+      ...form,
+      id: Date.now(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    const savedMessages = selectedMessage ? messages : [activity, ...messages]
+    setMessages(savedMessages)
+    writeJson(ACTIVITY_MESSAGES_KEY, savedMessages)
+    setSelectedId(String(activity.id))
 
-  const statusCounts = {
-    completed: students.filter(u => getStatus(u).key === 'completed').length,
-    watching:  students.filter(u => getStatus(u).key === 'watching').length,
-    booked:    students.filter(u => getStatus(u).key === 'booked').length,
-    none:      students.filter(u => getStatus(u).key === 'none').length,
+    const log = {
+      id: Date.now(),
+      activityId: activity.id,
+      title: form.title,
+      type: form.type,
+      audience: form.audience,
+      recipientCount: recipients.length,
+      sentAt: new Date().toISOString(),
+      preview: buildMessage(form),
+    }
+    const nextLogs = [log, ...sendLogs]
+    setSendLogs(nextLogs)
+    writeJson(ACTIVITY_SEND_LOG_KEY, nextLogs)
+    flash(`已建立發送紀錄：${getAudienceLabel(form.audience)} ${recipients.length} 位`)
   }
 
   return (
     <div>
-      <div className="page-heading">
-        <div>
-          <h1>體驗課管理</h1>
-          <p>初階學員體驗課進度總覽</p>
+      <div className="page-actions" style={{ marginBottom: 24 }}>
+        <div className="page-heading" style={{ margin: 0 }}>
+          <h1>活動管理</h1>
+          <p>建立實體課程、線上活動、優惠公告，之後可接 Email、Line OA 或簡訊一鍵發送。</p>
         </div>
-        <button className="btn btn-primary" onClick={sendAllReminders}>
-          一鍵發送今日提醒
+        <button className="btn btn-primary" onClick={sendActivity}>
+          一鍵發送活動資訊
         </button>
       </div>
 
       {msg && <div className="auth-alert success" style={{ marginBottom: 16 }}>{msg}</div>}
 
-      {/* Summary */}
       <div className="stats-grid" style={{ marginBottom: 24 }}>
-        {[
-          { label: '未預約', val: statusCounts.none,      icon: '未', bg: 'var(--gray-100)' },
-          { label: '已預約', val: statusCounts.booked,    icon: '約', bg: 'var(--advanced-light)' },
-          { label: '觀看中', val: statusCounts.watching,  icon: '播', bg: 'var(--primary-light)' },
-          { label: '已完成', val: statusCounts.completed, icon: '完', bg: 'var(--success-light)' },
-        ].map(({ label, val, icon, bg }) => (
-          <div key={label} className="stat-card">
-            <div className="stat-icon" style={{ background: bg }}>{icon}</div>
-            <span className="stat-label">{label}</span>
-            <span className="stat-value">{val}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="card">
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>學員</th>
-                <th>狀態</th>
-                <th>觀看進度</th>
-                <th>使用期限</th>
-                <th>提醒信</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody>
-              {students.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign:'center', padding:40, color:'var(--gray-400)' }}>尚無初階學員</td></tr>
-              )}
-              {students.map(user => {
-                const status  = getStatus(user)
-                const prog    = getTrialProgress(user.id)
-                const p       = pct(prog)
-                const remLog  = getReminderLog(user.id)
-                const lastTpl = remLog.log.length > 0 ? remLog.log[remLog.log.length - 1].template : null
-                const nextTpl = status.key !== 'completed' ? nextReminderTemplate(user.id) : null
-
-                return (
-                  <tr key={user.id}>
-                    {/* Name */}
-                    <td>
-                      <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                        <div className="avatar" style={{ width:32, height:32, fontSize:13 }}>{user.avatar}</div>
-                        <div>
-                          <p style={{ fontWeight:700, fontSize:14 }}>{user.name}</p>
-                          <p style={{ fontSize:12, color:'var(--gray-400)' }}>{user.email}</p>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Status */}
-                    <td>
-                      <span style={{ fontWeight:700, color:status.color, fontSize:13 }}>
-                        ● {status.label}
-                      </span>
-                      {status.sub && (
-                        <p style={{ fontSize:12, color:'var(--gray-500)', marginTop:2 }}>{status.sub}</p>
-                      )}
-                    </td>
-
-                    {/* Progress bar */}
-                    <td style={{ minWidth: 140 }}>
-                      {prog ? (
-                        <div>
-                          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'var(--gray-500)', marginBottom:4 }}>
-                            <span>{Math.floor(prog.currentSecond / 60)} 分 / 180 分</span>
-                            <span>{p}%</span>
-                          </div>
-                          <div style={{ height:6, background:'var(--gray-100)', borderRadius:3, overflow:'hidden' }}>
-                            <div style={{ height:'100%', width:`${p}%`, background: p >= 100 ? 'var(--success)' : 'var(--primary)', borderRadius:3 }} />
-                          </div>
-                        </div>
-                      ) : (
-                        <span style={{ fontSize:13, color:'var(--gray-300)' }}>—</span>
-                      )}
-                    </td>
-
-                    {/* Expires */}
-                    <td style={{ fontSize:13, color: user.expiresAt ? 'var(--gray-700)' : 'var(--gray-400)' }}>
-                      {user.expiresAt || '尚未起算'}
-                    </td>
-
-                    {/* Reminder info */}
-                    <td>
-                      <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                          <span style={{ fontSize:11, color:'var(--gray-400)' }}>已送</span>
-                          <span style={{ fontSize:13, fontWeight:700, color:'var(--gray-700)' }}>{remLog.count}</span>
-                          <span style={{ fontSize:11, color:'var(--gray-400)' }}>封</span>
-                          {lastTpl && (
-                            <>
-                              <span style={{ fontSize:11, color:'var(--gray-400)', marginLeft:4 }}>最後</span>
-                              <TplBadge tplKey={lastTpl} />
-                            </>
-                          )}
-                        </div>
-                        {nextTpl && (
-                          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                            <span style={{ fontSize:11, color:'var(--gray-400)' }}>下封</span>
-                            <TplBadge tplKey={nextTpl} />
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              style={{ fontSize:11, padding:'2px 8px' }}
-                              onClick={() => openPreview(user)}
-                            >
-                              預覽
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Actions */}
-                    <td>
-                      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                        {status.key !== 'completed' && (
-                          <>
-                            <button
-                              className="btn btn-sm btn-success"
-                              onClick={() => manualComplete(user)}
-                            >
-                              標記完成
-                            </button>
-                            <button
-                              className="btn btn-sm"
-                              style={{ background:'var(--primary-light)', color:'var(--primary)', border:'none' }}
-                              onClick={() => sendReminder(user)}
-                            >
-                              發提醒
-                            </button>
-                          </>
-                        )}
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => openEdit(user)}
-                        >
-                          調整期限
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Edit expiry modal */}
-      {editUser && (
-        <div className="modal-overlay" onClick={() => setEditUser(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">調整使用期限 — {editUser.name}</h2>
-              <button className="modal-close" onClick={() => setEditUser(null)}>×</button>
-            </div>
-            <div className="modal-body">
-              <div className="form-group">
-                <label className="form-label">使用期限日期</label>
-                <input
-                  type="date"
-                  className="form-input"
-                  value={editExpiry}
-                  onChange={e => setEditExpiry(e.target.value)}
-                />
-                <span className="form-hint">留空表示尚未起算（expiresAt = null）</span>
+        {AUDIENCES.map(audience => {
+          const count = targetStudents(users, audience.key).length
+          return (
+            <div key={audience.key} className="stat-card">
+              <div className="stat-icon" style={{ background: audience.key === form.audience ? 'var(--primary-light)' : 'var(--gray-100)' }}>
+                {audience.label.slice(0, 1)}
               </div>
-              <div style={{ display:'flex', gap:8, marginTop:12 }}>
-                {[30, 90, 180, 365].map(d => (
-                  <button key={d} className="btn btn-outline btn-sm"
-                    onClick={() => setEditExpiry(addDays(new Date().toISOString().split('T')[0], d))}>
-                    +{d}天
-                  </button>
+              <span className="stat-label">{audience.label}</span>
+              <span className="stat-value">{count}</span>
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(320px, 0.85fr)', gap: 20, alignItems: 'start' }}>
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h2 className="card-title">{selectedMessage ? '編輯活動訊息' : '新增活動訊息'}</h2>
+              <p style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 4 }}>儲存後可重複使用，一鍵發送會留下紀錄方便追蹤。</p>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={resetForm}>新增空白活動</button>
+          </div>
+          <div className="card-body">
+            <div className="form-group">
+              <label className="form-label">載入既有活動</label>
+              <select className="form-select" value={selectedId} onChange={e => loadMessage(e.target.value)}>
+                <option value="">新增活動訊息</option>
+                {messages.map(item => (
+                  <option key={item.id} value={item.id}>{item.title}｜{getActivityTypeLabel(item.type)}</option>
                 ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div className="form-group">
+                <label className="form-label">活動標題 *</label>
+                <input className="form-input" value={form.title} onChange={updateForm('title')} placeholder="例：台北實體課程｜短影音定位工作坊" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">活動類型</label>
+                <select className="form-select" value={form.type} onChange={updateForm('type')}>
+                  {ACTIVITY_TYPES.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">發送對象</label>
+                <select className="form-select" value={form.audience} onChange={updateForm('audience')}>
+                  {AUDIENCES.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+                </select>
+                <span className="form-hint">目前符合條件：{recipients.length} 位</span>
+              </div>
+              <div className="form-group">
+                <label className="form-label">活動時間</label>
+                <input className="form-input" type="datetime-local" value={form.date} onChange={updateForm('date')} />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label">活動地點 / 連線方式</label>
+                <input className="form-input" value={form.location} onChange={updateForm('location')} placeholder="例：台北市中山區 / Zoom 連結開課前提供" />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label">活動內容 *</label>
+                <textarea
+                  className="form-textarea"
+                  value={form.body}
+                  onChange={updateForm('body')}
+                  rows={7}
+                  placeholder="寫給學員看的活動說明，例如課程亮點、適合對象、名額限制、報名方式..."
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">行動按鈕文字</label>
+                <input className="form-input" value={form.ctaText} onChange={updateForm('ctaText')} placeholder="例：我要報名" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">活動連結</label>
+                <input className="form-input" value={form.ctaUrl} onChange={updateForm('ctaUrl')} placeholder="Line@、表單、活動頁連結" />
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setEditUser(null)}>取消</button>
-              <button className="btn btn-primary" onClick={saveExpiry}>儲存</button>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+              <button className="btn btn-secondary" onClick={saveMessage}>儲存活動訊息</button>
+              <button className="btn btn-primary" onClick={sendActivity}>一鍵發送</button>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Email preview modal */}
-      <PreviewModal
-        user={previewUser}
-        tplKey={previewTpl}
-        onClose={() => { setPreviewUser(null); setPreviewTpl(null) }}
-      />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">訊息預覽</h2>
+              <span className="badge badge-active">{getAudienceLabel(form.audience)}</span>
+            </div>
+            <div className="card-body">
+              <pre style={{
+                margin: 0,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontFamily: 'inherit',
+                fontSize: 13,
+                lineHeight: 1.8,
+                color: 'var(--gray-700)',
+                background: 'var(--gray-50)',
+                border: '1px solid var(--gray-200)',
+                borderRadius: 8,
+                padding: 14,
+              }}>{buildMessage(form)}</pre>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">最近發送紀錄</h2>
+              <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>{sendLogs.length} 筆</span>
+            </div>
+            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {latestLogs.length === 0 ? (
+                <p style={{ color: 'var(--gray-400)', fontSize: 13, margin: 0 }}>尚無發送紀錄</p>
+              ) : latestLogs.map(log => (
+                <div key={log.id} style={{ padding: 12, borderRadius: 8, border: '1px solid var(--gray-200)', background: 'var(--gray-50)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
+                    <strong style={{ fontSize: 13, color: 'var(--gray-900)' }}>{log.title}</strong>
+                    <span style={{ fontSize: 12, color: 'var(--gray-400)', whiteSpace: 'nowrap' }}>{formatDateTime(log.sentAt)}</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--gray-500)', margin: 0 }}>
+                    {getActivityTypeLabel(log.type)}｜{getAudienceLabel(log.audience)}｜{log.recipientCount} 位
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <h2 className="card-title">發送對象預覽</h2>
+              <span style={{ fontSize: 13, color: 'var(--gray-500)' }}>{recipients.length} 位</span>
+            </div>
+            <div className="card-body" style={{ maxHeight: 260, overflow: 'auto' }}>
+              {recipients.length === 0 ? (
+                <p style={{ color: 'var(--gray-400)', fontSize: 13, margin: 0 }}>沒有符合條件的學員</p>
+              ) : recipients.slice(0, 20).map(user => (
+                <div key={user.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--gray-100)' }}>
+                  <div>
+                    <strong style={{ fontSize: 13 }}>{user.name}</strong>
+                    <p style={{ fontSize: 12, color: 'var(--gray-400)', margin: 0 }}>{user.email}</p>
+                  </div>
+                  <span className={`badge badge-${user.tier || 'basic'}`}>{TIER_META[user.tier]?.label || '學員'}</span>
+                </div>
+              ))}
+              {recipients.length > 20 && (
+                <p style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 10 }}>另有 {recipients.length - 20} 位未顯示</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

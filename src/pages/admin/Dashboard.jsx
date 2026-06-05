@@ -151,7 +151,7 @@ export default function AdminDashboard() {
 
   const statCards = [
     { label: '總學員數', value: students.length, sub: `啟用 ${activeLearners} 位`, icon: 'users', to: '/admin/users' },
-    { label: '體驗課學員', value: students.filter(user => user.tier === 'basic').length, sub: '體驗課資格與進度', icon: 'trial', to: '/admin/trial' },
+    { label: '活動管理', value: students.filter(user => user.tier === 'basic').length, sub: '活動訊息與名單發送', icon: 'trial', to: '/admin/trial' },
     { label: '待審作業', value: pendingHomework.length, sub: `總提交 ${homework.length + practiceSubmissions.length} 份`, icon: 'homework', to: '/admin/homework' },
     { label: '待處理預約', value: pendingBookings.length, sub: '輔導與拍攝安排', icon: 'booking', to: '/admin/bookings' },
     { label: '代操進行中', value: activeManagedProjects.length, sub: `${managedUsers.length} 個代操帳號`, icon: 'managed', to: '/admin/managed' },

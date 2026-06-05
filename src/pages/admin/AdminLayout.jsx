@@ -10,7 +10,7 @@ const MAIN_NAV = [
   { to: '/admin/users',        label: '學員管理', icon: 'users' },
   { to: '/admin/courses',      label: '課程與影片', icon: 'video' },
   { to: '/admin/homework',     label: '作業審核', icon: 'edit' },
-  { to: '/admin/trial',        label: '體驗課管理', icon: 'calendar' },
+  { to: '/admin/trial',        label: '活動管理', icon: 'calendar' },
   { to: '/admin/bookings',     label: '預約管理', icon: 'booking' },
   { to: '/admin/managed',      label: '頂流代操', icon: 'bolt' },
   { to: '/admin/ai-analytics', label: 'AI 數據', icon: 'spark' },
