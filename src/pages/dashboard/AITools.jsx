@@ -359,10 +359,81 @@ const STORY_PRACTICE_FIELDS = [
   },
 ]
 
+const PROCESS_SCRIPT_SOP = {
+  title: '曬過程腳本 SOP',
+  processDirections: [
+    '過程展示：把進貨、諮詢、服務、售後、接需求到交付拍成一條可看的節目線。',
+    '測評產品：把產品、工具、設備、方法拿來對比、極限測試、驗證真偽。',
+    '任務挑戰：設定時間、成本、地點、身份或成果限制，讓觀眾想知道能不能完成。',
+    '事件體驗：用新奇體驗、奇葩規則、角色互換或當一天某身份，讓觀眾代入。',
+  ],
+  hookBeats: [
+    '送溫暖：送禮物、資源、服務，或大量買下弱勢群體、學員、客戶、陌生人需要的東西。',
+    '金錢：花大錢、花小錢辦大事、免費、賺錢、省錢、成本挑戰。',
+    '驗證/解密：解秘真假、挑戰權威、揭秘隱私、創根問底、驗證身份或是否成功。',
+    '賀爾蒙：黑絲、長髮、肌肉、明星臉、搭訕、變裝、跳舞、誘惑、大尺度；只用在合適題材，不要低俗。',
+    '盲盒：抽到什麼穿什麼、吃什麼、做什麼、用什麼、幹什麼，或抽到驚喜禮物。',
+    '對抗：下賭注、吵架、被阻止、發生意外、故意整人，製造衝突和懸念。',
+  ],
+  scriptFramework: ['節目企劃', '過程橋段', '反轉/看點', '結果收束'],
+  qualityRules: [
+    '曬過程不是流水帳，每一個橋段都必須先有一個鉤子企劃，像節目設計一樣讓過程好看。',
+    '每支腳本至少使用 3 個鉤子，並在段落中標明「鉤子：送溫暖 / 金錢 / 驗證/解密 / 賀爾蒙 / 盲盒 / 對抗」。',
+    '每個橋段都要寫出觀眾為什麼想繼續看：好奇結果、擔心失敗、想看反應、想看對比、想看翻車或想看解氣。',
+    '過程必須有任務、規則、限制、意外、對比或結果，不可以只寫準備、執行、完成。',
+    '輸出要像短影音節目企劃腳本，包含畫面、人物、動作、衝突、結果，不要像工作紀錄。',
+  ],
+}
+
+const PROCESS_SCRIPT_GENERATION_INSTRUCTION = [
+  '請把已上傳的知識庫 PDF 當成產生曬過程腳本的主要依據。若知識庫有曬過程案例、鉤子、句式或框架，必須優先依照知識庫。',
+  '曬過程不是流水帳，也不是普通工作紀錄。曬過程要像節目一樣設計，每一個橋段都要有鉤子企劃，讓觀眾想看下一秒。',
+  '曬過程有四個腳本方向：過程展示、測評產品、任務挑戰、事件體驗。請依選題判斷最適合的方向。',
+  '六大鉤子可用：送溫暖、金錢、驗證/解密、賀爾蒙、盲盒、對抗。',
+  '送溫暖：給養老院、孤兒院、弱勢群體、學員、客戶或陌生人送禮物、資源、服務，或大量買下對方需要的東西。',
+  '金錢：花大錢、花小錢辦大事、免費、賺錢、省錢、成本挑戰、低預算完成任務。',
+  '驗證/解密：解秘真假、挑戰權威、揭秘隱私、創根問底、驗證身份、驗證方法是否成功。',
+  '賀爾蒙：黑絲、長髮、肌肉、明星臉、搭訕、變裝、跳舞、誘惑、大尺度；只在題材自然適合時使用，不要低俗或硬塞。',
+  '盲盒：抽到什麼穿什麼、吃什麼、做什麼、用什麼、幹什麼，或抽到驚喜禮物。',
+  '對抗：下賭注、吵架、被阻止、發生意外、故意整人、有人不相信、有人唱反調。',
+  '每支曬過程腳本至少使用 3 個鉤子。每個主要橋段都要標明「鉤子：XXX」，再寫這個橋段怎麼拍。',
+  '輸出順序必須只有四段：節目企劃、過程橋段、反轉/看點、結果收束。',
+  '第一段【節目企劃】：說明這支採用哪個曬過程方向，核心任務是什麼，規則或限制是什麼，觀眾為什麼會想看。',
+  '第二段【過程橋段】：用 3 到 5 個小橋段寫出拍攝流程。每個小橋段都必須包含「橋段名」「鉤子」「畫面怎麼拍」「觀眾想看的點」。',
+  '第三段【反轉/看點】：安排至少 1 個意外、對抗、測試失敗、結果出乎意料、成本爆掉、時間不夠、對方反應超出預期的段落。',
+  '第四段【結果收束】：交代最後成果、數字、對比或人物反應，再收一個讓觀眾想留言、想問、想看下一集的結尾。',
+  '禁止只寫「準備階段、執行過程、遇到困難、結果」這種流水帳。每段都要有節目鉤子、有畫面、有懸念。',
+  '語氣要白話、像短影音口播與拍攝腳本，不要像企劃書摘要。',
+].join(' ')
+
+const PROCESS_PRACTICE_FIELDS = [
+  {
+    key: 'concept',
+    label: '節目企劃',
+    placeholder: '寫出這支曬過程的方向、任務、規則或限制，並說明觀眾為什麼想看...',
+  },
+  {
+    key: 'beats',
+    label: '過程橋段',
+    placeholder: '寫 3-5 個橋段。每段都標明鉤子：送溫暖、金錢、驗證/解密、賀爾蒙、盲盒、對抗，並寫畫面怎麼拍...',
+  },
+  {
+    key: 'twist',
+    label: '反轉/看點',
+    placeholder: '安排意外、對抗、翻車、時間不夠、成本爆掉、對方反應超出預期等看點...',
+  },
+  {
+    key: 'result',
+    label: '結果收束',
+    placeholder: '寫最後成果、數字、人物反應或對比，最後用一句話引導留言或下一集...',
+  },
+]
+
 const STRUCTURED_PRACTICE_FIELDS = {
   knowledge: KNOWLEDGE_PRACTICE_FIELDS,
   opinion: OPINION_PRACTICE_FIELDS,
   story: STORY_PRACTICE_FIELDS,
+  process: PROCESS_PRACTICE_FIELDS,
 }
 
 function parseKnowledgePractice(text) {
@@ -529,24 +600,20 @@ const MOCK_SCRIPTS = {
   ],
   process: text => [
     {
-      heading: '【今天要做什麼】',
-      body:    `今天帶大家看看我的完整過程，\n從準備到完成，一步一步全部公開。`,
+      heading: '【節目企劃】',
+      body:    `這支「${text}」不能拍成流水帳，要拍成一個小節目。\n方向我會用「任務挑戰」切入：今天限時完成一個真實任務，規則是不能提前準備、不能用理想案例，只能用現場拿到的素材。觀眾會想看的是：到底能不能做出結果，中間會不會翻車。`,
     },
     {
-      heading: '【準備階段】',
-      body:    `首先，開始之前一定要先確認三件事：\n第一，你的目標是什麼？\n第二，你有哪些資源？\n第三，最大的風險是什麼？`,
+      heading: '【過程橋段】',
+      body:    `橋段一：開箱限制\n鉤子：盲盒\n畫面怎麼拍：把今天能用的素材、預算、設備全部放在桌上，用抽籤決定先處理哪一項。\n觀眾想看的點：抽到最難的項目時，我要怎麼救。\n\n橋段二：低成本硬做\n鉤子：金錢\n畫面怎麼拍：直接公布預算上限，邊做邊算花了多少錢，讓觀眾看到每一步成本。\n觀眾想看的點：少花錢到底能不能做出像樣成果。\n\n橋段三：現場驗證\n鉤子：驗證/解密\n畫面怎麼拍：把做好的版本拿給真實對象看，直接問他願不願意用、哪裡不行。\n觀眾想看的點：不是我自己說好，而是現場反應會不會打臉我。`,
     },
     {
-      heading: '【執行過程】',
-      body:    `我習慣把執行分成三個階段：\n▌ 第一階段：打基礎（1-2 週）\n▌ 第二階段：測試優化（3-4 週）\n▌ 第三階段：放大複製（持續進行）`,
+      heading: '【反轉/看點】',
+      body:    `做到一半一定要設計一個對抗點。\n例如有人質疑：「這樣太趕了，根本不可能做好。」我就直接把時間倒數放在畫面上，讓觀眾看到壓力。中間如果真的卡住，不要剪掉，要保留卡住的那一刻，因為這才是曬過程最好看的地方。`,
     },
     {
-      heading: '【遇到的困難】',
-      body:    `過程中最大的挑戰是……\n老實說，沒有想像中那麼容易，\n但每一個困難都讓我學到很多。`,
-    },
-    {
-      heading: '【結果 + CTA】',
-      body:    `最後的結果大家已經看到了。\n如果你也想開始，先從最小的一步行動，不要等到「準備好」了才動。\n點個關注，我會繼續更新這個系列！`,
+      heading: '【結果收束】',
+      body:    `最後不要只說完成了，要給觀眾一個結果對比。\n例如：一開始只有零散素材，最後變成一套能直接使用的版本；一開始對方不相信，最後願意採用其中一段。結尾可以說：「如果下一集要我用更低預算挑戰一次，留言打 1。」`,
     },
   ],
 }
@@ -1013,6 +1080,39 @@ function normalizeScriptResult(result, topicText, scriptType) {
     return unique.length ? unique : fallback
   }
 
+  const normalizeProcessSections = sections => {
+    const allowed = ['【節目企劃】', '【過程橋段】', '【反轉/看點】', '【結果收束】']
+    const normalized = sections
+      .map(section => {
+        const heading = String(section.heading || '').trim()
+        if (heading.includes('節目') || heading.includes('企劃') || heading.includes('任務') || heading.includes('規則')) {
+          return { ...section, heading: '【節目企劃】' }
+        }
+        if (heading.includes('過程') || heading.includes('橋段') || heading.includes('流程') || heading.includes('拍攝')) {
+          return { ...section, heading: '【過程橋段】' }
+        }
+        if (heading.includes('反轉') || heading.includes('看點') || heading.includes('意外') || heading.includes('對抗') || heading.includes('懸念')) {
+          return { ...section, heading: '【反轉/看點】' }
+        }
+        if (heading.includes('結果') || heading.includes('收束') || heading.includes('結尾') || heading.includes('CTA')) {
+          return { ...section, heading: '【結果收束】' }
+        }
+        return section
+      })
+      .filter(section => section?.body && allowed.includes(section.heading))
+
+    const unique = []
+    allowed.forEach(heading => {
+      const matches = normalized.filter(section => section.heading === heading)
+      if (!matches.length) return
+      unique.push({
+        heading,
+        body: matches.map(section => section.body).join('\n\n'),
+      })
+    })
+    return unique.length ? unique : fallback
+  }
+
   const normalizeSection = (section, index) => {
     if (typeof section === 'string') {
       return {
@@ -1046,6 +1146,7 @@ function normalizeScriptResult(result, topicText, scriptType) {
     if (scriptType === 'knowledge') return normalizeKnowledgeSections(sections)
     if (scriptType === 'opinion') return normalizeOpinionSections(sections)
     if (scriptType === 'story') return normalizeStorySections(sections)
+    if (scriptType === 'process') return normalizeProcessSections(sections)
     return sections.length ? sections : fallback
   }
 
@@ -1060,6 +1161,18 @@ function normalizeScriptResult(result, topicText, scriptType) {
       ['process', '【具體操作過程】'],
       ['operation_process', '【具體操作過程】'],
       ['hook', '【鉤子 · 前 3 秒】'],
+      ['concept', '【節目企劃】'],
+      ['program_concept', '【節目企劃】'],
+      ['show_plan', '【節目企劃】'],
+      ['process_beats', '【過程橋段】'],
+      ['beats', '【過程橋段】'],
+      ['segments', '【過程橋段】'],
+      ['twist', '【反轉/看點】'],
+      ['highlight', '【反轉/看點】'],
+      ['surprise', '【反轉/看點】'],
+      ['result', '【結果收束】'],
+      ['ending', '【結果收束】'],
+      ['cta', '【結果收束】'],
       ['viewpoint', '【開篇】'],
       ['point_of_view', '【開篇】'],
       ['stance', '【開篇】'],
@@ -1102,6 +1215,7 @@ function normalizeScriptResult(result, topicText, scriptType) {
     if (scriptType === 'knowledge') return normalizeKnowledgeSections(objectSections)
     if (scriptType === 'opinion') return normalizeOpinionSections(objectSections)
     if (scriptType === 'story') return normalizeStorySections(objectSections)
+    if (scriptType === 'process') return normalizeProcessSections(objectSections)
     return objectSections.length ? objectSections : fallback
   }
 
@@ -1637,13 +1751,17 @@ function CopyPage() {
             ? OPINION_SCRIPT_SOP
             : nextScriptType === 'story'
               ? STORY_SCRIPT_SOP
-              : null,
+              : nextScriptType === 'process'
+                ? PROCESS_SCRIPT_SOP
+                : null,
         instruction: nextScriptType === 'knowledge'
           ? '請優先依照已上傳的知識庫與教知識腳本 SOP。輸出順序必須只有三段：場景難題、低行動成本解決方案、具體操作過程。腳本類型由系統在推薦型或解題型中擇一，寫在場景難題段落裡，不要出現在標題。三段都必須通過自檢：信息多、效果快、料夠猛。禁止中規中矩的泛泛論點，例如只說設定目標、善用工具、提升效率。不要輸出教知識影片腳本第四段，也不要輸出通用的鉤子/問題引入/主體/CTA 框架。'
           : nextScriptType === 'opinion'
             ? OPINION_SCRIPT_GENERATION_INSTRUCTION
             : nextScriptType === 'story'
               ? STORY_SCRIPT_GENERATION_INSTRUCTION
+              : nextScriptType === 'process'
+                ? PROCESS_SCRIPT_GENERATION_INSTRUCTION
             : '請優先依照已上傳的腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
       }
       const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
