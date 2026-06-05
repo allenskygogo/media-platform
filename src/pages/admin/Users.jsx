@@ -33,6 +33,8 @@ export default function UsersAdmin() {
   const [showProvision, setShowProvision] = useState(false)
   const [provisionForm, setProvisionForm] = useState(emptyProvisionForm)
   const [provisioning, setProvisioning] = useState(false)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [deleting, setDeleting] = useState(false)
   const [msg, setMsg]           = useState('')
   const [err, setErr]           = useState('')
 
@@ -44,6 +46,8 @@ export default function UsersAdmin() {
 
   const flash = (t) => { setErr(''); setMsg(t); setTimeout(() => setMsg(''), 3000) }
   const flashError = (t) => { setMsg(''); setErr(t); setTimeout(() => setErr(''), 5000) }
+  const selectedUsers = users.filter(user => selectedIds.includes(user.id))
+  const allFilteredSelected = filtered.length > 0 && filtered.every(user => selectedIds.includes(user.id))
 
   useEffect(() => {
     loadStudents()
@@ -85,6 +89,7 @@ export default function UsersAdmin() {
     try {
       const data = await workerJson('/api/admin/students')
       setUsers((data.students || []).filter(u => u.role === 'student' && u.tier !== 'managed'))
+      setSelectedIds([])
     } catch (error) {
       flashError(error.message || '讀取正式會員失敗')
     } finally {
@@ -206,6 +211,56 @@ export default function UsersAdmin() {
   const refreshLocalUsers = () => {
     const next = getUsers().filter(u => u.role === 'student' && u.tier !== 'managed')
     setUsers(next)
+    setSelectedIds(ids => ids.filter(id => next.some(user => user.id === id)))
+  }
+
+  const toggleSelected = (userId) => {
+    setSelectedIds(ids => ids.includes(userId) ? ids.filter(id => id !== userId) : [...ids, userId])
+  }
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      setSelectedIds(ids => ids.filter(id => !filtered.some(user => user.id === id)))
+      return
+    }
+    setSelectedIds(ids => [...new Set([...ids, ...filtered.map(user => user.id)])])
+  }
+
+  const deleteLocalStudents = (ids) => {
+    const all = getUsers().filter(user => !ids.includes(user.id))
+    saveUsers(all)
+    refreshLocalUsers()
+  }
+
+  const deleteStudents = async (targets) => {
+    const list = Array.isArray(targets) ? targets : [targets]
+    const students = list.filter(Boolean)
+    if (!students.length || deleting) return
+
+    const label = students.length === 1
+      ? `確定永久刪除學員「${students[0].name}」？刪除後此帳號將無法登入。`
+      : `確定永久刪除 ${students.length} 位學員？刪除後這些帳號將無法登入。`
+    if (!confirm(label)) return
+
+    setDeleting(true)
+    setUpdatingId(students.length === 1 ? students[0].id : '__bulk_delete__')
+    try {
+      if (hasSupabase && supabase) {
+        for (const student of students) {
+          await workerJson(`/api/admin/students/${encodeURIComponent(student.id)}`, { method: 'DELETE' })
+        }
+        await loadStudents()
+      } else {
+        deleteLocalStudents(students.map(student => student.id))
+      }
+      setSelectedIds(ids => ids.filter(id => !students.some(student => student.id === id)))
+      flash(students.length === 1 ? `已刪除學員 ${students[0].name}` : `已刪除 ${students.length} 位學員`)
+    } catch (error) {
+      flashError(error.message || '刪除學員失敗')
+    } finally {
+      setDeleting(false)
+      setUpdatingId('')
+    }
   }
 
   const provisionLocalStudent = () => {
@@ -322,21 +377,34 @@ export default function UsersAdmin() {
             {t === 'all' ? '全部' : `${TIER_MARK[t]} ${TIER_META[t]?.label}`}
           </button>
         ))}
+        {selectedUsers.length > 0 && (
+          <button className="btn btn-danger btn-sm" onClick={() => deleteStudents(selectedUsers)} disabled={deleting}>
+            {deleting ? '刪除中...' : `刪除已選 ${selectedUsers.length} 位`}
+          </button>
+        )}
       </div>
 
       <div className="card">
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>學員</th><th>電子郵件</th><th>會員等級</th><th>效期</th><th>狀態</th><th>操作</th></tr>
+              <tr>
+                <th style={{ width: 42 }}>
+                  <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAllFiltered} disabled={!filtered.length || loading || deleting} />
+                </th>
+                <th>學員</th><th>電子郵件</th><th>會員等級</th><th>效期</th><th>狀態</th><th>操作</th>
+              </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>讀取正式會員中...</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>讀取正式會員中...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>沒有符合條件的學員</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>沒有符合條件的學員</td></tr>
               ) : filtered.map(user => (
                 <tr key={user.id}>
+                  <td>
+                    <input type="checkbox" checked={selectedIds.includes(user.id)} onChange={() => toggleSelected(user.id)} disabled={deleting || updatingId === user.id} />
+                  </td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div className="avatar" style={{ width: 32, height: 32, fontSize: 13 }}>{user.avatar}</div>
@@ -361,6 +429,9 @@ export default function UsersAdmin() {
                       <button className="btn btn-secondary btn-sm" onClick={() => openEdit(user)} disabled={updatingId === user.id}>編輯</button>
                       <button className={`btn btn-sm ${user.status === 'active' ? 'btn-danger' : 'btn-success'}`} onClick={() => toggleStatus(user)} disabled={updatingId === user.id}>
                         {updatingId === user.id ? '更新中...' : user.status === 'active' ? '停用' : '啟用'}
+                      </button>
+                      <button className="btn btn-danger btn-sm" onClick={() => deleteStudents(user)} disabled={deleting || updatingId === user.id}>
+                        刪除
                       </button>
                     </div>
                   </td>

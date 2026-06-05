@@ -344,6 +344,12 @@ export default {
         return await handleUpdateStudent(request, userId, env)
       }
 
+      // DELETE /api/admin/students/:id → permanently delete a student account
+      if (path.startsWith('/api/admin/students/') && request.method === 'DELETE') {
+        const userId = decodeURIComponent(path.slice('/api/admin/students/'.length))
+        return await handleDeleteStudent(request, userId, env)
+      }
+
       // POST /api/calendar/events → create a confirmed booking event
       if (path === '/api/calendar/events' && request.method === 'POST') {
         return await handleCreateCalendarEvent(request, env)
@@ -1199,6 +1205,28 @@ async function handleUpdateStudent(request, userId, env) {
   })
 }
 
+async function handleDeleteStudent(request, userId, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) return err('Invalid student id', 400)
+
+  const profile = await getProfileById(env, userId)
+  if (profile.role !== 'student') return err('Only student accounts can be deleted here', 400)
+
+  await deleteMembershipsForUser(env, userId)
+  await deleteProfile(env, userId)
+  await deleteSupabaseAuthUser(env, userId)
+
+  return json({
+    success: true,
+    deletedId: userId,
+    deletedEmail: profile.email,
+  })
+}
+
 async function getAIAgent(feature, env) {
   if (!feature) return null
   const fallback = DEFAULT_AI_AGENTS[feature] || null
@@ -1753,6 +1781,18 @@ async function updateSupabaseAuthUser(env, userId, payload) {
   return data
 }
 
+async function deleteSupabaseAuthUser(env, userId) {
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok && response.status !== 404) {
+    throw new Error(data.msg || data.message || 'Failed to delete Supabase auth user')
+  }
+  return data
+}
+
 async function upsertProfile(env, payload) {
   const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
   url.searchParams.set('on_conflict', 'id')
@@ -1791,6 +1831,34 @@ async function updateProfile(env, userId, payload) {
     throw new Error(data.message || 'Failed to update student profile')
   }
   return Array.isArray(data) ? data[0] : data
+}
+
+async function deleteProfile(env, userId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
+  url.searchParams.set('id', `eq.${userId}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'DELETE',
+    headers: supabaseServiceHeaders(env, { Prefer: 'return=minimal' }),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.message || 'Failed to delete student profile')
+  }
+}
+
+async function deleteMembershipsForUser(env, userId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/memberships`)
+  url.searchParams.set('user_id', `eq.${userId}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'DELETE',
+    headers: supabaseServiceHeaders(env, { Prefer: 'return=minimal' }),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.message || 'Failed to delete student memberships')
+  }
 }
 
 async function insertOrder(env, payload) {
