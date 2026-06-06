@@ -1678,7 +1678,7 @@ function CopyPage() {
     }
   }
 
-  const hasUnfinishedScript = () => Boolean(script || practice.trim() || generatingScript)
+  const hasUnfinishedScript = () => Boolean(script || practice.trim())
 
   const saveScriptDraft = (reason = 'abandoned') => {
     if (!hasUnfinishedScript()) return
@@ -1850,9 +1850,11 @@ function CopyPage() {
   const handleRefreshTopics = () => {
     saveCurrentWorkspaceState()
     requestAbandonCurrentScript(() => {
+      activeScriptRequestRef.current = ''
       setTopicRounds(prev => ({ ...prev, [scriptType]: (prev[scriptType] ?? 0) + 1 }))
       setSelectedTopicIdx(null)
       setScript(null)
+      setGeneratingScript(false)
       setScriptError('')
       setPractice('')
       setPracticeSubmitted(false)
@@ -1868,7 +1870,9 @@ function CopyPage() {
     if (nextIdea === idea) return
     saveCurrentWorkspaceState()
     requestAbandonCurrentScript(() => {
+      activeScriptRequestRef.current = ''
       setIdea(nextIdea)
+      setGeneratingScript(false)
       setActiveDraftId(null)
     })
   }
@@ -2284,7 +2288,8 @@ function CopyPage() {
                   if (id === scriptType) return
                   saveCurrentWorkspaceState()
                   requestAbandonCurrentScript(() => {
-                    setScriptType(id); setSelectedTopicIdx(null); setScript(null); setScriptError(''); setActiveDraftId(null)
+                    activeScriptRequestRef.current = ''
+                    setScriptType(id); setSelectedTopicIdx(null); setScript(null); setGeneratingScript(false); setScriptError(''); setActiveDraftId(null)
                   })
                 }}>
                 <Icon size={22} strokeWidth={1.5} /><span>{label}</span>{locked && <ComingSoonLabel />}
