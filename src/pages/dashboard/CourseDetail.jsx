@@ -27,6 +27,24 @@ function mapProgress(records) {
   }, {})
 }
 
+function nextLessonFromProgress(lessons, progressByLesson, needsSequentialWatch, needsHomework) {
+  if (!Array.isArray(lessons) || lessons.length === 0) return null
+  const watched = lessons
+    .map((lesson, index) => ({ lesson, index, progress: progressByLesson[lesson.id] }))
+    .filter(item => item.progress)
+    .sort((a, b) => new Date(b.progress.updatedAt || b.progress.completedAt || 0) - new Date(a.progress.updatedAt || a.progress.completedAt || 0))
+
+  const latestIncomplete = watched.find(item => !item.progress.completed && item.progress.currentSecond > 0)
+  if (latestIncomplete) return latestIncomplete.lesson.id
+
+  if (needsSequentialWatch || needsHomework) {
+    const firstIncomplete = lessons.find(lesson => !progressByLesson[lesson.id]?.completed)
+    return firstIncomplete?.id || lessons[0].id
+  }
+
+  return watched[0]?.lesson.id || lessons[0].id
+}
+
 function mapHomeworkSpecs(records) {
   return records.reduce((acc, record) => {
     acc[record.lessonId] = record
@@ -145,9 +163,16 @@ export default function CourseDetail() {
     ])
       .then(([progressRecords, specRecords, homeworkRecords]) => {
         if (cancelled) return
-        setProgressByLesson(mapProgress(progressRecords))
+        const nextProgressByLesson = mapProgress(progressRecords)
+        setProgressByLesson(nextProgressByLesson)
         setSpecByLesson(mapHomeworkSpecs(specRecords))
         setHomeworkByLesson(mapLatestHomework(homeworkRecords))
+        setActiveLessonId(current => current || nextLessonFromProgress(
+          course.lessons,
+          nextProgressByLesson,
+          NEEDS_SEQUENTIAL_WATCH.includes(currentUser.tier),
+          NEEDS_HOMEWORK.includes(currentUser.tier),
+        ))
         setProgressLoadError('')
       })
       .catch(err => {

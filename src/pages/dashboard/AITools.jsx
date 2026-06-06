@@ -31,6 +31,7 @@ const NAV_TOOLS = [
 const SAVED_TOPICS_FALLBACK_KEY = 'mp_saved_topics'
 const PRACTICE_FALLBACK_KEY = 'mp_topic_practices'
 const SCRIPT_DRAFTS_FALLBACK_KEY = 'mp_script_drafts'
+const SCRIPT_WORKSPACE_FALLBACK_KEY = 'mp_script_workspace'
 const AI_PRACTICE_PASS_SCORE = 60
 const PRACTICE_FIELD_MIN_CHARS = 12
 const PRACTICE_TOTAL_MIN_CHARS = 50
@@ -1667,6 +1668,7 @@ function CopyPage() {
   const scriptCacheRef = useRef({})
   const activeScriptRequestRef = useRef('')
   const pendingAbandonActionRef = useRef(null)
+  const workspaceRestoredRef = useRef(false)
 
   // Step 1 — idea
   const [idea, setIdea] = useState('')
@@ -1704,6 +1706,9 @@ function CopyPage() {
   const getScriptCacheKey = (topic, type = scriptType, ideaText = idea.trim()) =>
     [currentUser?.id || 'guest', ideaText, type || '', topic?.text || ''].join('::')
 
+  const getWorkspaceStorageKey = () =>
+    `${SCRIPT_WORKSPACE_FALLBACK_KEY}_${currentUser?.id || 'guest'}`
+
   const saveCurrentWorkspaceState = () => {
     if (!scriptType || !idea.trim()) return
     const key = getTopicStateKey()
@@ -1740,6 +1745,8 @@ function CopyPage() {
         traffic: selectedTopic?.traffic || '',
         script,
         practice,
+        practice_submitted: practiceSubmitted,
+        practice_evaluation: practiceEvaluation,
         shoot_format: shootFormat,
         reason,
         created_at: existing?.created_at || new Date().toISOString(),
@@ -1819,6 +1826,74 @@ function CopyPage() {
       setScriptDrafts([])
     }
   }, [currentUser?.id])
+
+  useEffect(() => {
+    workspaceRestoredRef.current = false
+    try {
+      const saved = JSON.parse(localStorage.getItem(getWorkspaceStorageKey()) || 'null')
+      if (saved && String(saved.user_id || 'guest') === String(currentUser?.id || 'guest')) {
+        skipAutoGenerateRef.current = Array.isArray(saved.copy_topics) && saved.copy_topics.length > 0
+        setIdea(saved.idea || '')
+        setScriptType(saved.script_type || null)
+        setCopyTopics(Array.isArray(saved.copy_topics) ? saved.copy_topics : null)
+        setSelectedTopicIdx(saved.selected_topic_idx ?? null)
+        setScript(saved.script || null)
+        setScriptError(saved.script_error || '')
+        setPractice(saved.practice || '')
+        setPracticeSubmitted(Boolean(saved.practice_submitted))
+        setPracticeEvaluation(saved.practice_evaluation || null)
+        setPracticeError(saved.practice_error || '')
+        setShootFormat(saved.shoot_format || null)
+        setActiveDraftId(saved.active_draft_id || null)
+      }
+    } catch (_) {
+      // Ignore corrupted saved workspaces.
+    } finally {
+      workspaceRestoredRef.current = true
+    }
+  }, [currentUser?.id])
+
+  useEffect(() => {
+    if (!workspaceRestoredRef.current) return
+    if (!idea.trim() && !scriptType && !script && !practice.trim()) return
+    const selectedTopic = selectedTopicIdx !== null ? copyTopics?.[selectedTopicIdx] : null
+    const workspace = {
+      user_id: currentUser?.id || 'guest',
+      idea: idea.trim(),
+      script_type: scriptType,
+      copy_topics: copyTopics,
+      selected_topic_idx: selectedTopicIdx,
+      topic_text: selectedTopic?.text || '',
+      script,
+      script_error: scriptError,
+      practice,
+      practice_submitted: practiceSubmitted,
+      practice_evaluation: practiceEvaluation,
+      practice_error: practiceError,
+      shoot_format: shootFormat,
+      active_draft_id: activeDraftId,
+      updated_at: new Date().toISOString(),
+    }
+    try {
+      localStorage.setItem(getWorkspaceStorageKey(), JSON.stringify(workspace))
+    } catch (_) {
+      // Workspace persistence should never block writing.
+    }
+  }, [
+    currentUser?.id,
+    idea,
+    scriptType,
+    copyTopics,
+    selectedTopicIdx,
+    script,
+    scriptError,
+    practice,
+    practiceSubmitted,
+    practiceEvaluation,
+    practiceError,
+    shootFormat,
+    activeDraftId,
+  ])
 
   // Generate topics when scriptType is selected
   useEffect(() => {
@@ -2044,8 +2119,8 @@ function CopyPage() {
       setSelectedTopicIdx(0)
       setScript(draft.script || null)
       setPractice(draft.practice || '')
-      setPracticeSubmitted(false)
-      setPracticeEvaluation(null)
+      setPracticeSubmitted(Boolean(draft.practice_submitted))
+      setPracticeEvaluation(draft.practice_evaluation || null)
       setPracticeError('')
       setScriptError('')
       setShootFormat(draft.shoot_format || null)
