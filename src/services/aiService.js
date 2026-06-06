@@ -4,6 +4,8 @@
 //  To switch to real API: replace callAI() body only.
 // ══════════════════════════════════════════════════════
 
+import { supabase, hasSupabase } from '../lib/supabase'
+
 const AI_USAGE_KEY      = 'ai_usage_log'
 const FREE_DATE_KEY     = 'free_ai_date'
 const FREE_COUNT_KEY    = 'free_ai_count'
@@ -15,10 +17,44 @@ const WORKER_URL        = import.meta.env.VITE_WORKER_URL || 'https://media-plat
 export function getAIUsageLogs() {
   return JSON.parse(localStorage.getItem(AI_USAGE_KEY) || '[]')
 }
+function getIndustryLabel(input) {
+  if (typeof input === 'string') return input
+  if (!input || typeof input !== 'object') return ''
+  return input.industry || input.idea || input.topicText || input.text || input.scriptType || ''
+}
+export async function fetchAIUsageLogs(limit = 1000) {
+  if (!hasSupabase || !supabase) return getAIUsageLogs()
+  const { data, error } = await supabase
+    .from('ai_usage_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return Array.isArray(data) ? data : []
+}
 function appendAIUsage(record) {
+  const normalized = {
+    ...record,
+    industry: getIndustryLabel(record.industry),
+    created_at: new Date().toISOString(),
+  }
   const logs = getAIUsageLogs()
-  logs.push({ ...record, created_at: new Date().toISOString() })
+  logs.push(normalized)
   localStorage.setItem(AI_USAGE_KEY, JSON.stringify(logs))
+
+  if (hasSupabase && supabase) {
+    supabase.from('ai_usage_logs').insert({
+      user_id: normalized.user_id || null,
+      feature: normalized.feature,
+      industry: normalized.industry || null,
+      plan: normalized.plan || 'free',
+      provider: normalized.provider || 'openai',
+      input_payload: record.industry && typeof record.industry === 'object' ? record.industry : {},
+      created_at: normalized.created_at,
+    }).then(({ error }) => {
+      if (error && import.meta.env.DEV) console.warn('AI usage log insert failed:', error)
+    })
+  }
 }
 
 // ── Free daily rate-limit ─────────────────────────────

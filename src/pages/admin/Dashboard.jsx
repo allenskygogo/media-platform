@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getUsers, getCourses, getBookings, getProjects, getAllHomework } from '../../data/mockData'
-import { getAIUsageLogs, getPracticeSubmissions } from '../../services/aiService'
+import { fetchAIUsageLogs, getAIUsageLogs, getPracticeSubmissions } from '../../services/aiService'
 import { getBookingSubmitterProfiles, getBookingsRecords } from '../../services/bookings'
 
 const TIER_LABELS = {
@@ -92,6 +92,7 @@ function topValue(items, fallback = '尚無資料') {
 export default function AdminDashboard() {
   const [cloudBookings, setCloudBookings] = useState(null)
   const [bookingProfilesById, setBookingProfilesById] = useState({})
+  const [aiLogs, setAiLogs] = useState(() => getAIUsageLogs())
   const users = getUsers()
   const memberUsers = users.filter(user => user.role !== 'admin')
   const students = memberUsers.filter(user => user.tier !== 'managed')
@@ -101,7 +102,6 @@ export default function AdminDashboard() {
   const projects = getProjects()
   const homework = getAllHomework()
   const practiceSubmissions = getPracticeSubmissions()
-  const aiLogs = getAIUsageLogs()
   const betaApplications = readLocalArray('beta_applications')
 
   const pendingHomework = homework.filter(item => item.status === 'pending')
@@ -144,6 +144,14 @@ export default function AdminDashboard() {
         if (!cancelled) setBookingProfilesById(Object.fromEntries(profiles.map(profile => [profile.id, profile])))
       })
       .catch(err => console.error('Dashboard bookings load failed:', err))
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchAIUsageLogs()
+      .then(records => { if (!cancelled) setAiLogs(records) })
+      .catch(err => console.error('Dashboard AI usage load failed:', err))
     return () => { cancelled = true }
   }, [])
 

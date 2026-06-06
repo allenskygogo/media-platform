@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { getAIUsageLogs } from '../../services/aiService'
+import { useEffect, useMemo, useState } from 'react'
+import { fetchAIUsageLogs, getAIUsageLogs } from '../../services/aiService'
 
 const FEATURE_LABELS = {
   topics:     '爆款選題生成',
@@ -13,7 +13,9 @@ const FEATURE_LABELS = {
 const PLAN_LABELS = {
   free:     '免費訪客',
   trial:    '體驗課',
+  basic:    '體驗課',
   standard: '頂流達人',
+  advanced: '頂流私塾',
   premium:  '頂流私塾',
   managed:  '頂流代操',
 }
@@ -21,7 +23,9 @@ const PLAN_LABELS = {
 const PLAN_COLORS = {
   free:     '#6b7280',
   trial:    '#3b82f6',
+  basic:    '#3b82f6',
   standard: '#8b5cf6',
+  advanced: '#f59e0b',
   premium:  '#f59e0b',
   managed:  '#10b981',
 }
@@ -51,7 +55,23 @@ function BarRow({ label, count, max, color }) {
 
 export default function AIAnalytics() {
   const [range, setRange] = useState('month') // 'today' | 'month' | 'all'
-  const logs = getAIUsageLogs()
+  const [logs, setLogs] = useState(() => getAIUsageLogs())
+  const [loadError, setLoadError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    fetchAIUsageLogs()
+      .then(records => {
+        if (cancelled) return
+        setLogs(records)
+        setLoadError('')
+      })
+      .catch(error => {
+        if (cancelled) return
+        setLoadError(error.message || '雲端 AI 數據讀取失敗，暫時顯示本機資料')
+      })
+    return () => { cancelled = true }
+  }, [])
 
   const filtered = useMemo(() => {
     const now = new Date()
@@ -116,6 +136,7 @@ export default function AIAnalytics() {
           ))}
         </div>
       </div>
+      {loadError && <div className="admin-alert admin-alert-warning">{loadError}</div>}
 
       {/* ── Top stat cards ── */}
       <div className="ai-stats-grid">
