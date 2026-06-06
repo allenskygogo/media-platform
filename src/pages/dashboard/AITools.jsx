@@ -32,6 +32,8 @@ const SAVED_TOPICS_FALLBACK_KEY = 'mp_saved_topics'
 const PRACTICE_FALLBACK_KEY = 'mp_topic_practices'
 const SCRIPT_DRAFTS_FALLBACK_KEY = 'mp_script_drafts'
 const AI_PRACTICE_PASS_SCORE = 75
+const PRACTICE_FIELD_MIN_CHARS = 12
+const PRACTICE_TOTAL_MIN_CHARS = 50
 
 const STATS = [
   { num: '1,200+',  label: '創作者使用'   },
@@ -514,7 +516,7 @@ function validatePracticeSubmission(scriptType, text) {
     }
 
     const tooShort = structuredFields
-      .filter(field => String(fields[field.key] || '').trim().length < 12)
+      .filter(field => String(fields[field.key] || '').trim().length < PRACTICE_FIELD_MIN_CHARS)
       .map(field => field.label)
 
     if (tooShort.length > 0) {
@@ -525,8 +527,8 @@ function validatePracticeSubmission(scriptType, text) {
     }
   }
 
-  if (String(text || '').trim().length < 50) {
-    return { ok: false, message: '練習內容至少需要 50 字。' }
+  if (String(text || '').trim().length < PRACTICE_TOTAL_MIN_CHARS) {
+    return { ok: false, message: `練習內容至少需要 ${PRACTICE_TOTAL_MIN_CHARS} 字。` }
   }
 
   return { ok: true, message: '' }
@@ -1630,7 +1632,7 @@ function CopyPage() {
   const [scriptType, setScriptType] = useState(null)
   // Step 3 — topics
   const [copyTopics,      setCopyTopics]      = useState(null)
-  const [topicRound,      setTopicRound]      = useState(0)
+  const [topicRounds,     setTopicRounds]     = useState({ knowledge: 0, opinion: 0, story: 0, process: 0 })
   const [generatingTopics,setGeneratingTopics]= useState(false)
   const [selectedTopicIdx,setSelectedTopicIdx]= useState(null)
   // Step 4 — script
@@ -1652,6 +1654,7 @@ function CopyPage() {
   const [scriptDrafts, setScriptDrafts] = useState([])
   const [activeDraftId, setActiveDraftId] = useState(null)
   const [showAbandonModal, setShowAbandonModal] = useState(false)
+  const topicRound = scriptType ? (topicRounds[scriptType] ?? 0) : 0
 
   const getTopicStateKey = (type = scriptType, round = topicRound, ideaText = idea.trim()) =>
     [currentUser?.id || 'guest', ideaText, type || '', round].join('::')
@@ -1847,7 +1850,7 @@ function CopyPage() {
   const handleRefreshTopics = () => {
     saveCurrentWorkspaceState()
     requestAbandonCurrentScript(() => {
-      setTopicRound(r => r + 1)
+      setTopicRounds(prev => ({ ...prev, [scriptType]: (prev[scriptType] ?? 0) + 1 }))
       setSelectedTopicIdx(null)
       setScript(null)
       setScriptError('')
@@ -2182,6 +2185,10 @@ function CopyPage() {
   }
 
   const practiceValidation = validatePracticeSubmission(scriptType, practice)
+  const structuredPracticeFields = STRUCTURED_PRACTICE_FIELDS[scriptType] || null
+  const structuredPracticeValues = structuredPracticeFields ? parseStructuredPractice(scriptType, practice) : {}
+  const totalPracticeLength = String(practice || '').trim().length
+  const totalPracticeRemaining = Math.max(0, PRACTICE_TOTAL_MIN_CHARS - totalPracticeLength)
 
   return (
     <>
@@ -2364,28 +2371,40 @@ function CopyPage() {
           <p className="ait-practice-hint">用自己的版本完成這支影片的腳本練習，系統會依照課程框架與句式判斷是否符合。</p>
           {!practiceSubmitted ? (
             <>
-              {STRUCTURED_PRACTICE_FIELDS[scriptType] ? (
+              {structuredPracticeFields ? (
                 <div className="ait-practice-wrap">
-                  {STRUCTURED_PRACTICE_FIELDS[scriptType].map(field => (
-                    <label key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <span className="ait-sc-heading">【{field.label}】</span>
-                      <textarea
-                        className="ait-practice-ta"
-                        rows={3}
-                        placeholder={field.placeholder}
-                        value={parseStructuredPractice(scriptType, practice)[field.key] || ''}
-                        onChange={e => setPractice(prev => updateStructuredPractice(scriptType, prev, field.key, e.target.value))}
-                      />
-                    </label>
-                  ))}
-                  <span className="ait-char-count">{practice.length} / 50+ 字</span>
+                  {structuredPracticeFields.map(field => {
+                    const fieldValue = structuredPracticeValues[field.key] || ''
+                    const fieldLength = String(fieldValue).trim().length
+                    const fieldRemaining = Math.max(0, PRACTICE_FIELD_MIN_CHARS - fieldLength)
+                    return (
+                      <label key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <span className="ait-sc-heading">【{field.label}】</span>
+                        <textarea
+                          className="ait-practice-ta"
+                          rows={3}
+                          placeholder={field.placeholder}
+                          value={fieldValue}
+                          onChange={e => setPractice(prev => updateStructuredPractice(scriptType, prev, field.key, e.target.value))}
+                        />
+                        <span className="ait-char-count">
+                          {fieldRemaining > 0 ? `還缺 ${fieldRemaining} 字` : '已達最低字數'}｜目前 {fieldLength} 字
+                        </span>
+                      </label>
+                    )
+                  })}
+                  <span className="ait-char-count">
+                    總字數 {totalPracticeLength} / {PRACTICE_TOTAL_MIN_CHARS}+ 字{totalPracticeRemaining > 0 ? `，還缺 ${totalPracticeRemaining} 字才能提交判斷` : '，可以提交判斷'}
+                  </span>
                   <span className="ait-practice-hint">判斷標準：每個框都要填寫，完成後只能下載自己的練習內容。</span>
                 </div>
               ) : (
                 <div className="ait-practice-wrap">
                   <textarea className="ait-practice-ta" rows={6} placeholder="用自己的版本寫出這支影片的腳本練習…"
                     value={practice} onChange={e => setPractice(e.target.value)} />
-                  <span className="ait-char-count">{practice.length} / 50+ 字</span>
+                  <span className="ait-char-count">
+                    總字數 {totalPracticeLength} / {PRACTICE_TOTAL_MIN_CHARS}+ 字{totalPracticeRemaining > 0 ? `，還缺 ${totalPracticeRemaining} 字才能提交判斷` : '，可以提交判斷'}
+                  </span>
                 </div>
               )}
               {practiceError && <div className="ait-inline-error">{practiceError}</div>}
