@@ -34,6 +34,8 @@ drop policy if exists "Users can read own course progress"
   on public.course_progress;
 drop policy if exists "Users can upsert own course progress"
   on public.course_progress;
+drop policy if exists "Users can update own course progress"
+  on public.course_progress;
 drop policy if exists "Admins can manage course progress"
   on public.course_progress;
 
