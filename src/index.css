@@ -10910,7 +10910,9 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   font-size: 13px; color: var(--gray-500); margin: 0;
 }
 .ait-practice-wrap {
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .ait-practice-ta {
   width: 100%; box-sizing: border-box;
@@ -10923,8 +10925,10 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
 }
 .ait-practice-ta:focus { outline: none; border-color: rgba(79,159,255,0.4); }
 .ait-char-count {
-  position: absolute; bottom: 10px; right: 14px;
-  font-size: 11px; color: var(--gray-500); pointer-events: none;
+  display: block;
+  font-size: 11px; color: var(--gray-500);
+  text-align: right;
+  line-height: 1.5;
 }
 .ait-practice-ok {
   font-size: 13px; color: #4ade80; font-weight: 600;
