@@ -735,7 +735,8 @@ async function handleWritingEvaluation(request, env) {
           '- 信息多：要有清單、數字、判斷標準、對比或案例。',
           '- 效果快：要有今天可執行的小動作。',
           '- 料夠猛：要有反常識、痛點命中、踩坑提醒、真實場景或具體案例。',
-          '- score 75 分以上才 approved=true。',
+          '- score 60 分以上才 approved=true。60 到 74 分代表可下載自己的文案，但仍需要在 improvements 給出具體修改建議。',
+          '- 只有明顯亂碼、純數字、符號堆疊、重複拼湊、完全沒有照框架寫，才應低於 60 分或 approved=false。',
         ].join('\n'),
       },
     ],
@@ -782,7 +783,7 @@ async function handleWritingEvaluation(request, env) {
 
   const score = Number(evaluation.score || 0)
   evaluation.score = Number.isFinite(score) ? Math.max(0, Math.min(100, score)) : 0
-  evaluation.approved = Boolean(evaluation.approved) && evaluation.score >= 75
+  evaluation.approved = evaluation.score >= 60
 
   return json({ success: true, evaluation, provider: 'openai', agent: agent.feature_key || feature })
 }

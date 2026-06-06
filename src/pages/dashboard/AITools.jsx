@@ -31,7 +31,7 @@ const NAV_TOOLS = [
 const SAVED_TOPICS_FALLBACK_KEY = 'mp_saved_topics'
 const PRACTICE_FALLBACK_KEY = 'mp_topic_practices'
 const SCRIPT_DRAFTS_FALLBACK_KEY = 'mp_script_drafts'
-const AI_PRACTICE_PASS_SCORE = 75
+const AI_PRACTICE_PASS_SCORE = 60
 const PRACTICE_FIELD_MIN_CHARS = 12
 const PRACTICE_TOTAL_MIN_CHARS = 50
 
@@ -500,6 +500,35 @@ function updateStructuredPractice(scriptType, text, key, value) {
     .join('\n\n')
 }
 
+function validateMeaningfulPracticeText(text, label = '練習內容', minMeaningfulChars = 20) {
+  const raw = String(text || '').trim()
+  const compact = raw.replace(/\s+/g, '')
+  const contentOnly = compact.replace(/【[^】]+】/g, '')
+  const meaningfulChars = contentOnly.match(/[\u4e00-\u9fffA-Za-z]/g) || []
+  const digitOrSymbolChars = contentOnly.match(/[0-9０-９\W_]/g) || []
+  const uniqueMeaningfulChars = new Set(meaningfulChars.map(char => char.toLowerCase())).size
+  const digitSymbolRatio = contentOnly.length ? digitOrSymbolChars.length / contentOnly.length : 1
+  const minUniqueChars = Math.min(10, Math.max(5, Math.floor(meaningfulChars.length * 0.35)))
+
+  if (meaningfulChars.length < minMeaningfulChars) {
+    return { ok: false, message: `${label}需要寫成完整句子，不能只填數字、符號或零散字。` }
+  }
+
+  if (digitSymbolRatio > 0.55) {
+    return { ok: false, message: `${label}看起來像數字或符號拼湊，請改成可閱讀的文案內容。` }
+  }
+
+  if (uniqueMeaningfulChars < minUniqueChars) {
+    return { ok: false, message: `${label}看起來重複度太高，請改成有具體意思的句子。` }
+  }
+
+  if (/(.)\1{7,}/.test(contentOnly) || /(.{2,6})\1{5,}/.test(contentOnly)) {
+    return { ok: false, message: `${label}看起來有重複拼湊，請用自己的話寫出完整內容。` }
+  }
+
+  return { ok: true, message: '' }
+}
+
 function validatePracticeSubmission(scriptType, text) {
   const structuredFields = STRUCTURED_PRACTICE_FIELDS[scriptType]
   if (structuredFields) {
@@ -525,11 +554,24 @@ function validatePracticeSubmission(scriptType, text) {
         message: `請補強：${tooShort.join('、')}。每一格至少寫出一段完整意思。`,
       }
     }
+
+    const invalidField = structuredFields.find(field => {
+      const result = validateMeaningfulPracticeText(fields[field.key], field.label, 8)
+      return !result.ok
+    })
+
+    if (invalidField) {
+      const result = validateMeaningfulPracticeText(fields[invalidField.key], invalidField.label, 8)
+      return { ok: false, message: result.message }
+    }
   }
 
   if (String(text || '').trim().length < PRACTICE_TOTAL_MIN_CHARS) {
     return { ok: false, message: `練習內容至少需要 ${PRACTICE_TOTAL_MIN_CHARS} 字。` }
   }
+
+  const meaningful = validateMeaningfulPracticeText(text)
+  if (!meaningful.ok) return meaningful
 
   return { ok: true, message: '' }
 }
@@ -2109,7 +2151,7 @@ function CopyPage() {
           score: practice.length >= 80 ? 82 : 68,
           summary: practice.length >= 80
             ? '本機測試判斷：內容長度與三段框架已達練習門檻。'
-            : '本機測試判斷：內容仍偏短，請補上場景難題、低行動成本解法與具體操作過程。',
+            : '本機測試判斷：已達下載門檻，但內容仍可補強。',
           strengths: ['已有明確主題方向'],
           improvements: ['補強場景難題', '加入低行動成本解決方案', '寫出更具體的操作步驟'],
         }
@@ -2119,7 +2161,7 @@ function CopyPage() {
           score: AI_PRACTICE_PASS_SCORE,
           summary: '已完成三段練習。正式 AI 判斷服務尚未設定時，系統先依照三格必填與最低字數規則解鎖下載。',
           strengths: ['三段練習皆已填寫'],
-          improvements: [],
+          improvements: ['可再補更多具體場景、數字或操作細節，讓文案更有說服力。'],
         }
       } else {
         evaluation = {
@@ -2127,7 +2169,7 @@ function CopyPage() {
           score: AI_PRACTICE_PASS_SCORE,
           summary: '已完成練習。正式 AI 判斷服務尚未設定時，系統先依照最低字數規則解鎖下載。',
           strengths: ['練習內容已完成'],
-          improvements: [],
+          improvements: ['可再補更多具體場景、數字或操作細節，讓文案更有說服力。'],
         }
       }
 
@@ -2422,6 +2464,11 @@ function CopyPage() {
             <div className="ait-practice-ok">
               AI 判斷通過，分數 {practiceEvaluation.score || AI_PRACTICE_PASS_SCORE}。可以進入下一步並下載練習內容。
               {practiceEvaluation.summary && <p>{practiceEvaluation.summary}</p>}
+              {Array.isArray(practiceEvaluation?.improvements) && practiceEvaluation.improvements.length > 0 && (
+                <ul>
+                  {practiceEvaluation.improvements.map((item, index) => <li key={index}>{item}</li>)}
+                </ul>
+              )}
             </div>
           ) : (
             <div className="ait-practice-review">
