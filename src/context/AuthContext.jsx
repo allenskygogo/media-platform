@@ -285,8 +285,27 @@ export function AuthProvider({ children }) {
     persist(users[idx])
   }
 
+  const updatePassword = async (newPassword) => {
+    if (!currentUser) throw new Error('請先登入。')
+    const password = String(newPassword || '').trim()
+    if (password.length < 6) throw new Error('新密碼至少需要 6 碼。')
+
+    if (hasSupabase && supabase && currentUser?.source === 'supabase') {
+      const { error } = await supabase.auth.updateUser({ password })
+      if (error) throw new Error(error.message || '密碼更新失敗，請稍後再試。')
+      return true
+    }
+
+    const users = getUsers()
+    const idx = users.findIndex(u => u.id === currentUser.id)
+    if (idx === -1) throw new Error('找不到帳號資料。')
+    users[idx] = { ...users[idx], password }
+    saveUsers(users)
+    return true
+  }
+
   return (
-    <AuthContext.Provider value={{ currentUser, login, logout, register, updateCurrentUser, loading }}>
+    <AuthContext.Provider value={{ currentUser, login, logout, register, updateCurrentUser, updatePassword, loading }}>
       {children}
     </AuthContext.Provider>
   )

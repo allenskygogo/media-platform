@@ -448,9 +448,12 @@ function PlanComparisonModal({ currentPlan, onClose }) {
 }
 
 export default function Profile() {
-  const { currentUser, updateCurrentUser } = useAuth()
+  const { currentUser, updateCurrentUser, updatePassword } = useAuth()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ name: currentUser.name })
+  const [passwordForm, setPasswordForm] = useState({ password: '', confirm: '' })
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordErr, setPasswordErr] = useState('')
   const [msg, setMsg] = useState('')
   const [showPlanModal, setShowPlanModal] = useState(false)
 
@@ -466,6 +469,31 @@ export default function Profile() {
     setEditing(false)
     setMsg('個人資料已更新！')
     setTimeout(() => setMsg(''), 3000)
+  }
+
+  const savePassword = async (e) => {
+    e.preventDefault()
+    setPasswordErr('')
+    if (passwordForm.password.length < 6) {
+      setPasswordErr('新密碼至少需要 6 碼。')
+      return
+    }
+    if (passwordForm.password !== passwordForm.confirm) {
+      setPasswordErr('兩次輸入的密碼不一致。')
+      return
+    }
+
+    setPasswordSaving(true)
+    try {
+      await updatePassword(passwordForm.password)
+      setPasswordForm({ password: '', confirm: '' })
+      setMsg('密碼已更新！下次登入請使用新密碼。')
+      setTimeout(() => setMsg(''), 3000)
+    } catch (error) {
+      setPasswordErr(error.message || '密碼更新失敗，請稍後再試。')
+    } finally {
+      setPasswordSaving(false)
+    }
   }
 
   const daysLeft = currentUser.expiresAt
@@ -546,6 +574,40 @@ export default function Profile() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header"><h2 className="card-title">更改密碼</h2></div>
+            <div className="card-body">
+              {passwordErr && <div className="auth-alert error" style={{ marginBottom: 16 }}>{passwordErr}</div>}
+              <form onSubmit={savePassword} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="form-group">
+                  <label className="form-label">新密碼</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={passwordForm.password}
+                    onChange={e => setPasswordForm(f => ({ ...f, password: e.target.value }))}
+                    placeholder="至少 6 碼"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">確認新密碼</label>
+                  <input
+                    className="form-input"
+                    type="password"
+                    value={passwordForm.confirm}
+                    onChange={e => setPasswordForm(f => ({ ...f, confirm: e.target.value }))}
+                    placeholder="再次輸入新密碼"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <button type="submit" className="btn btn-primary" disabled={passwordSaving}>
+                  {passwordSaving ? '更新中...' : '更新密碼'}
+                </button>
+              </form>
             </div>
           </div>
 

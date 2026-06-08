@@ -30,6 +30,9 @@ export default function UsersAdmin() {
   const [filterTier, setFilterTier] = useState('all')
   const [editUser, setEditUser] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [resetUser, setResetUser] = useState(null)
+  const [resetPassword, setResetPassword] = useState('')
+  const [resettingPassword, setResettingPassword] = useState(false)
   const [showProvision, setShowProvision] = useState(false)
   const [provisionForm, setProvisionForm] = useState(emptyProvisionForm)
   const [provisioning, setProvisioning] = useState(false)
@@ -181,6 +184,47 @@ export default function UsersAdmin() {
     saveUsers(all)
     setUsers(all.filter(u => u.role === 'student' && u.tier !== 'managed'))
     flash(`已${all[idx].status === 'active' ? '啟用' : '停用'}學員 ${user.name}`)
+  }
+
+  const openResetPassword = (user) => {
+    setResetUser(user)
+    setResetPassword('')
+  }
+
+  const resetStudentPassword = async (event) => {
+    event.preventDefault()
+    if (!resetUser || resettingPassword) return
+    const password = resetPassword.trim()
+    if (password.length < 6) {
+      flashError('新密碼至少需要 6 碼。')
+      return
+    }
+
+    setResettingPassword(true)
+    setUpdatingId(resetUser.id)
+    try {
+      if (hasSupabase && supabase && resetUser.source === 'supabase') {
+        await workerJson(`/api/admin/students/${encodeURIComponent(resetUser.id)}/password`, {
+          method: 'POST',
+          body: JSON.stringify({ password }),
+        })
+      } else {
+        const all = getUsers()
+        const idx = all.findIndex(user => user.id === resetUser.id)
+        if (idx === -1) throw new Error('找不到學員資料')
+        all[idx] = { ...all[idx], password }
+        saveUsers(all)
+        refreshLocalUsers()
+      }
+      setResetUser(null)
+      setResetPassword('')
+      flash(`已重設 ${resetUser.name} 的登入密碼，請將新密碼提供給學員。`)
+    } catch (error) {
+      flashError(error.message || '重設密碼失敗')
+    } finally {
+      setResettingPassword(false)
+      setUpdatingId('')
+    }
   }
 
   const changeTier = async (user, tier) => {
@@ -436,6 +480,9 @@ export default function UsersAdmin() {
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-secondary btn-sm" onClick={() => openEdit(user)} disabled={updatingId === user.id}>編輯</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openResetPassword(user)} disabled={updatingId === user.id}>
+                        重設密碼
+                      </button>
                       <button className={`btn btn-sm ${user.status === 'active' ? 'btn-danger' : 'btn-success'}`} onClick={() => toggleStatus(user)} disabled={updatingId === user.id}>
                         {updatingId === user.id ? '更新中...' : user.status === 'active' ? '停用' : '啟用'}
                       </button>
@@ -489,6 +536,43 @@ export default function UsersAdmin() {
               <button type="button" className="btn btn-secondary" onClick={() => setShowProvision(false)}>取消</button>
               <button type="submit" className="btn btn-primary" disabled={provisioning}>
                 {provisioning ? '開通中...' : '建立登入帳號'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {resetUser && (
+        <div className="modal-overlay" onClick={() => setResetUser(null)}>
+          <form className="modal" onSubmit={resetStudentPassword} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">重設學員密碼</h2>
+              <button type="button" className="modal-close" onClick={() => setResetUser(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginTop: 0, color: 'var(--gray-500)', fontSize: 13 }}>
+                正式會員系統不會顯示原密碼。你可以為 {resetUser.name} 設定一組新密碼，再提供給學員登入。
+              </p>
+              <div className="form-group">
+                <label className="form-label">學員 Email</label>
+                <input className="form-input" value={resetUser.email} disabled style={{ background: 'var(--gray-50)', color: 'var(--gray-400)' }} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">新密碼</label>
+                <input
+                  className="form-input"
+                  type="password"
+                  value={resetPassword}
+                  onChange={e => setResetPassword(e.target.value)}
+                  placeholder="至少 6 碼"
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setResetUser(null)}>取消</button>
+              <button type="submit" className="btn btn-primary" disabled={resettingPassword}>
+                {resettingPassword ? '重設中...' : '確認重設'}
               </button>
             </div>
           </form>

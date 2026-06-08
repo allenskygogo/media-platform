@@ -32,6 +32,7 @@ import AdminDashboard     from './pages/admin/Dashboard'
 import OrdersAdmin        from './pages/admin/OrdersAdmin'
 import UsersAdmin         from './pages/admin/Users'
 import CoursesAdmin       from './pages/admin/CoursesAdmin'
+import LearningProgressAdmin from './pages/admin/LearningProgressAdmin'
 import ManagedAdmin       from './pages/admin/ManagedAdmin'
 import BookingsAdmin      from './pages/admin/BookingsAdmin'
 import TrialAdmin         from './pages/admin/TrialAdmin'
@@ -120,6 +121,7 @@ export default function App() {
             <Route path="orders"       element={<OrdersAdmin />} />
             <Route path="users"        element={<UsersAdmin />} />
             <Route path="courses"      element={<CoursesAdmin />} />
+            <Route path="learning-progress" element={<LearningProgressAdmin />} />
             <Route path="managed"      element={<ManagedAdmin />} />
             <Route path="bookings"     element={<BookingsAdmin />} />
             <Route path="trial"        element={<TrialAdmin />} />

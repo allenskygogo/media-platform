@@ -440,6 +440,22 @@ export default {
         return await handleListStudents(request, env)
       }
 
+      // GET /api/admin/learning-progress → list all student course watch progress
+      if (path === '/api/admin/learning-progress' && request.method === 'GET') {
+        return await handleLearningProgress(request, env)
+      }
+
+      // POST /api/admin/learning-progress/reminders → record learning reminders
+      if (path === '/api/admin/learning-progress/reminders' && request.method === 'POST') {
+        return await handleSendLearningReminders(request, env)
+      }
+
+      // POST /api/admin/students/:id/password → reset a student password
+      if (path.startsWith('/api/admin/students/') && path.endsWith('/password') && request.method === 'POST') {
+        const userId = decodeURIComponent(path.slice('/api/admin/students/'.length, -'/password'.length))
+        return await handleResetStudentPassword(request, userId, env)
+      }
+
       // PATCH /api/admin/students/:id → update profile status or open a new membership
       if (path.startsWith('/api/admin/students/') && request.method === 'PATCH') {
         const userId = decodeURIComponent(path.slice('/api/admin/students/'.length))
@@ -1265,6 +1281,135 @@ async function handleListStudents(request, env) {
   })
 }
 
+async function handleLearningProgress(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+
+  const [catalog, profiles, progressRows, reminderRows] = await Promise.all([
+    getCourseCatalog(env),
+    listStudentProfiles(env),
+    listCourseProgressRows(env),
+    listLearningReminderRows(env),
+  ])
+  const memberships = await listLatestActiveMemberships(env, profiles.map(profile => profile.id))
+  const membershipByUserId = Object.fromEntries(memberships.map(item => [item.user_id, item]))
+  const reminderByUserId = new Map()
+  for (const reminder of reminderRows) {
+    if (!reminderByUserId.has(reminder.user_id)) reminderByUserId.set(reminder.user_id, reminder)
+  }
+
+  const courses = catalog.courses || []
+  const courseById = Object.fromEntries(courses.map(course => [Number(course.id), course]))
+  const progressByUser = progressRows.reduce((acc, row) => {
+    const key = row.user_id
+    if (!acc[key]) acc[key] = []
+    acc[key].push(row)
+    return acc
+  }, {})
+
+  const students = profiles
+    .filter(profile => profile.role === 'student')
+    .map(profile => {
+      const membership = membershipByUserId[profile.id] || null
+      const tier = membership?.plan_id ? planToLegacyTier(membership.plan_id) : membership?.legacy_tier || 'basic'
+      const rows = progressByUser[profile.id] || []
+      const visibleCourses = courses.filter(course => {
+        const accessLevels = getCourseAccessLevels(course)
+        return accessLevels.map(courseAccessLevelToTier).includes(tier)
+      })
+      const visibleCourseIds = new Set(visibleCourses.map(course => Number(course.id)))
+      const visibleRows = rows.filter(row => visibleCourseIds.has(Number(row.course_id)))
+      const totalLessons = visibleCourses.reduce((sum, course) => sum + (Array.isArray(course.lessons) ? course.lessons.length : 0), 0)
+      const completedLessons = visibleRows.filter(row => row.completed).length
+      const latestRow = visibleRows
+        .slice()
+        .sort((a, b) => new Date(b.updated_at || b.completed_at || 0) - new Date(a.updated_at || a.completed_at || 0))[0] || null
+      const latestCourse = latestRow ? courseById[Number(latestRow.course_id)] : null
+      const latestLesson = latestCourse?.lessons?.find(lesson => Number(lesson.id) === Number(latestRow.lesson_id)) || null
+      const percent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0
+      const name = profile.display_name || profile.email?.split('@')[0] || '學員'
+
+      return {
+        id: profile.id,
+        name,
+        email: profile.email,
+        status: profile.status,
+        tier,
+        planId: membership?.plan_id || null,
+        totalLessons,
+        completedLessons,
+        percent,
+        latestCourseTitle: latestCourse?.title || null,
+        latestLessonTitle: latestLesson?.title || null,
+        latestSecond: latestRow?.current_second || 0,
+        latestUpdatedAt: latestRow?.updated_at || latestRow?.completed_at || null,
+        lastReminderAt: reminderByUserId.get(profile.id)?.created_at || null,
+        progress: visibleRows.map(row => {
+          const course = courseById[Number(row.course_id)]
+          const lesson = course?.lessons?.find(item => Number(item.id) === Number(row.lesson_id))
+          return {
+            courseId: row.course_id,
+            courseTitle: course?.title || `課程 ${row.course_id}`,
+            lessonId: row.lesson_id,
+            lessonTitle: lesson?.title || `第 ${row.lesson_id} 堂`,
+            currentSecond: row.current_second || 0,
+            completed: !!row.completed,
+            completedAt: row.completed_at || null,
+            updatedAt: row.updated_at || null,
+          }
+        }),
+      }
+    })
+
+  return json({ success: true, students, courses })
+}
+
+async function handleSendLearningReminders(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  const admin = await requireAdmin(request, env)
+  const body = await request.json().catch(() => ({}))
+  const userIds = Array.isArray(body.userIds) ? body.userIds.map(id => String(id)).filter(Boolean) : []
+  const message = String(body.message || '').trim()
+  const courseId = body.courseId ? Number(body.courseId) : null
+
+  if (userIds.length === 0) return err('Missing reminder recipients', 400)
+  if (!message) return err('Missing reminder message', 400)
+
+  const rows = userIds.map(userId => ({
+    admin_id: admin.id,
+    user_id: userId,
+    course_id: Number.isFinite(courseId) ? courseId : null,
+    channel: 'internal',
+    message,
+    created_at: new Date().toISOString(),
+  }))
+
+  const inserted = await insertLearningReminders(env, rows)
+  return json({ success: true, count: inserted.length, reminders: inserted })
+}
+
+async function handleResetStudentPassword(request, userId, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) return err('Invalid user id', 400)
+
+  const body = await request.json().catch(() => ({}))
+  const password = String(body.password || '').trim()
+  if (password.length < 6) return err('Password must be at least 6 characters', 400)
+
+  await updateSupabaseAuthUser(env, userId, { password })
+  return json({ success: true, userId })
+}
+
 async function handleStartMembership(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
     return err('Supabase service key is not configured', 503)
@@ -2028,6 +2173,50 @@ async function listAuthUsers(env) {
   }
 
   return users
+}
+
+async function listCourseProgressRows(env) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/course_progress`)
+  url.searchParams.set('select', 'user_id,course_id,lesson_id,current_second,completed,completed_at,watch_count,updated_at')
+  url.searchParams.set('order', 'updated_at.desc')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || data.error || 'Failed to list course progress')
+  return Array.isArray(data) ? data : []
+}
+
+async function listLearningReminderRows(env) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/learning_reminders`)
+  url.searchParams.set('select', 'id,user_id,course_id,message,channel,created_at')
+  url.searchParams.set('order', 'created_at.desc')
+  url.searchParams.set('limit', '1000')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || data.error || 'Failed to list learning reminders')
+  return Array.isArray(data) ? data : []
+}
+
+async function insertLearningReminders(env, rows) {
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/learning_reminders`, {
+    method: 'POST',
+    headers: {
+      ...supabaseServiceHeaders(env, {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      }),
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify(rows),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || data.error || 'Failed to insert learning reminders')
+  return Array.isArray(data) ? data : []
 }
 
 async function createSupabaseAuthUser(env, payload) {

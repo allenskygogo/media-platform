@@ -9,6 +9,7 @@ const MAIN_NAV = [
   { to: '/admin/orders',       label: '訂單管理', icon: 'booking' },
   { to: '/admin/users',        label: '學員管理', icon: 'users' },
   { to: '/admin/courses',      label: '課程與影片', icon: 'video' },
+  { to: '/admin/learning-progress', label: '學習進度', icon: 'video' },
   { to: '/admin/homework',     label: '作業審核', icon: 'edit' },
   { to: '/admin/trial',        label: '活動管理', icon: 'calendar' },
   { to: '/admin/bookings',     label: '預約管理', icon: 'booking' },
