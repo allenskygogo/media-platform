@@ -153,7 +153,7 @@ const SCRIPT_TYPES = [
 ]
 
 const PUBLIC_AI_TOOL_IDS = new Set(['topics'])
-const PUBLIC_SCRIPT_TYPE_IDS = new Set(['knowledge', 'opinion'])
+const PUBLIC_SCRIPT_TYPE_IDS = new Set(['knowledge', 'opinion', 'story', 'process'])
 const FULL_AI_TEST_EMAILS = new Set(['test-ai-pay@xgfx-tw.com'])
 
 function hasFullAITestAccess(user) {
