@@ -1717,7 +1717,7 @@ function CopyPage() {
     [currentUser?.id || 'guest', ideaText, type || '', round].join('::')
 
   const getScriptCacheKey = (topic, type = scriptType, ideaText = idea.trim()) =>
-    [currentUser?.id || 'guest', ideaText, type || '', topic?.text || ''].join('::')
+    [currentUser?.id || 'guest', ideaText, type || '', getTopicText(topic)].join('::')
 
   const getWorkspaceStorageKey = () =>
     `${SCRIPT_WORKSPACE_FALLBACK_KEY}_${currentUser?.id || 'guest'}`
@@ -1744,6 +1744,7 @@ function CopyPage() {
     if (!hasUnfinishedScript()) return
     try {
       const selectedTopic = selectedTopicIdx !== null ? copyTopics?.[selectedTopicIdx] : null
+      const selectedTopicText = getTopicText(selectedTopic)
       const all = JSON.parse(localStorage.getItem(SCRIPT_DRAFTS_FALLBACK_KEY) || '[]')
       const targetId = activeDraftId || `draft-${Date.now()}`
       const existing = all.find(item => item.id === targetId)
@@ -1753,7 +1754,7 @@ function CopyPage() {
         idea: idea.trim(),
         script_type: scriptType,
         script_type_label: SCRIPT_TYPES.find(s => s.id === scriptType)?.label || scriptType,
-        topic_text: selectedTopic?.text || '',
+        topic_text: selectedTopicText,
         element: selectedTopic?.element || '',
         traffic: selectedTopic?.traffic || '',
         script,
@@ -1845,11 +1846,24 @@ function CopyPage() {
     try {
       const saved = JSON.parse(localStorage.getItem(getWorkspaceStorageKey()) || 'null')
       if (saved && String(saved.user_id || 'guest') === String(currentUser?.id || 'guest')) {
-        skipAutoGenerateRef.current = Array.isArray(saved.copy_topics) && saved.copy_topics.length > 0
+        const restoredTopics = Array.isArray(saved.copy_topics) && saved.copy_topics.length > 0
+          ? saved.copy_topics
+          : saved.topic_text
+            ? [{
+                element: saved.element || '人群',
+                text: saved.topic_text,
+                traffic: saved.traffic || 'medium',
+                savedTopicId: saved.saved_topic_id || null,
+              }]
+            : null
+        const restoredTopicIdx = restoredTopics
+          ? Math.min(Math.max(Number(saved.selected_topic_idx ?? 0), 0), restoredTopics.length - 1)
+          : null
+        skipAutoGenerateRef.current = Array.isArray(restoredTopics) && restoredTopics.length > 0
         setIdea(saved.idea || '')
         setScriptType(saved.script_type || null)
-        setCopyTopics(Array.isArray(saved.copy_topics) ? saved.copy_topics : null)
-        setSelectedTopicIdx(saved.selected_topic_idx ?? null)
+        setCopyTopics(restoredTopics)
+        setSelectedTopicIdx(restoredTopicIdx)
         setScript(saved.script || null)
         setScriptError(saved.script_error || '')
         setPractice(saved.practice || '')
@@ -1870,13 +1884,30 @@ function CopyPage() {
     if (!workspaceRestoredRef.current) return
     if (!idea.trim() && !scriptType && !script && !practice.trim()) return
     const selectedTopic = selectedTopicIdx !== null ? copyTopics?.[selectedTopicIdx] : null
+    const selectedTopicText = getTopicText(selectedTopic)
+    const previousWorkspace = (() => {
+      try {
+        return JSON.parse(localStorage.getItem(getWorkspaceStorageKey()) || 'null')
+      } catch (_) {
+        return null
+      }
+    })()
+    const previousTopics = Array.isArray(previousWorkspace?.copy_topics) && previousWorkspace.copy_topics.length > 0
+      ? previousWorkspace.copy_topics
+      : null
+    const nextTopics = Array.isArray(copyTopics) && copyTopics.length > 0 ? copyTopics : previousTopics
+    const nextTopicText = selectedTopicText || previousWorkspace?.topic_text || ''
+    const nextSelectedTopicIdx = selectedTopicIdx ?? previousWorkspace?.selected_topic_idx ?? (nextTopics ? 0 : null)
     const workspace = {
       user_id: currentUser?.id || 'guest',
       idea: idea.trim(),
       script_type: scriptType,
-      copy_topics: copyTopics,
-      selected_topic_idx: selectedTopicIdx,
-      topic_text: selectedTopic?.text || '',
+      copy_topics: nextTopics,
+      selected_topic_idx: nextSelectedTopicIdx,
+      topic_text: nextTopicText,
+      element: selectedTopic?.element || previousWorkspace?.element || '',
+      traffic: selectedTopic?.traffic || previousWorkspace?.traffic || '',
+      saved_topic_id: selectedTopic?.savedTopicId || previousWorkspace?.saved_topic_id || null,
       script,
       script_error: scriptError,
       practice,
@@ -2189,13 +2220,18 @@ function CopyPage() {
 
   const handleSubmitPractice = async () => {
     const validation = validatePracticeSubmission(scriptType, practice)
-    if (evaluatingPractice || selectedTopicIdx === null) return
+    const effectiveSelectedTopicIdx = selectedTopicIdx ?? (copyTopics?.length === 1 ? 0 : null)
+    if (evaluatingPractice) return
+    if (effectiveSelectedTopicIdx === null) {
+      setPracticeError('找不到目前選題，請重新選擇一次選題後再提交判斷。')
+      return
+    }
     if (!validation.ok) {
       setPracticeError(validation.message)
       return
     }
 
-    const selectedTopic = copyTopics?.[selectedTopicIdx] || null
+    const selectedTopic = copyTopics?.[effectiveSelectedTopicIdx] || null
     const selectedTopicText = getTopicText(selectedTopic)
     if (!selectedTopicText) {
       setPracticeError('找不到目前選題，請重新選擇一次選題後再提交判斷。')
