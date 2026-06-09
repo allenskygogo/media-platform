@@ -111,7 +111,7 @@ export default function StandardHome() {
         <h2 className="sh2-courses-title">推薦課程</h2>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/dashboard/courses')}>查看全部 →</button>
       </div>
-      <div className="sh2-course-grid">
+      <div className={`sh2-course-grid${featured.length === 1 ? ' is-single' : ''}`}>
         {featured.map(course => {
           const cfg = COURSE_CAT_CONFIG[course.category] || DEFAULT_CAT_CONFIG
           const ThumbIcon = cfg.Icon
