@@ -33,7 +33,6 @@ const PRACTICE_FALLBACK_KEY = 'mp_topic_practices'
 const SCRIPT_DRAFTS_FALLBACK_KEY = 'mp_script_drafts'
 const SCRIPT_WORKSPACE_FALLBACK_KEY = 'mp_script_workspace'
 const AI_PRACTICE_PASS_SCORE = 60
-const PRACTICE_FIELD_MIN_CHARS = 12
 const PRACTICE_TOTAL_MIN_CHARS = 50
 
 const STATS = [
@@ -545,34 +544,19 @@ function validatePracticeSubmission(scriptType, text) {
       }
     }
 
-    const tooShort = structuredFields
-      .filter(field => String(fields[field.key] || '').trim().length < PRACTICE_FIELD_MIN_CHARS)
-      .map(field => field.label)
-
-    if (tooShort.length > 0) {
-      return {
-        ok: false,
-        message: `請補強：${tooShort.join('、')}。每一格至少寫出一段完整意思。`,
-      }
-    }
-
-    const invalidField = structuredFields.find(field => {
-      const result = validateMeaningfulPracticeText(fields[field.key], field.label, 8)
-      return !result.ok
-    })
-
-    if (invalidField) {
-      const result = validateMeaningfulPracticeText(fields[invalidField.key], invalidField.label, 8)
-      return { ok: false, message: result.message }
-    }
+    const combinedText = structuredFields.map(field => fields[field.key]).join('\n')
+    const meaningful = validateMeaningfulPracticeText(combinedText)
+    if (!meaningful.ok) return meaningful
   }
 
   if (String(text || '').trim().length < PRACTICE_TOTAL_MIN_CHARS) {
     return { ok: false, message: `練習內容至少需要 ${PRACTICE_TOTAL_MIN_CHARS} 字。` }
   }
 
-  const meaningful = validateMeaningfulPracticeText(text)
-  if (!meaningful.ok) return meaningful
+  if (!structuredFields) {
+    const meaningful = validateMeaningfulPracticeText(text)
+    if (!meaningful.ok) return meaningful
+  }
 
   return { ok: true, message: '' }
 }
@@ -2498,7 +2482,6 @@ function CopyPage() {
                   {structuredPracticeFields.map(field => {
                     const fieldValue = structuredPracticeValues[field.key] || ''
                     const fieldLength = String(fieldValue).trim().length
-                    const fieldRemaining = Math.max(0, PRACTICE_FIELD_MIN_CHARS - fieldLength)
                     return (
                       <label key={field.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         <span className="ait-sc-heading">【{field.label}】</span>
@@ -2510,7 +2493,7 @@ function CopyPage() {
                           onChange={e => setPractice(prev => updateStructuredPractice(scriptType, prev, field.key, e.target.value))}
                         />
                         <span className="ait-char-count">
-                          {fieldRemaining > 0 ? `還缺 ${fieldRemaining} 字` : '已達最低字數'}｜目前 {fieldLength} 字
+                          {fieldLength > 0 ? '已填寫' : '請填寫此段'}｜目前 {fieldLength} 字
                         </span>
                       </label>
                     )
@@ -2529,8 +2512,10 @@ function CopyPage() {
                   </span>
                 </div>
               )}
-              {practiceError && <div className="ait-inline-error">{practiceError}</div>}
-              <button className="ait-btn-primary" disabled={!practiceValidation.ok || evaluatingPractice}
+              {(practiceError || (!practiceValidation.ok && totalPracticeLength >= PRACTICE_TOTAL_MIN_CHARS)) && (
+                <div className="ait-inline-error">{practiceError || practiceValidation.message}</div>
+              )}
+              <button className="ait-btn-primary" disabled={evaluatingPractice}
                 onClick={handleSubmitPractice}>
                 {evaluatingPractice ? <Spinner /> : '提交練習給系統判斷'}
               </button>
