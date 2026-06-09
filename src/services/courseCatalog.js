@@ -13,11 +13,19 @@ const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-ap
 
 function normalizeCatalog(catalog = {}) {
   return {
-    courses: Array.isArray(catalog.courses) ? catalog.courses : [],
+    courses: Array.isArray(catalog.courses) ? catalog.courses.map(sanitizeCourseForRemote) : [],
     cfVideos: Array.isArray(catalog.cfVideos) ? catalog.cfVideos : [],
     videoAssignments: catalog.videoAssignments && typeof catalog.videoAssignments === 'object' ? catalog.videoAssignments : {},
     updatedAt: catalog.updatedAt || null,
   }
+}
+
+function sanitizeCourseForRemote(course) {
+  if (!course || typeof course !== 'object') return course
+  if (typeof course.coverUrl === 'string' && course.coverUrl.startsWith('data:image/')) {
+    return { ...course, coverUrl: '' }
+  }
+  return course
 }
 
 function applyCatalog(catalog) {
