@@ -1,6 +1,8 @@
 import { supabase, hasSupabase, allowLocalFallback } from '../lib/supabase'
 import { getLessonProgress, saveLessonProgress } from '../data/mockData'
 
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
+
 function normalizeProgress(row) {
   if (!row) return null
   return {
@@ -13,6 +15,61 @@ function normalizeProgress(row) {
     watchCount: row.watch_count || 0,
     updatedAt: row.updated_at,
   }
+}
+
+async function getAccessToken() {
+  if (!supabase) return ''
+  const { data } = await supabase.auth.getSession()
+  return data?.session?.access_token || ''
+}
+
+function mergeProgressRecords(localRecords, remoteRecords) {
+  const byLesson = new Map(localRecords.map(record => [String(record.lessonId), record]))
+  for (const record of remoteRecords) {
+    const local = byLesson.get(String(record.lessonId))
+    if (!local || new Date(record.updatedAt || 0) >= new Date(local.updatedAt || 0)) {
+      byLesson.set(String(record.lessonId), record)
+    }
+  }
+  return [...byLesson.values()]
+}
+
+async function loadProgressFromWorker(userId, courseId, lessonIds) {
+  if (!WORKER_URL || !userId) return []
+  const token = await getAccessToken()
+  if (!token) return []
+
+  const url = new URL(`${WORKER_URL.replace(/\/$/, '')}/api/course-progress`)
+  url.searchParams.set('courseId', String(courseId))
+  if (lessonIds.length > 0) {
+    url.searchParams.set('lessonIds', lessonIds.map(Number).filter(Number.isFinite).join(','))
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload.error || 'Worker course progress load failed')
+  return Array.isArray(payload.progress) ? payload.progress : []
+}
+
+async function saveProgressToWorker(userId, courseId, lessonId, currentSecond, completed) {
+  if (!WORKER_URL || !userId) return null
+  const token = await getAccessToken()
+  if (!token) return null
+
+  const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/course-progress`, {
+    method: 'POST',
+    keepalive: true,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ courseId, lessonId, currentSecond, completed }),
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload.error || 'Worker course progress save failed')
+  return payload.progress || null
 }
 
 export async function getCourseProgressRecords(userId, courseId, lessonIds = []) {
@@ -35,17 +92,16 @@ export async function getCourseProgressRecords(userId, courseId, lessonIds = [])
       const { data, error } = await query
       if (error) throw error
       const remoteRecords = (data || []).map(normalizeProgress)
-      const byLesson = new Map(localRecords.map(record => [String(record.lessonId), record]))
-      for (const record of remoteRecords) {
-        const local = byLesson.get(String(record.lessonId))
-        if (!local || new Date(record.updatedAt || 0) >= new Date(local.updatedAt || 0)) {
-          byLesson.set(String(record.lessonId), record)
-        }
-      }
-      return [...byLesson.values()]
+      return mergeProgressRecords(localRecords, remoteRecords)
     } catch (error) {
       console.error('Remote course progress load failed:', error)
-      return localRecords
+      try {
+        const workerRecords = await loadProgressFromWorker(userId, courseId, lessonIds)
+        return mergeProgressRecords(localRecords, workerRecords)
+      } catch (workerError) {
+        console.error('Worker course progress load failed:', workerError)
+        return localRecords
+      }
     }
   }
 
@@ -58,6 +114,12 @@ export async function getCourseProgressRecords(userId, courseId, lessonIds = [])
 
 export async function saveCourseProgressRecord(userId, courseId, lessonId, currentSecond, completed = false) {
   const localRecord = saveLessonProgress(userId, Number(courseId), Number(lessonId), currentSecond, completed)
+  const workerMirrorPromise = hasSupabase && supabase
+    ? saveProgressToWorker(userId, courseId, lessonId, currentSecond, completed).catch(error => {
+      console.error('Worker course progress mirror failed:', error)
+      return null
+    })
+    : Promise.resolve(null)
 
   if (hasSupabase && supabase) {
     const now = new Date().toISOString()
@@ -78,6 +140,10 @@ export async function saveCourseProgressRecord(userId, courseId, lessonId, curre
 
       if (error) {
         console.error('Remote course progress save failed:', error)
+        try {
+          const workerRecord = await workerMirrorPromise
+          return workerRecord || localRecord
+        } catch {}
         return localRecord
       }
       return normalizeProgress(data)
@@ -93,6 +159,10 @@ export async function saveCourseProgressRecord(userId, courseId, lessonId, curre
 
     if (existingError) {
       console.error('Remote course progress lookup failed:', existingError)
+      try {
+        const workerRecord = await workerMirrorPromise
+        return workerRecord || localRecord
+      } catch {}
       return localRecord
     }
 
@@ -111,6 +181,10 @@ export async function saveCourseProgressRecord(userId, courseId, lessonId, curre
 
     if (error) {
       console.error('Remote course progress completion save failed:', error)
+      try {
+        const workerRecord = await workerMirrorPromise
+        return workerRecord || localRecord
+      } catch {}
       return localRecord
     }
     return normalizeProgress(data)

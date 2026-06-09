@@ -112,6 +112,13 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
     }
   }, [isFirstWatch, onComplete, persistProgress, totalSec])
 
+  const flushProgress = useCallback(() => {
+    if (!userId || !courseId || !lesson?.id || done) return
+    const second = Math.max(0, Math.floor(latestSec.current || currentSec || 0))
+    if (second <= 0) return
+    persistProgress(second, false).catch(() => {})
+  }, [courseId, currentSec, done, lesson?.id, persistProgress, userId])
+
   // Start / pause / stop interval
   useEffect(() => {
     if (done) return
@@ -122,6 +129,22 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
     }
     return () => clearInterval(intervalRef.current)
   }, [playing, done, advance])
+
+  useEffect(() => {
+    const handlePageHide = () => flushProgress()
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushProgress()
+    }
+    window.addEventListener('pagehide', handlePageHide)
+    window.addEventListener('beforeunload', handlePageHide)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide)
+      window.removeEventListener('beforeunload', handlePageHide)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      flushProgress()
+    }
+  }, [flushProgress])
 
   // Prevent context menu in forced mode
   useEffect(() => {
@@ -208,7 +231,15 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
             {fullscreenActive ? '離開全螢幕' : '全螢幕'}
           </button>
           {onClose && (
-            <button className="btn btn-ghost btn-sm" onClick={onClose}>✕ 關閉</button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                flushProgress()
+                onClose()
+              }}
+            >
+              ✕ 關閉
+            </button>
           )}
         </div>
       </div>

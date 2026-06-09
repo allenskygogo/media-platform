@@ -388,6 +388,14 @@ export default {
         return await handleStartMembership(request, env)
       }
 
+      // GET/POST /api/course-progress → current user's course watch progress
+      if (path === '/api/course-progress' && request.method === 'GET') {
+        return await handleGetCourseProgress(request, url, env)
+      }
+      if (path === '/api/course-progress' && request.method === 'POST') {
+        return await handleSaveCourseProgress(request, env)
+      }
+
       // POST /api/auth/last-login → record current user's successful login time
       if (path === '/api/auth/last-login' && request.method === 'POST') {
         return await handleRecordLastLogin(request, env)
@@ -590,6 +598,138 @@ async function handleUpdateCourseCatalog(request, env) {
   }
   const saved = await upsertCourseCatalog(env, catalog)
   return json({ success: true, catalog: saved })
+}
+
+function normalizeCourseProgressRow(row) {
+  if (!row) return null
+  return {
+    userId: row.user_id,
+    courseId: row.course_id,
+    lessonId: row.lesson_id,
+    currentSecond: row.current_second || 0,
+    completed: !!row.completed,
+    completedAt: row.completed_at || null,
+    watchCount: row.watch_count || 0,
+    updatedAt: row.updated_at || null,
+  }
+}
+
+async function handleGetCourseProgress(request, url, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Course progress storage is not configured', 503)
+  }
+
+  let user
+  try {
+    user = await requireUser(request, env)
+  } catch (error) {
+    return err(error.message || 'Unauthorized', 401)
+  }
+  const courseId = Number(url.searchParams.get('courseId'))
+  if (!Number.isFinite(courseId)) return err('Missing course id', 400)
+
+  const lessonIds = String(url.searchParams.get('lessonIds') || '')
+    .split(',')
+    .map(value => Number(value.trim()))
+    .filter(Number.isFinite)
+
+  const progressUrl = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/course_progress`)
+  progressUrl.searchParams.set('select', 'user_id,course_id,lesson_id,current_second,completed,completed_at,watch_count,updated_at')
+  progressUrl.searchParams.set('user_id', `eq.${user.id}`)
+  progressUrl.searchParams.set('course_id', `eq.${courseId}`)
+  if (lessonIds.length > 0) {
+    progressUrl.searchParams.set('lesson_id', `in.(${lessonIds.join(',')})`)
+  }
+
+  const response = await fetch(progressUrl.toString(), {
+    headers: serviceRoleHeaders(env),
+  })
+  const rows = await response.json().catch(() => [])
+  if (!response.ok) {
+    const message = rows?.message || rows?.error || 'Course progress load failed'
+    throw new Error(message)
+  }
+
+  return json({
+    success: true,
+    progress: Array.isArray(rows) ? rows.map(normalizeCourseProgressRow) : [],
+  })
+}
+
+async function handleSaveCourseProgress(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Course progress storage is not configured', 503)
+  }
+
+  let user
+  try {
+    user = await requireUser(request, env)
+  } catch (error) {
+    return err(error.message || 'Unauthorized', 401)
+  }
+  const body = await request.json().catch(() => ({}))
+  const courseId = Number(body.courseId)
+  const lessonId = Number(body.lessonId)
+  const currentSecond = Math.max(0, Math.floor(Number(body.currentSecond || 0)))
+  const completed = Boolean(body.completed)
+
+  if (!Number.isFinite(courseId) || !Number.isFinite(lessonId)) {
+    return err('Missing course or lesson id', 400)
+  }
+
+  const now = new Date().toISOString()
+  let existing = null
+  if (completed) {
+    const existingUrl = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/course_progress`)
+    existingUrl.searchParams.set('select', 'watch_count,completed,completed_at')
+    existingUrl.searchParams.set('user_id', `eq.${user.id}`)
+    existingUrl.searchParams.set('course_id', `eq.${courseId}`)
+    existingUrl.searchParams.set('lesson_id', `eq.${lessonId}`)
+    existingUrl.searchParams.set('limit', '1')
+    const existingResponse = await fetch(existingUrl.toString(), {
+      headers: serviceRoleHeaders(env),
+    })
+    const rows = await existingResponse.json().catch(() => [])
+    if (!existingResponse.ok) {
+      const message = rows?.message || rows?.error || 'Course progress lookup failed'
+      throw new Error(message)
+    }
+    existing = Array.isArray(rows) ? rows[0] || null : null
+  }
+
+  const payload = {
+    user_id: user.id,
+    course_id: courseId,
+    lesson_id: lessonId,
+    current_second: currentSecond,
+    last_watched_at: now,
+    ...(completed ? {
+      completed: true,
+      completed_at: existing?.completed_at || now,
+      watch_count: existing?.completed ? (existing.watch_count || 0) : ((existing?.watch_count || 0) + 1),
+    } : {}),
+  }
+
+  const upsertUrl = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/course_progress`)
+  upsertUrl.searchParams.set('on_conflict', 'user_id,course_id,lesson_id')
+  const response = await fetch(upsertUrl.toString(), {
+    method: 'POST',
+    headers: {
+      ...serviceRoleHeaders(env),
+      Prefer: 'resolution=merge-duplicates,return=representation',
+    },
+    body: JSON.stringify(payload),
+  })
+  const rows = await response.json().catch(() => [])
+  if (!response.ok) {
+    const message = rows?.message || rows?.error || 'Course progress save failed'
+    throw new Error(message)
+  }
+
+  return json({
+    success: true,
+    progress: normalizeCourseProgressRow(Array.isArray(rows) ? rows[0] : rows),
+  })
 }
 
 async function handleToken(request, videoUid, env) {

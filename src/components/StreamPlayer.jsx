@@ -98,6 +98,7 @@ export default function StreamPlayer({
   const correctingSeekRef = useRef(false)
   const doneRef    = useRef(false) // video ended
   const lastSavedSecondRef = useRef(0)
+  const flushProgressRef = useRef(() => {})
 
   const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
   const [errMsg, setErrMsg] = useState('')
@@ -170,6 +171,19 @@ export default function StreamPlayer({
           })
       }
 
+      const flushProgress = () => {
+        if (!userId || !courseId || !lessonId || doneRef.current) return
+        const second = Math.max(
+          Math.floor(player.currentTime || 0),
+          Math.floor(maxRef.current || 0),
+          Math.floor(lastTimeRef.current || 0)
+        )
+        if (second <= 0 || second === lastSavedSecondRef.current) return
+        lastSavedSecondRef.current = second
+        persistProgress(second, false).catch(() => {})
+      }
+      flushProgressRef.current = flushProgress
+
       const completeLesson = () => {
         if (doneRef.current) return
         doneRef.current = true
@@ -231,9 +245,26 @@ export default function StreamPlayer({
         player.addEventListener('seeking', clampForwardSeek)
         player.addEventListener('seeked', clampForwardSeek)
       }
+
+      const handlePageHide = () => flushProgress()
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'hidden') flushProgress()
+      }
+      window.addEventListener('pagehide', handlePageHide)
+      window.addEventListener('beforeunload', handlePageHide)
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+
+      playerRef.currentCleanup = () => {
+        window.removeEventListener('pagehide', handlePageHide)
+        window.removeEventListener('beforeunload', handlePageHide)
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+        flushProgress()
+      }
     })
 
     return () => {
+      playerRef.currentCleanup?.()
+      flushProgressRef.current = () => {}
       playerRef.current = null
     }
   }, [status]) // eslint-disable-line
@@ -342,7 +373,15 @@ export default function StreamPlayer({
             {fullscreenActive ? '離開全螢幕' : '全螢幕'}
           </button>
           {onClose && (
-            <button className="btn btn-ghost btn-sm" onClick={onClose}>✕ 關閉</button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                flushProgressRef.current()
+                onClose()
+              }}
+            >
+              ✕ 關閉
+            </button>
           )}
         </div>
       </div>
