@@ -104,6 +104,19 @@ function courseAccessLevels(course) {
   return startIndex >= 0 ? ACCESS_LEVEL_ORDER.slice(startIndex) : [legacyAccess]
 }
 
+function isTrialCourse(course) {
+  return course?.tier === 'basic' || courseAccessLevels(course).includes('trial')
+}
+
+function courseNeedsHomework(course, userTier) {
+  if (isTrialCourse(course)) return false
+  return NEEDS_HOMEWORK.includes(userTier)
+}
+
+function courseNeedsSequentialWatch(course) {
+  return isTrialCourse(course)
+}
+
 function courseLevelText(course) {
   return courseAccessLevels(course).map(level => ACCESS_LEVEL_LABEL[level]).filter(Boolean).join(' / ') || COURSE_LEVEL_LABEL[course?.tier] || '達人'
 }
@@ -197,8 +210,8 @@ export default function CourseDetail() {
         setActiveLessonId(current => current || resumeLessonId || nextLessonFromProgress(
           course.lessons,
           nextProgressByLesson,
-          NEEDS_SEQUENTIAL_WATCH.includes(currentUser.tier),
-          NEEDS_HOMEWORK.includes(currentUser.tier),
+          courseNeedsSequentialWatch(course),
+          courseNeedsHomework(course, currentUser.tier),
         ))
         setProgressLoadError('')
       })
@@ -247,8 +260,8 @@ export default function CourseDetail() {
     )
   }
 
-  const needsHomework = NEEDS_HOMEWORK.includes(currentUser.tier)
-  const needsSequentialWatch = NEEDS_SEQUENTIAL_WATCH.includes(currentUser.tier)
+  const needsHomework = courseNeedsHomework(course, currentUser.tier)
+  const needsSequentialWatch = courseNeedsSequentialWatch(course)
   const activeLesson  = course.lessons.find(l => l.id === activeLessonId) || null
 
   const handleLessonClick = (lesson, lessonIdx) => {
