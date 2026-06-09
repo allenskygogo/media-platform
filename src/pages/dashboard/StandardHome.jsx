@@ -1,13 +1,15 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { getCourses, canAccessCourse, TIER_META, getLessonProgress, getAdvancedOfferStatus, getManagedOfferStatus, getSystemSettings } from '../../data/mockData'
+import { fetchCourseCatalog } from '../../services/courseCatalog'
 import { AdvancedOfferBanner, CompletionOfferBanner } from '../../components/CountdownBanner'
 import { IconBook, IconPlay, IconStar, IconArrow, IconTrophy, COURSE_CAT_CONFIG, DEFAULT_CAT_CONFIG } from '../../components/Icons'
 
 export default function StandardHome() {
   const { currentUser } = useAuth()
   const navigate = useNavigate()
+  const [courses, setCourses] = useState(() => getCourses())
 
   useEffect(() => {
     const { bgImages } = getSystemSettings()
@@ -22,7 +24,17 @@ export default function StandardHome() {
       document.body.style.backgroundPosition = ''
     }
   }, [])
-  const allCourses   = getCourses().filter(c => c.published)
+  useEffect(() => {
+    let cancelled = false
+    fetchCourseCatalog()
+      .then(catalog => {
+        if (!cancelled) setCourses(catalog.courses)
+      })
+      .catch(err => console.error('Course catalog refresh failed:', err))
+    return () => { cancelled = true }
+  }, [])
+
+  const allCourses   = courses.filter(c => c.published)
   const accessible   = allCourses.filter(c => canAccessCourse(currentUser.tier, c.accessLevels || c.accessLevel))
   const featured     = accessible.slice(0, 3)
   const meta         = TIER_META[currentUser.tier]
@@ -106,7 +118,7 @@ export default function StandardHome() {
           return (
             <div key={course.id} className="sh2-course" onClick={() => navigate(`/dashboard/courses/${course.id}`)}>
               <div
-                className="sh2-course-thumb"
+                className={`sh2-course-thumb${course.coverUrl ? ' has-cover' : ''}`}
                 style={course.coverUrl ? { backgroundImage:`url(${course.coverUrl})`, backgroundSize:'cover', backgroundPosition:'center' } : { background: cfg.bg }}
               >
                 {!course.coverUrl && <ThumbIcon size={36} stroke={cfg.color} strokeWidth={1}/>}

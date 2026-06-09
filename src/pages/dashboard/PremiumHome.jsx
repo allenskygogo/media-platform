@@ -1,14 +1,27 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { getCourses, canAccessCourse, TIER_META, getAdvancedOfferStatus, getManagedOfferStatus, getSystemSettings } from '../../data/mockData'
+import { fetchCourseCatalog } from '../../services/courseCatalog'
 import { AdvancedOfferBanner, CompletionOfferBanner } from '../../components/CountdownBanner'
 import { IconBook, IconPlay, IconAI, IconCalendar, IconZap, IconArrow, COURSE_CAT_CONFIG, DEFAULT_CAT_CONFIG } from '../../components/Icons'
 
 export default function PremiumHome() {
   const { currentUser } = useAuth()
   const navigate = useNavigate()
-  const allCourses = getCourses().filter(c => c.published)
+  const [courses, setCourses] = useState(() => getCourses())
+
+  useEffect(() => {
+    let cancelled = false
+    fetchCourseCatalog()
+      .then(catalog => {
+        if (!cancelled) setCourses(catalog.courses)
+      })
+      .catch(err => console.error('Course catalog refresh failed:', err))
+    return () => { cancelled = true }
+  }, [])
+
+  const allCourses = courses.filter(c => c.published)
   const accessible = allCourses.filter(c => canAccessCourse(currentUser.tier, c.accessLevels || c.accessLevel))
   const featured   = accessible.slice(0, 3)
   const meta       = TIER_META[currentUser.tier]
@@ -97,7 +110,7 @@ export default function PremiumHome() {
           return (
             <div key={course.id} className="ph2-course" onClick={() => navigate(`/dashboard/courses/${course.id}`)}>
               <div
-                className="ph2-course-thumb"
+                className={`ph2-course-thumb${course.coverUrl ? ' has-cover' : ''}`}
                 style={course.coverUrl ? { backgroundImage:`url(${course.coverUrl})`, backgroundSize:'cover', backgroundPosition:'center' } : { background: cfg.bg }}
               >
                 {!course.coverUrl && <ThumbIcon size={40} stroke={cfg.color} strokeWidth={1} />}

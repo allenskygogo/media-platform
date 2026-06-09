@@ -361,7 +361,8 @@ export default function CourseDetail() {
               <div
                 className={`course-thumb course-thumb-${course.tier}`}
                 style={{
-                  height:220,
+                  height:'auto',
+                  aspectRatio:'16 / 9',
                   borderRadius:'var(--radius-lg) var(--radius-lg) 0 0',
                   fontSize:64,
                   ...(course.coverUrl ? { backgroundImage:`url(${course.coverUrl})`, backgroundSize:'cover', backgroundPosition:'center' } : {}),

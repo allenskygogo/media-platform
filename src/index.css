@@ -7044,9 +7044,14 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
 .sh2-course-thumb {
   height: 160px; display: flex; align-items: center; justify-content: center;
 }
-.sh2-course:nth-child(1) .sh2-course-thumb { background: linear-gradient(135deg, #060f1e, #0c1e3a) !important; }
-.sh2-course:nth-child(2) .sh2-course-thumb { background: linear-gradient(135deg, #0c0e22, #16103a) !important; }
-.sh2-course:nth-child(3) .sh2-course-thumb { background: linear-gradient(135deg, #080f1e, #0c1e38) !important; }
+.ph2-course-thumb.has-cover,
+.sh2-course-thumb.has-cover {
+  background-size: cover;
+  background-position: center;
+}
+.sh2-course:nth-child(1) .sh2-course-thumb:not(.has-cover) { background: linear-gradient(135deg, #060f1e, #0c1e3a) !important; }
+.sh2-course:nth-child(2) .sh2-course-thumb:not(.has-cover) { background: linear-gradient(135deg, #0c0e22, #16103a) !important; }
+.sh2-course:nth-child(3) .sh2-course-thumb:not(.has-cover) { background: linear-gradient(135deg, #080f1e, #0c1e38) !important; }
 .sh2-course-body { padding: 14px; flex: 1; }
 .sh2-course-tag {
   display: inline-block; padding: 2px 8px; border-radius: 999px;
