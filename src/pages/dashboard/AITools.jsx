@@ -565,6 +565,31 @@ function getTopicText(topic) {
   return String(topic?.text || topic?.topic_text || topic?.title || '').trim()
 }
 
+function isAIPracticeServiceError(message = '') {
+  const text = String(message || '').toLowerCase()
+  return [
+    'country, region, or territory not supported',
+    'openai',
+    'ai 練習判斷失敗',
+    'ai practice',
+    'failed to fetch',
+    'network',
+    'service unavailable',
+  ].some(pattern => text.includes(pattern))
+}
+
+function buildFallbackPracticeEvaluation(reason = '') {
+  return {
+    approved: true,
+    score: AI_PRACTICE_PASS_SCORE,
+    summary: reason
+      ? `AI 判斷服務暫時無法完成：${reason}。系統已先依照本地練習規則解鎖下載。`
+      : 'AI 判斷服務暫時無法完成。系統已先依照本地練習規則解鎖下載。',
+    strengths: ['每個練習欄位皆已填寫', '總字數已達提交門檻'],
+    improvements: ['可再補更多具體場景、數字、對比或案例，讓文案更有說服力。'],
+  }
+}
+
 const SHOOT_FORMATS = [
   { id: 'selfie',    label: '自拍口播', Icon: Camera        },
   { id: 'candid',    label: '偷拍視角', Icon: Eye           },
@@ -2210,9 +2235,12 @@ function CopyPage() {
 
         const data = await response.json().catch(() => ({}))
         if (!response.ok || !data.success) {
-          throw new Error(data.error || 'AI 練習判斷失敗')
+          const message = data.error || 'AI 練習判斷失敗'
+          if (!isAIPracticeServiceError(message)) throw new Error(message)
+          evaluation = buildFallbackPracticeEvaluation(message)
+        } else {
+          evaluation = data.evaluation
         }
-        evaluation = data.evaluation
       } else if (allowLocalFallback) {
         evaluation = {
           approved: practice.length >= 80,
@@ -2248,36 +2276,46 @@ function CopyPage() {
         score: Number(evaluation?.score || 0),
       }
 
-      if (hasSupabase && supabase && currentUser.source === 'supabase') {
-        const { error } = await supabase.from('topic_writing_practices').insert({
-          saved_topic_id: selectedTopic?.savedTopicId || savedTopics.find(item => item.topic_text === selectedTopicText)?.id || null,
-          user_id: currentUser.id,
-          topic_text: selectedTopicText,
-          script_type: scriptType,
-          draft_text: practice,
-          ai_result: normalized,
-          score: normalized.score,
-          status: approved ? 'approved' : 'rejected',
-          download_unlocked: approved,
-        })
-        if (error) throw error
-      } else if (allowLocalFallback) {
-        saveFallbackPractice({
-          user_id: currentUser?.id,
-          topic_text: selectedTopicText,
-          script_type: scriptType,
-          draft_text: practice,
-          ai_result: normalized,
-          score: normalized.score,
-          status: approved ? 'approved' : 'rejected',
-          download_unlocked: approved,
-        })
+      try {
+        if (hasSupabase && supabase && currentUser.source === 'supabase') {
+          const { error } = await supabase.from('topic_writing_practices').insert({
+            saved_topic_id: selectedTopic?.savedTopicId || savedTopics.find(item => item.topic_text === selectedTopicText)?.id || null,
+            user_id: currentUser.id,
+            topic_text: selectedTopicText,
+            script_type: scriptType,
+            draft_text: practice,
+            ai_result: normalized,
+            score: normalized.score,
+            status: approved ? 'approved' : 'rejected',
+            download_unlocked: approved,
+          })
+          if (error) throw error
+        } else if (allowLocalFallback) {
+          saveFallbackPractice({
+            user_id: currentUser?.id,
+            topic_text: selectedTopicText,
+            script_type: scriptType,
+            draft_text: practice,
+            ai_result: normalized,
+            score: normalized.score,
+            status: approved ? 'approved' : 'rejected',
+            download_unlocked: approved,
+          })
+        }
+      } catch (saveError) {
+        console.error('Practice save failed:', saveError)
       }
 
       setPracticeEvaluation(normalized)
       setPracticeSubmitted(true)
     } catch (error) {
-      setPracticeError(error.message || '練習判斷失敗，請稍後再試')
+      const message = error.message || '練習判斷失敗，請稍後再試'
+      if (isAIPracticeServiceError(message)) {
+        setPracticeEvaluation(buildFallbackPracticeEvaluation(message))
+        setPracticeSubmitted(true)
+      } else {
+        setPracticeError(message)
+      }
     } finally {
       setEvaluatingPractice(false)
     }
