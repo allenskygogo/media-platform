@@ -600,12 +600,26 @@ async function handleUpdateCourseCatalog(request, env) {
   return json({ success: true, catalog: saved })
 }
 
-function normalizeCourseProgressRow(row) {
+function progressStorageId(value) {
+  const text = String(value ?? '').trim()
+  const numeric = Number(text)
+  if (Number.isInteger(numeric) && numeric > 0 && numeric <= 2147483647) return numeric
+
+  let hash = 2166136261
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0) % 2147483647 || 1
+}
+
+function normalizeCourseProgressRow(row, originalIds = {}) {
   if (!row) return null
+  const lessonMap = originalIds.lessonMap || new Map()
   return {
     userId: row.user_id,
-    courseId: row.course_id,
-    lessonId: row.lesson_id,
+    courseId: originalIds.courseId ?? row.course_id,
+    lessonId: lessonMap.get(Number(row.lesson_id)) ?? originalIds.lessonId ?? row.lesson_id,
     currentSecond: row.current_second || 0,
     completed: !!row.completed,
     completedAt: row.completed_at || null,
@@ -625,20 +639,24 @@ async function handleGetCourseProgress(request, url, env) {
   } catch (error) {
     return err(error.message || 'Unauthorized', 401)
   }
-  const courseId = Number(url.searchParams.get('courseId'))
+  const rawCourseId = url.searchParams.get('courseId')
+  const courseId = Number(rawCourseId)
   if (!Number.isFinite(courseId)) return err('Missing course id', 400)
+  const storageCourseId = progressStorageId(rawCourseId)
 
-  const lessonIds = String(url.searchParams.get('lessonIds') || '')
+  const rawLessonIds = String(url.searchParams.get('lessonIds') || '')
     .split(',')
-    .map(value => Number(value.trim()))
-    .filter(Number.isFinite)
+    .map(value => value.trim())
+    .filter(Boolean)
+  const lessonMap = new Map(rawLessonIds.map(value => [progressStorageId(value), Number(value)]))
+  const storageLessonIds = rawLessonIds.map(progressStorageId)
 
   const progressUrl = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/course_progress`)
   progressUrl.searchParams.set('select', 'user_id,course_id,lesson_id,current_second,completed,completed_at,watch_count,updated_at')
   progressUrl.searchParams.set('user_id', `eq.${user.id}`)
-  progressUrl.searchParams.set('course_id', `eq.${courseId}`)
-  if (lessonIds.length > 0) {
-    progressUrl.searchParams.set('lesson_id', `in.(${lessonIds.join(',')})`)
+  progressUrl.searchParams.set('course_id', `eq.${storageCourseId}`)
+  if (storageLessonIds.length > 0) {
+    progressUrl.searchParams.set('lesson_id', `in.(${storageLessonIds.join(',')})`)
   }
 
   const response = await fetch(progressUrl.toString(), {
@@ -652,7 +670,7 @@ async function handleGetCourseProgress(request, url, env) {
 
   return json({
     success: true,
-    progress: Array.isArray(rows) ? rows.map(normalizeCourseProgressRow) : [],
+    progress: Array.isArray(rows) ? rows.map(row => normalizeCourseProgressRow(row, { courseId, lessonMap })) : [],
   })
 }
 
@@ -670,6 +688,8 @@ async function handleSaveCourseProgress(request, env) {
   const body = await request.json().catch(() => ({}))
   const courseId = Number(body.courseId)
   const lessonId = Number(body.lessonId)
+  const storageCourseId = progressStorageId(body.courseId)
+  const storageLessonId = progressStorageId(body.lessonId)
   const currentSecond = Math.max(0, Math.floor(Number(body.currentSecond || 0)))
   const completed = Boolean(body.completed)
 
@@ -683,8 +703,8 @@ async function handleSaveCourseProgress(request, env) {
     const existingUrl = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/course_progress`)
     existingUrl.searchParams.set('select', 'watch_count,completed,completed_at')
     existingUrl.searchParams.set('user_id', `eq.${user.id}`)
-    existingUrl.searchParams.set('course_id', `eq.${courseId}`)
-    existingUrl.searchParams.set('lesson_id', `eq.${lessonId}`)
+    existingUrl.searchParams.set('course_id', `eq.${storageCourseId}`)
+    existingUrl.searchParams.set('lesson_id', `eq.${storageLessonId}`)
     existingUrl.searchParams.set('limit', '1')
     const existingResponse = await fetch(existingUrl.toString(), {
       headers: serviceRoleHeaders(env),
@@ -699,8 +719,8 @@ async function handleSaveCourseProgress(request, env) {
 
   const payload = {
     user_id: user.id,
-    course_id: courseId,
-    lesson_id: lessonId,
+    course_id: storageCourseId,
+    lesson_id: storageLessonId,
     current_second: currentSecond,
     last_watched_at: now,
     ...(completed ? {
@@ -728,7 +748,7 @@ async function handleSaveCourseProgress(request, env) {
 
   return json({
     success: true,
-    progress: normalizeCourseProgressRow(Array.isArray(rows) ? rows[0] : rows),
+    progress: normalizeCourseProgressRow(Array.isArray(rows) ? rows[0] : rows, { courseId, lessonId }),
   })
 }
 
@@ -1443,6 +1463,7 @@ async function handleLearningProgress(request, env) {
 
   const courses = catalog.courses || []
   const courseById = Object.fromEntries(courses.map(course => [Number(course.id), course]))
+  const courseByProgressId = Object.fromEntries(courses.map(course => [progressStorageId(course.id), course]))
   const progressByUser = progressRows.reduce((acc, row) => {
     const key = row.user_id
     if (!acc[key]) acc[key] = []
@@ -1460,15 +1481,15 @@ async function handleLearningProgress(request, env) {
         const accessLevels = getCourseAccessLevels(course)
         return accessLevels.map(courseAccessLevelToTier).includes(tier)
       })
-      const visibleCourseIds = new Set(visibleCourses.map(course => Number(course.id)))
+      const visibleCourseIds = new Set(visibleCourses.map(course => progressStorageId(course.id)))
       const visibleRows = rows.filter(row => visibleCourseIds.has(Number(row.course_id)))
       const totalLessons = visibleCourses.reduce((sum, course) => sum + (Array.isArray(course.lessons) ? course.lessons.length : 0), 0)
       const completedLessons = visibleRows.filter(row => row.completed).length
       const latestRow = visibleRows
         .slice()
         .sort((a, b) => new Date(b.updated_at || b.completed_at || 0) - new Date(a.updated_at || a.completed_at || 0))[0] || null
-      const latestCourse = latestRow ? courseById[Number(latestRow.course_id)] : null
-      const latestLesson = latestCourse?.lessons?.find(lesson => Number(lesson.id) === Number(latestRow.lesson_id)) || null
+      const latestCourse = latestRow ? courseByProgressId[Number(latestRow.course_id)] || courseById[Number(latestRow.course_id)] : null
+      const latestLesson = latestCourse?.lessons?.find(lesson => progressStorageId(lesson.id) === Number(latestRow.lesson_id) || Number(lesson.id) === Number(latestRow.lesson_id)) || null
       const percent = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0
       const name = profile.display_name || profile.email?.split('@')[0] || '學員'
 
@@ -1488,12 +1509,12 @@ async function handleLearningProgress(request, env) {
         latestUpdatedAt: latestRow?.updated_at || latestRow?.completed_at || null,
         lastReminderAt: reminderByUserId.get(profile.id)?.created_at || null,
         progress: visibleRows.map(row => {
-          const course = courseById[Number(row.course_id)]
-          const lesson = course?.lessons?.find(item => Number(item.id) === Number(row.lesson_id))
+          const course = courseByProgressId[Number(row.course_id)] || courseById[Number(row.course_id)]
+          const lesson = course?.lessons?.find(item => progressStorageId(item.id) === Number(row.lesson_id) || Number(item.id) === Number(row.lesson_id))
           return {
-            courseId: row.course_id,
+            courseId: course?.id || row.course_id,
             courseTitle: course?.title || `課程 ${row.course_id}`,
-            lessonId: row.lesson_id,
+            lessonId: lesson?.id || row.lesson_id,
             lessonTitle: lesson?.title || `第 ${row.lesson_id} 堂`,
             currentSecond: row.current_second || 0,
             completed: !!row.completed,
