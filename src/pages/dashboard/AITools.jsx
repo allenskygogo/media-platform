@@ -561,6 +561,10 @@ function validatePracticeSubmission(scriptType, text) {
   return { ok: true, message: '' }
 }
 
+function getTopicText(topic) {
+  return String(topic?.text || topic?.topic_text || topic?.title || '').trim()
+}
+
 const SHOOT_FORMATS = [
   { id: 'selfie',    label: '自拍口播', Icon: Camera        },
   { id: 'candid',    label: '偷拍視角', Icon: Eye           },
@@ -2166,7 +2170,12 @@ function CopyPage() {
       return
     }
 
-    const selectedTopic = copyTopics?.[selectedTopicIdx]
+    const selectedTopic = copyTopics?.[selectedTopicIdx] || null
+    const selectedTopicText = getTopicText(selectedTopic)
+    if (!selectedTopicText) {
+      setPracticeError('找不到目前選題，請重新選擇一次選題後再提交判斷。')
+      return
+    }
     setEvaluatingPractice(true)
     setPracticeError('')
     setPracticeEvaluation(null)
@@ -2185,7 +2194,7 @@ function CopyPage() {
           },
           body: JSON.stringify({
             feature: 'script',
-            topicText: selectedTopic.text,
+            topicText: selectedTopicText,
             scriptType,
             practiceFramework: scriptType === 'knowledge'
               ? KNOWLEDGE_SCRIPT_SOP.scriptFramework
@@ -2241,9 +2250,9 @@ function CopyPage() {
 
       if (hasSupabase && supabase && currentUser.source === 'supabase') {
         const { error } = await supabase.from('topic_writing_practices').insert({
-          saved_topic_id: selectedTopic.savedTopicId || savedTopics.find(item => item.topic_text === selectedTopic.text)?.id || null,
+          saved_topic_id: selectedTopic?.savedTopicId || savedTopics.find(item => item.topic_text === selectedTopicText)?.id || null,
           user_id: currentUser.id,
-          topic_text: selectedTopic.text,
+          topic_text: selectedTopicText,
           script_type: scriptType,
           draft_text: practice,
           ai_result: normalized,
@@ -2255,7 +2264,7 @@ function CopyPage() {
       } else if (allowLocalFallback) {
         saveFallbackPractice({
           user_id: currentUser?.id,
-          topic_text: selectedTopic.text,
+          topic_text: selectedTopicText,
           script_type: scriptType,
           draft_text: practice,
           ai_result: normalized,
@@ -2277,9 +2286,10 @@ function CopyPage() {
   const handleDownload = () => {
     const typeLabel   = SCRIPT_TYPES.find(s => s.id === scriptType)?.label  || ''
     const formatLabel = SHOOT_FORMATS.find(f => f.id === shootFormat)?.label || '尚未選擇'
+    const topicText = selectedTopicIdx !== null ? getTopicText(copyTopics?.[selectedTopicIdx]) : ''
     const content = [
       `想法：${idea}`, `腳本類型：${typeLabel}`,
-      `選題：${selectedTopicIdx !== null ? copyTopics[selectedTopicIdx].text : ''}`,
+      `選題：${topicText}`,
       `拍攝形式：${formatLabel}`, '', '== 我的腳本練習 ==', practice,
     ].join('\n')
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
