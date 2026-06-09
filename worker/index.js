@@ -335,6 +335,11 @@ export default {
         return await handleUpdateCourseCatalog(request, env)
       }
 
+      // POST /api/admin/course-cover → upload a public course cover image
+      if (path === '/api/admin/course-cover' && request.method === 'POST') {
+        return await handleUploadCourseCover(request, env)
+      }
+
       // GET /api/videos  → list all videos in the account
       if (path === '/api/videos' && request.method === 'GET') {
         return await handleListVideos(env)
@@ -598,6 +603,94 @@ async function handleUpdateCourseCatalog(request, env) {
   }
   const saved = await upsertCourseCatalog(env, catalog)
   return json({ success: true, catalog: saved })
+}
+
+const COURSE_COVER_BUCKET = 'course-covers'
+
+async function handleUploadCourseCover(request, env) {
+  await requireAdmin(request, env)
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Course cover storage is not configured', 503)
+  }
+
+  const body = await request.json().catch(() => ({}))
+  const dataUrl = String(body.dataUrl || '')
+  const fileName = String(body.fileName || 'cover.jpg')
+  const match = dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([\s\S]+)$/)
+  if (!match) return err('Invalid cover image', 400)
+
+  const mimeType = match[1]
+  const bytes = base64ToUint8Array(match[2])
+  if (bytes.byteLength > 1024 * 1024) {
+    return err('Cover image is too large after compression', 413)
+  }
+
+  await ensurePublicStorageBucket(env, COURSE_COVER_BUCKET)
+
+  const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg'
+  const safeName = fileName
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^\w-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '') || 'cover'
+  const objectPath = `${Date.now()}-${safeName}.${ext}`
+  const encodedPath = objectPath.split('/').map(encodeURIComponent).join('/')
+
+  const uploadResponse = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/${COURSE_COVER_BUCKET}/${encodedPath}`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': mimeType,
+      'Cache-Control': '31536000',
+      'x-upsert': 'true',
+    },
+    body: bytes,
+  })
+  const uploadData = await uploadResponse.json().catch(() => ({}))
+  if (!uploadResponse.ok) {
+    return err(uploadData?.message || uploadData?.error || 'Course cover upload failed', uploadResponse.status)
+  }
+
+  const publicUrl = `${env.SUPABASE_URL.replace(/\/$/, '')}/storage/v1/object/public/${COURSE_COVER_BUCKET}/${encodedPath}`
+  return json({ success: true, publicUrl, path: objectPath })
+}
+
+async function ensurePublicStorageBucket(env, bucketName) {
+  const baseUrl = env.SUPABASE_URL.replace(/\/$/, '')
+  const headers = {
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+    'Content-Type': 'application/json',
+  }
+
+  const readResponse = await fetch(`${baseUrl}/storage/v1/bucket/${encodeURIComponent(bucketName)}`, { headers })
+  if (readResponse.ok) return
+
+  const createResponse = await fetch(`${baseUrl}/storage/v1/bucket`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      id: bucketName,
+      name: bucketName,
+      public: true,
+      file_size_limit: 1048576,
+      allowed_mime_types: ['image/jpeg', 'image/png', 'image/webp'],
+    }),
+  })
+  const createData = await createResponse.json().catch(() => ({}))
+  if (!createResponse.ok && createResponse.status !== 409) {
+    throw new Error(createData?.message || createData?.error || 'Create course cover bucket failed')
+  }
+}
+
+function base64ToUint8Array(base64) {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
 }
 
 function progressStorageId(value) {

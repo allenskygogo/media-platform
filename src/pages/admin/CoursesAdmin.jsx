@@ -9,7 +9,7 @@ import {
 } from '../../data/mockData'
 import { uploadVideoToCF, getVideo, listVideos, deleteVideo, extractCustomerSubdomain, isConfigured as workerConfigured } from '../../services/streamApi'
 import { getLocalCourseCatalog, saveCourseCatalog, seedCourseCatalogIfEmpty } from '../../services/courseCatalog'
-import { BANNER_BUCKET, hasSupabase, supabase } from '../../lib/supabase'
+import { hasSupabase, supabase } from '../../lib/supabase'
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
@@ -25,8 +25,6 @@ const ACCESS_LEVELS = [
   { key: 'advanced', tier: 'advanced', label: '私塾' },
 ]
 const COURSE_LEVEL_ORDER = ['basic', 'standard', 'advanced']
-const COURSE_COVER_BUCKET = BANNER_BUCKET
-const COURSE_COVER_FOLDER = 'course-covers'
 const EMPTY_COURSE = { title:'', description:'', coverUrl:'', tier:'basic', accessLevel:'trial', accessLevels:['trial'], category:'影音創作', instructor:'', duration:'', published:true }
 const EMPTY_LESSON = { title:'', duration:'', free:false }
 
@@ -151,21 +149,8 @@ function CourseCoverUploader({ value, onChange }) {
         return
       }
 
-      const safeName = file.name.replace(/\.[^.]+$/, '').replace(/[^\w-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'cover'
-      const path = `${COURSE_COVER_FOLDER}/${Date.now()}-${safeName}.jpg`
-      const { error: uploadError } = await supabase.storage
-        .from(COURSE_COVER_BUCKET)
-        .upload(path, imageBlob, {
-          contentType: 'image/jpeg',
-          cacheControl: '31536000',
-          upsert: false,
-        })
-
-      if (uploadError) throw uploadError
-
-      const { data: { publicUrl } } = supabase.storage
-        .from(COURSE_COVER_BUCKET)
-        .getPublicUrl(path)
+      const dataUrl = await blobToDataUrl(imageBlob)
+      const publicUrl = await uploadCourseCover(dataUrl, file.name)
       onChange(publicUrl)
     } catch (err) {
       setError(`上傳失敗：${err.message || '請重新選擇圖片'}`)
@@ -218,6 +203,26 @@ function CourseCoverUploader({ value, onChange }) {
       <p style={{ fontSize:12, color:'var(--gray-400)', marginTop:6 }}>建議比例 16:9，系統會自動壓縮並上傳成公開封面網址。</p>
     </div>
   )
+}
+
+async function uploadCourseCover(dataUrl, fileName) {
+  const { data: sessionData } = supabase ? await supabase.auth.getSession() : { data: { session: null } }
+  const token = sessionData?.session?.access_token
+  if (!token) throw new Error('缺少管理員登入狀態，請重新登入後再上傳')
+
+  const response = await fetch(`${WORKER_URL}/api/admin/course-cover`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ dataUrl, fileName }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || data.success === false) {
+    throw new Error(data.error || data.message || '封面上傳失敗')
+  }
+  return data.publicUrl
 }
 
 function blobToDataUrl(blob) {
