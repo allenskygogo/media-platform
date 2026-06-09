@@ -79,6 +79,13 @@ export async function getCourseProgressRecords(userId, courseId, lessonIds = [])
 
   if (hasSupabase && supabase) {
     try {
+      const workerRecords = await loadProgressFromWorker(userId, courseId, lessonIds)
+      return mergeProgressRecords(localRecords, workerRecords)
+    } catch (workerError) {
+      console.error('Worker course progress load failed:', workerError)
+    }
+
+    try {
       const query = supabase
         .from('course_progress')
         .select('user_id, course_id, lesson_id, current_second, completed, completed_at, watch_count, updated_at')
@@ -95,13 +102,7 @@ export async function getCourseProgressRecords(userId, courseId, lessonIds = [])
       return mergeProgressRecords(localRecords, remoteRecords)
     } catch (error) {
       console.error('Remote course progress load failed:', error)
-      try {
-        const workerRecords = await loadProgressFromWorker(userId, courseId, lessonIds)
-        return mergeProgressRecords(localRecords, workerRecords)
-      } catch (workerError) {
-        console.error('Worker course progress load failed:', workerError)
-        return localRecords
-      }
+      return localRecords
     }
   }
 
@@ -114,14 +115,15 @@ export async function getCourseProgressRecords(userId, courseId, lessonIds = [])
 
 export async function saveCourseProgressRecord(userId, courseId, lessonId, currentSecond, completed = false) {
   const localRecord = saveLessonProgress(userId, Number(courseId), Number(lessonId), currentSecond, completed)
-  const workerMirrorPromise = hasSupabase && supabase
-    ? saveProgressToWorker(userId, courseId, lessonId, currentSecond, completed).catch(error => {
-      console.error('Worker course progress mirror failed:', error)
-      return null
-    })
-    : Promise.resolve(null)
 
   if (hasSupabase && supabase) {
+    try {
+      const workerRecord = await saveProgressToWorker(userId, courseId, lessonId, currentSecond, completed)
+      if (workerRecord) return workerRecord
+    } catch (workerError) {
+      console.error('Worker course progress save failed:', workerError)
+    }
+
     const now = new Date().toISOString()
     const basePayload = {
       user_id: userId,
@@ -140,10 +142,6 @@ export async function saveCourseProgressRecord(userId, courseId, lessonId, curre
 
       if (error) {
         console.error('Remote course progress save failed:', error)
-        try {
-          const workerRecord = await workerMirrorPromise
-          return workerRecord || localRecord
-        } catch {}
         return localRecord
       }
       return normalizeProgress(data)
@@ -159,10 +157,6 @@ export async function saveCourseProgressRecord(userId, courseId, lessonId, curre
 
     if (existingError) {
       console.error('Remote course progress lookup failed:', existingError)
-      try {
-        const workerRecord = await workerMirrorPromise
-        return workerRecord || localRecord
-      } catch {}
       return localRecord
     }
 
@@ -181,10 +175,6 @@ export async function saveCourseProgressRecord(userId, courseId, lessonId, curre
 
     if (error) {
       console.error('Remote course progress completion save failed:', error)
-      try {
-        const workerRecord = await workerMirrorPromise
-        return workerRecord || localRecord
-      } catch {}
       return localRecord
     }
     return normalizeProgress(data)
