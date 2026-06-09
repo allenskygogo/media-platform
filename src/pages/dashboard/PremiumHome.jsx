@@ -103,7 +103,7 @@ export default function PremiumHome() {
         <p className="ph2-courses-title">精選課程</p>
         <button className="btn btn-ghost btn-sm" onClick={() => navigate('/dashboard/courses')}>查看全部 →</button>
       </div>
-      <div className={`ph2-course-grid${featured.length === 1 ? ' is-single' : ''}`}>
+      <div className="ph2-course-grid">
         {featured.map(course => {
           const cfg = COURSE_CAT_CONFIG[course.category] || DEFAULT_CAT_CONFIG
           const ThumbIcon = cfg.Icon
