@@ -9,7 +9,7 @@ import {
 } from '../../data/mockData'
 import { uploadVideoToCF, getVideo, listVideos, deleteVideo, extractCustomerSubdomain, isConfigured as workerConfigured } from '../../services/streamApi'
 import { getLocalCourseCatalog, saveCourseCatalog, seedCourseCatalogIfEmpty } from '../../services/courseCatalog'
-import { hasSupabase, supabase } from '../../lib/supabase'
+import { BANNER_BUCKET, hasSupabase, supabase } from '../../lib/supabase'
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
@@ -25,6 +25,8 @@ const ACCESS_LEVELS = [
   { key: 'advanced', tier: 'advanced', label: '私塾' },
 ]
 const COURSE_LEVEL_ORDER = ['basic', 'standard', 'advanced']
+const COURSE_COVER_BUCKET = BANNER_BUCKET
+const COURSE_COVER_FOLDER = 'course-covers'
 const EMPTY_COURSE = { title:'', description:'', coverUrl:'', tier:'basic', accessLevel:'trial', accessLevels:['trial'], category:'影音創作', instructor:'', duration:'', published:true }
 const EMPTY_LESSON = { title:'', duration:'', free:false }
 
@@ -142,8 +144,31 @@ function CourseCoverUploader({ value, onChange }) {
     }
     setUploading(true)
     try {
-      const image = await compressImage(file, 1400, 0.82)
-      onChange(image)
+      const imageBlob = await compressImageToBlob(file, 1400, 0.82)
+      if (!hasSupabase || !supabase) {
+        const image = await blobToDataUrl(imageBlob)
+        onChange(image)
+        return
+      }
+
+      const safeName = file.name.replace(/\.[^.]+$/, '').replace(/[^\w-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || 'cover'
+      const path = `${COURSE_COVER_FOLDER}/${Date.now()}-${safeName}.jpg`
+      const { error: uploadError } = await supabase.storage
+        .from(COURSE_COVER_BUCKET)
+        .upload(path, imageBlob, {
+          contentType: 'image/jpeg',
+          cacheControl: '31536000',
+          upsert: false,
+        })
+
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from(COURSE_COVER_BUCKET)
+        .getPublicUrl(path)
+      onChange(publicUrl)
+    } catch (err) {
+      setError(`上傳失敗：${err.message || '請重新選擇圖片'}`)
     } finally {
       setUploading(false)
       if (inputRef.current) inputRef.current.value = ''
@@ -190,9 +215,38 @@ function CourseCoverUploader({ value, onChange }) {
         </div>
       </div>
       {error && <p style={{ fontSize:12, color:'var(--danger)', marginTop:6 }}>{error}</p>}
-      <p style={{ fontSize:12, color:'var(--gray-400)', marginTop:6 }}>建議比例 16:9，系統會自動壓縮後儲存。</p>
+      <p style={{ fontSize:12, color:'var(--gray-400)', marginTop:6 }}>建議比例 16:9，系統會自動壓縮並上傳成公開封面網址。</p>
     </div>
   )
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
+function compressImageToBlob(file, maxW=1200, quality=0.8) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width)
+      const canvas = document.createElement('canvas')
+      canvas.width  = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob)
+        else reject(new Error('圖片壓縮失敗'))
+      }, 'image/jpeg', quality)
+    }
+    img.onerror = () => reject(new Error('圖片讀取失敗'))
+    img.src = URL.createObjectURL(file)
+  })
 }
 
 function compressImage(file, maxW=1200, quality=0.8) {
@@ -759,6 +813,10 @@ export default function CoursesAdmin() {
   const saveCourse = async () => {
     if (!courseForm.title.trim() || !courseForm.instructor.trim()) return
     const payload = courseFormWithAccess(courseForm)
+    if (hasSupabase && payload.coverUrl?.startsWith('data:image/')) {
+      flash('這張封面是舊版本機圖片，請重新上傳一次封面後再儲存')
+      return
+    }
     let updated
     if (editCourseId) {
       updated = courses.map(c => c.id===editCourseId ? {...c,...payload} : c)
