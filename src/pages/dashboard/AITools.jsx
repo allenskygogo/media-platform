@@ -505,7 +505,7 @@ function validateMeaningfulPracticeText(text, label = '練習內容', minMeaning
   const compact = raw.replace(/\s+/g, '')
   const contentOnly = compact.replace(/【[^】]+】/g, '')
   const meaningfulChars = contentOnly.match(/[\u4e00-\u9fffA-Za-z]/g) || []
-  const digitOrSymbolChars = contentOnly.match(/[0-9０-９\W_]/g) || []
+  const digitOrSymbolChars = contentOnly.match(/[^\u4e00-\u9fffA-Za-z]/g) || []
   const uniqueMeaningfulChars = new Set(meaningfulChars.map(char => char.toLowerCase())).size
   const digitSymbolRatio = contentOnly.length ? digitOrSymbolChars.length / contentOnly.length : 1
   const minUniqueChars = Math.min(10, Math.max(5, Math.floor(meaningfulChars.length * 0.35)))
@@ -2490,7 +2490,10 @@ function CopyPage() {
                           rows={3}
                           placeholder={field.placeholder}
                           value={fieldValue}
-                          onChange={e => setPractice(prev => updateStructuredPractice(scriptType, prev, field.key, e.target.value))}
+                          onChange={e => {
+                            setPracticeError('')
+                            setPractice(prev => updateStructuredPractice(scriptType, prev, field.key, e.target.value))
+                          }}
                         />
                         <span className="ait-char-count">
                           {fieldLength > 0 ? '已填寫' : '請填寫此段'}｜目前 {fieldLength} 字
@@ -2506,7 +2509,7 @@ function CopyPage() {
               ) : (
                 <div className="ait-practice-wrap">
                   <textarea className="ait-practice-ta" rows={6} placeholder="用自己的版本寫出這支影片的腳本練習…"
-                    value={practice} onChange={e => setPractice(e.target.value)} />
+                    value={practice} onChange={e => { setPracticeError(''); setPractice(e.target.value) }} />
                   <span className="ait-char-count">
                     總字數 {totalPracticeLength} / {PRACTICE_TOTAL_MIN_CHARS}+ 字{totalPracticeRemaining > 0 ? `，還缺 ${totalPracticeRemaining} 字才能提交判斷` : '，可以提交判斷'}
                   </span>
