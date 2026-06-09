@@ -3,9 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   getCourses, canAccessCourse, TIER_META,
-  getLessonProgress, getLatestHomework, getHomeworkSpec,
+  getLessonProgress, getLatestHomework, getHomeworkSpec, parseDurationToSec,
 } from '../../data/mockData'
-import { getCourseProgressRecords } from '../../services/courseProgress'
+import { getCourseProgressRecords, saveCourseProgressRecord } from '../../services/courseProgress'
 import { fetchCourseCatalog } from '../../services/courseCatalog'
 import { getHomeworkSpecsRecords, getHomeworkSubmissionsForCourse } from '../../services/homework'
 import LessonPlayer  from '../../components/LessonPlayer'
@@ -15,6 +15,7 @@ const CAT_EMOJI = { '影音創作':'🎬', '社群媒體':'📱', '音頻創作'
 const COURSE_LEVEL_LABEL = { basic: '體驗', standard: '達人', advanced: '私塾' }
 const ACCESS_LEVEL_LABEL = { trial: '體驗', standard: '達人', advanced: '私塾' }
 const ACCESS_LEVEL_ORDER = ['trial', 'standard', 'advanced']
+const COURSE_RESUME_KEY = 'mp_course_resume_targets'
 
 // Only standard/advanced tier students get the forced-watch + homework system
 const NEEDS_HOMEWORK = ['standard', 'advanced']
@@ -25,6 +26,28 @@ function mapProgress(records) {
     acc[record.lessonId] = record
     return acc
   }, {})
+}
+
+function getCourseResumeTargets() {
+  try {
+    return JSON.parse(localStorage.getItem(COURSE_RESUME_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function getCourseResumeTarget(userId, courseId) {
+  return getCourseResumeTargets()[`${userId}:${courseId}`] || null
+}
+
+function saveCourseResumeTarget(userId, courseId, lessonId) {
+  if (!lessonId) return
+  const targets = getCourseResumeTargets()
+  targets[`${userId}:${courseId}`] = {
+    lessonId,
+    updatedAt: new Date().toISOString(),
+  }
+  localStorage.setItem(COURSE_RESUME_KEY, JSON.stringify(targets))
 }
 
 function nextLessonFromProgress(lessons, progressByLesson, needsSequentialWatch, needsHomework) {
@@ -164,10 +187,14 @@ export default function CourseDetail() {
       .then(([progressRecords, specRecords, homeworkRecords]) => {
         if (cancelled) return
         const nextProgressByLesson = mapProgress(progressRecords)
+        const resumeTarget = getCourseResumeTarget(currentUser.id, course.id)
+        const resumeLessonId = resumeTarget && course.lessons.some(lesson => lesson.id === resumeTarget.lessonId)
+          ? resumeTarget.lessonId
+          : null
         setProgressByLesson(nextProgressByLesson)
         setSpecByLesson(mapHomeworkSpecs(specRecords))
         setHomeworkByLesson(mapLatestHomework(homeworkRecords))
-        setActiveLessonId(current => current || nextLessonFromProgress(
+        setActiveLessonId(current => current || resumeLessonId || nextLessonFromProgress(
           course.lessons,
           nextProgressByLesson,
           NEEDS_SEQUENTIAL_WATCH.includes(currentUser.tier),
@@ -238,8 +265,11 @@ export default function CourseDetail() {
 
   const handlePlayerComplete = useCallback(() => {
     // After forced-watch done → show homework panel only for tiers that require it.
+    const activeIndex = activeLesson ? course.lessons.findIndex(lesson => lesson.id === activeLesson.id) : -1
+    const nextLesson = activeIndex >= 0 ? course.lessons[activeIndex + 1] : null
     if (activeLesson) {
       const existing = progressByLesson[activeLesson.id]
+      const completedSecond = Math.max(existing?.currentSecond || 0, parseDurationToSec(activeLesson.duration))
       setProgressByLesson(prev => ({
         ...prev,
         [activeLesson.id]: {
@@ -247,20 +277,44 @@ export default function CourseDetail() {
           userId: currentUser.id,
           courseId: course.id,
           lessonId: activeLesson.id,
-          currentSecond: existing?.currentSecond || 0,
+          currentSecond: completedSecond,
           completed: true,
           completedAt: existing?.completedAt || new Date().toISOString(),
         },
       }))
+      saveCourseProgressRecord(currentUser.id, course.id, activeLesson.id, completedSecond, true)
+        .catch(err => console.error('Course completion retry failed:', err))
     }
     const spec = activeLesson ? homeworkSpecForLesson(activeLesson.id, specByLesson) : null
     if (needsHomework && spec) {
       setView('homework')
       return
     }
+    if (nextLesson) {
+      saveCourseResumeTarget(currentUser.id, course.id, nextLesson.id)
+      setProgressByLesson(prev => {
+        const existingNext = prev[nextLesson.id]
+        if (existingNext?.completed || existingNext?.currentSecond > 0) return prev
+        return {
+          ...prev,
+          [nextLesson.id]: {
+            userId: currentUser.id,
+            courseId: course.id,
+            lessonId: nextLesson.id,
+            currentSecond: 1,
+            completed: false,
+            completedAt: null,
+            watchCount: 0,
+            updatedAt: new Date().toISOString(),
+          },
+        }
+      })
+      saveCourseProgressRecord(currentUser.id, course.id, nextLesson.id, 1, false)
+        .catch(err => console.error('Next lesson resume save failed:', err))
+    }
     setView('info')
     setActiveLessonId(null)
-  }, [activeLesson, course.id, currentUser.id, needsHomework, progressByLesson, specByLesson])
+  }, [activeLesson, course.id, course.lessons, currentUser.id, needsHomework, progressByLesson, specByLesson])
 
   const handleClose = () => {
     setView('info')
