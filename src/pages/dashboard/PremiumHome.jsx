@@ -96,8 +96,11 @@ export default function PremiumHome() {
           const ThumbIcon = cfg.Icon
           return (
             <div key={course.id} className="ph2-course" onClick={() => navigate(`/dashboard/courses/${course.id}`)}>
-              <div className="ph2-course-thumb" style={{ background: cfg.bg }}>
-                <ThumbIcon size={40} stroke={cfg.color} strokeWidth={1} />
+              <div
+                className="ph2-course-thumb"
+                style={course.coverUrl ? { backgroundImage:`url(${course.coverUrl})`, backgroundSize:'cover', backgroundPosition:'center' } : { background: cfg.bg }}
+              >
+                {!course.coverUrl && <ThumbIcon size={40} stroke={cfg.color} strokeWidth={1} />}
               </div>
               <div className="ph2-course-body">
                 <span className="ph2-course-tag">{course.category}</span>

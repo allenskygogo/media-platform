@@ -90,8 +90,11 @@ export default function CoursesPage() {
             return (
               <div key={course.id} className={`course-card ${!ok ? 'locked' : ''}`}
                 onClick={() => ok && navigate(`/dashboard/courses/${course.id}`)}>
-                <div className={`course-thumb course-thumb-${course.tier}`}>
-                  <span>{CAT_EMOJI[course.category] || '📖'}</span>
+                <div
+                  className={`course-thumb course-thumb-${course.tier}`}
+                  style={course.coverUrl ? { backgroundImage:`url(${course.coverUrl})`, backgroundSize:'cover', backgroundPosition:'center' } : undefined}
+                >
+                  {!course.coverUrl && <span>{CAT_EMOJI[course.category] || '📖'}</span>}
                   {!ok && <div className="course-lock-overlay">🔒</div>}
                 </div>
                 <div className="course-body">

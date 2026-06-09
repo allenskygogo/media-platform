@@ -25,7 +25,7 @@ const ACCESS_LEVELS = [
   { key: 'advanced', tier: 'advanced', label: '私塾' },
 ]
 const COURSE_LEVEL_ORDER = ['basic', 'standard', 'advanced']
-const EMPTY_COURSE = { title:'', description:'', tier:'basic', accessLevel:'trial', accessLevels:['trial'], category:'影音創作', instructor:'', duration:'', published:true }
+const EMPTY_COURSE = { title:'', description:'', coverUrl:'', tier:'basic', accessLevel:'trial', accessLevels:['trial'], category:'影音創作', instructor:'', duration:'', published:true }
 const EMPTY_LESSON = { title:'', duration:'', free:false }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -120,6 +120,77 @@ function CourseAccessCheckboxes({ value, onChange }) {
           <span>{level.label}</span>
         </label>
       ))}
+    </div>
+  )
+}
+
+function CourseCoverUploader({ value, onChange }) {
+  const inputRef = useRef(null)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleFile = async (file) => {
+    if (!file) return
+    setError('')
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError('請上傳 JPG、PNG 或 WebP 圖片')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('圖片大小請勿超過 10 MB')
+      return
+    }
+    setUploading(true)
+    try {
+      const image = await compressImage(file, 1400, 0.82)
+      onChange(image)
+    } finally {
+      setUploading(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  return (
+    <div className="form-group">
+      <label className="form-label">課程封面</label>
+      <div style={{ display:'flex', gap:14, alignItems:'center', flexWrap:'wrap' }}>
+        <div
+          style={{
+            width:160,
+            aspectRatio:'16 / 9',
+            borderRadius:8,
+            border:'1px solid var(--gray-200)',
+            background:value ? `url(${value}) center/cover` : 'var(--gray-100)',
+            display:'flex',
+            alignItems:'center',
+            justifyContent:'center',
+            color:'var(--gray-400)',
+            fontSize:12,
+            overflow:'hidden',
+          }}
+        >
+          {!value && '尚未上傳'}
+        </div>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display:'none' }}
+            onChange={e => handleFile(e.target.files?.[0])}
+          />
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => inputRef.current?.click()} disabled={uploading}>
+            {uploading ? '處理中...' : value ? '更換封面' : '上傳封面'}
+          </button>
+          {value && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange('')}>
+              移除
+            </button>
+          )}
+        </div>
+      </div>
+      {error && <p style={{ fontSize:12, color:'var(--danger)', marginTop:6 }}>{error}</p>}
+      <p style={{ fontSize:12, color:'var(--gray-400)', marginTop:6 }}>建議比例 16:9，系統會自動壓縮後儲存。</p>
     </div>
   )
 }
@@ -682,7 +753,7 @@ export default function CoursesAdmin() {
   const openNewCourse = () => { setEditCourseId(null); setCourseForm(EMPTY_COURSE); setShowCourseModal(true) }
   const openEditCourse = (c) => {
     setEditCourseId(c.id)
-    setCourseForm({ title:c.title, description:c.description, tier:c.tier, accessLevel:c.accessLevel, accessLevels:getCourseAccessLevels(c), category:c.category, instructor:c.instructor, duration:c.duration, published:c.published })
+    setCourseForm({ title:c.title, description:c.description, coverUrl:c.coverUrl || '', tier:c.tier, accessLevel:c.accessLevel, accessLevels:getCourseAccessLevels(c), category:c.category, instructor:c.instructor, duration:c.duration, published:c.published })
     setShowCourseModal(true)
   }
   const saveCourse = async () => {
@@ -813,6 +884,16 @@ export default function CoursesAdmin() {
                   const uploaded = lessons.filter(l => getVideoForLesson(l.id)).length
                   return (
                     <div key={c.id} className="course-admin-card">
+                      {c.coverUrl && (
+                        <div
+                          style={{
+                            height:110,
+                            margin:'-20px -20px 14px',
+                            borderRadius:'var(--radius-lg) var(--radius-lg) 0 0',
+                            background:`url(${c.coverUrl}) center/cover`,
+                          }}
+                        />
+                      )}
                       <div className="course-admin-card-header">
                         <span className={`badge badge-${c.tier}`}>{courseAccessLabel(c)}</span>
                         <span className={`badge ${c.published?'badge-published':'badge-draft'}`}>{c.published?'上架':'草稿'}</span>
@@ -846,6 +927,10 @@ export default function CoursesAdmin() {
               <button className="modal-close" onClick={() => setShowCourseModal(false)}>×</button>
             </div>
             <div className="modal-body">
+              <CourseCoverUploader
+                value={courseForm.coverUrl}
+                onChange={coverUrl=>setCourseForm(f=>({...f,coverUrl}))}
+              />
               <div className="form-group">
                 <label className="form-label">課程標題 *</label>
                 <input className="form-input" placeholder="輸入課程標題" value={courseForm.title} onChange={e=>setCourseForm(f=>({...f,title:e.target.value}))} />
@@ -936,6 +1021,15 @@ export default function CoursesAdmin() {
 
       {/* Course header */}
       <div className="card" style={{ marginBottom:24 }}>
+        {course?.coverUrl && (
+          <div
+            style={{
+              height:180,
+              borderRadius:'var(--radius-lg) var(--radius-lg) 0 0',
+              background:`url(${course.coverUrl}) center/cover`,
+            }}
+          />
+        )}
         <div className="card-body" style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:16 }}>
           <div>
             <div style={{ display:'flex', gap:8, marginBottom:8 }}>
@@ -1095,6 +1189,10 @@ export default function CoursesAdmin() {
               <button className="modal-close" onClick={() => setShowCourseModal(false)}>×</button>
             </div>
             <div className="modal-body">
+              <CourseCoverUploader
+                value={courseForm.coverUrl}
+                onChange={coverUrl=>setCourseForm(f=>({...f,coverUrl}))}
+              />
               <div className="form-group">
                 <label className="form-label">課程標題 *</label>
                 <input className="form-input" value={courseForm.title} onChange={e=>setCourseForm(f=>({...f,title:e.target.value}))} />

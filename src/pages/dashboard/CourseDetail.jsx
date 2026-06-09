@@ -358,9 +358,16 @@ export default function CourseDetail() {
           {/* Course cover (when no lesson selected) */}
           {view === 'info' && (
             <div className="card" style={{ marginBottom:24 }}>
-              <div className={`course-thumb course-thumb-${course.tier}`}
-                style={{ height:220, borderRadius:'var(--radius-lg) var(--radius-lg) 0 0', fontSize:64 }}>
-                <span>{CAT_EMOJI[course.category] || '📖'}</span>
+              <div
+                className={`course-thumb course-thumb-${course.tier}`}
+                style={{
+                  height:220,
+                  borderRadius:'var(--radius-lg) var(--radius-lg) 0 0',
+                  fontSize:64,
+                  ...(course.coverUrl ? { backgroundImage:`url(${course.coverUrl})`, backgroundSize:'cover', backgroundPosition:'center' } : {}),
+                }}
+              >
+                {!course.coverUrl && <span>{CAT_EMOJI[course.category] || '📖'}</span>}
               </div>
               <div className="card-body">
                 <div className="course-meta" style={{ marginBottom:12 }}>

@@ -105,8 +105,11 @@ export default function StandardHome() {
           const ThumbIcon = cfg.Icon
           return (
             <div key={course.id} className="sh2-course" onClick={() => navigate(`/dashboard/courses/${course.id}`)}>
-              <div className="sh2-course-thumb" style={{ background: cfg.bg }}>
-                <ThumbIcon size={36} stroke={cfg.color} strokeWidth={1}/>
+              <div
+                className="sh2-course-thumb"
+                style={course.coverUrl ? { backgroundImage:`url(${course.coverUrl})`, backgroundSize:'cover', backgroundPosition:'center' } : { background: cfg.bg }}
+              >
+                {!course.coverUrl && <ThumbIcon size={36} stroke={cfg.color} strokeWidth={1}/>}
               </div>
               <div className="sh2-course-body">
                 <span className="sh2-course-tag">{course.category}</span>
