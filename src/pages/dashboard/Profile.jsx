@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
 import { TIER_META } from '../../data/mockData'
 import { plans, planComparisonRows, getPlanByTier, getNextPlanByTier } from '../../data/plans'
+
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const TIER_PERKS = {
   basic: {
@@ -111,8 +114,39 @@ function getCheckoutAmount(planId, billingCycle) {
   return price.primary
 }
 
+function normalizeTaiwanMobilePhone(value) {
+  let digits = String(value || '').trim().replace(/[^\d+]/g, '')
+  if (digits.startsWith('+886')) digits = `0${digits.slice(4)}`
+  else if (digits.startsWith('886')) digits = `0${digits.slice(3)}`
+  digits = digits.replace(/\D/g, '')
+  return /^09\d{8}$/.test(digits) ? digits : ''
+}
+
+function submitPaymentCheckout(payment) {
+  if (!payment?.configured || !payment?.action || !payment?.params) {
+    throw new Error(payment?.message || '付款尚未設定完成，請稍後再試。')
+  }
+
+  const formEl = document.createElement('form')
+  formEl.method = payment.method || 'POST'
+  formEl.action = payment.action
+  formEl.style.display = 'none'
+
+  Object.entries(payment.params).forEach(([key, value]) => {
+    const input = document.createElement('input')
+    input.type = 'hidden'
+    input.name = key
+    input.value = String(value ?? '')
+    formEl.appendChild(input)
+  })
+
+  document.body.appendChild(formEl)
+  formEl.submit()
+}
+
 function PlanCheckoutPreview({
   plan,
+  currentUser,
   billingCycle,
   setBillingCycle,
   acceptedContract,
@@ -121,10 +155,55 @@ function PlanCheckoutPreview({
   setCheckoutStep,
   onClose,
 }) {
+  const [phone, setPhone] = useState('')
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const price = planPriceDetails[plan.id]
   const isQuote = price?.kind === 'quote'
   const isAnnualPlan = price?.kind === 'annual'
   const amount = getCheckoutAmount(plan.id, billingCycle)
+
+  const startUpgradePayment = async () => {
+    if (loading) return
+    const normalizedPhone = normalizeTaiwanMobilePhone(phone)
+    if (!normalizedPhone) {
+      setError('請輸入有效的台灣手機號碼（例：0912-345-678）。')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setMessage('')
+
+    try {
+      const { data: sessionData } = supabase ? await supabase.auth.getSession() : { data: { session: null } }
+      const token = sessionData?.session?.access_token
+      if (!token) throw new Error('登入狀態已過期，請重新登入後再升級。')
+
+      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/checkout/upgrade`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          planId: plan.id,
+          phone: normalizedPhone,
+          billingCycle,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || data.success === false) {
+        throw new Error(data.error || '建立升級訂單失敗，請稍後再試。')
+      }
+      setMessage(`升級訂單已建立：${data.order.orderNumber}。正在前往付款頁...`)
+      submitPaymentCheckout(data.ecpay || data.payment || data.newebpay)
+    } catch (err) {
+      setError(err.message || '建立升級訂單失敗，請稍後再試。')
+      setLoading(false)
+    }
+  }
 
   if (isQuote) {
     return (
@@ -148,14 +227,14 @@ function PlanCheckoutPreview({
     <section className="plan-checkout-panel">
       <div className="checkout-panel-head">
         <div>
-          <p>升級流程預覽</p>
+          <p>升級流程</p>
           <h3>{plan.name}</h3>
         </div>
         <button type="button" onClick={onClose}>關閉</button>
       </div>
 
       <div className="checkout-steps" aria-label="升級流程">
-        {['選擇付款', '合約確認', '刷卡確認'].map((step, index) => (
+        {['選擇付款', '確認資料', '前往付款'].map((step, index) => (
           <span key={step} className={checkoutStep === index ? 'active' : checkoutStep > index ? 'done' : ''}>
             {step}
           </span>
@@ -166,7 +245,7 @@ function PlanCheckoutPreview({
         <div className="checkout-preview-card">
           <div className="checkout-card-title">
             <h4>選擇付款週期</h4>
-            <span>目前為前端預覽，尚未建立真實訂單</span>
+            <span>付款成功後自動升級會員</span>
           </div>
           <div className="billing-options">
             {price.kind === 'single' && (
@@ -179,11 +258,11 @@ function PlanCheckoutPreview({
               <>
                 <button
                   type="button"
-                  className={`billing-option ${billingCycle === 'monthly' ? 'active' : ''}`}
-                  onClick={() => setBillingCycle('monthly')}
+                  className="billing-option"
+                  disabled
                 >
                   <strong>{price.monthly}</strong>
-                  <span>每月扣款，保留升級彈性</span>
+                  <span>分期請聯繫官方帳號 @xgfx</span>
                 </button>
                 <button
                   type="button"
@@ -209,12 +288,26 @@ function PlanCheckoutPreview({
       {checkoutStep === 1 && (
         <div className="checkout-preview-card">
           <div className="checkout-card-title">
-            <h4>合約確認事項</h4>
-            <span>合約內容之後上傳後會替換此預覽內容</span>
+            <h4>確認升級資料</h4>
+            <span>{currentUser?.email}</span>
           </div>
           <div className="contract-placeholder">
-            <p>合約內容待補。正式版會在付款前顯示完整服務內容、扣款週期、取消規則、發票與會員升級條款。</p>
-            <p>使用者確認合約後，系統才會建立金流訂單並導向刷卡頁。</p>
+            <p>本次升級方案：{plan.name}，付款金額：{amount}。</p>
+            <p>付款成功後，系統會自動開通新的會員方案；若付款中斷，訂單會維持待付款狀態。</p>
+          </div>
+          <div className="form-group" style={{ marginTop: 14 }}>
+            <label className="form-label">聯絡手機</label>
+            <input
+              className="form-input"
+              value={phone}
+              onChange={event => {
+                setPhone(event.target.value)
+                setError('')
+              }}
+              placeholder="例：0912-345-678"
+              inputMode="tel"
+              autoComplete="tel"
+            />
           </div>
           <label className="contract-check">
             <input
@@ -222,8 +315,9 @@ function PlanCheckoutPreview({
               checked={acceptedContract}
               onChange={event => setAcceptedContract(event.target.checked)}
             />
-            <span>我已閱讀並同意合約確認事項，理解目前為測試版流程預覽。</span>
+            <span>我已確認升級方案與付款金額，並同意付款成功後開通對應會員權限。</span>
           </label>
+          {error && <div className="auth-alert error" style={{ marginTop: 14 }}>{error}</div>}
           <div className="checkout-actions">
             <button type="button" className="checkout-back-btn" onClick={() => setCheckoutStep(0)}>上一步</button>
             <button
@@ -232,7 +326,7 @@ function PlanCheckoutPreview({
               disabled={!acceptedContract}
               onClick={() => setCheckoutStep(2)}
             >
-              前往模擬刷卡確認
+              下一步，確認付款
             </button>
           </div>
         </div>
@@ -241,8 +335,8 @@ function PlanCheckoutPreview({
       {checkoutStep === 2 && (
         <div className="checkout-preview-card">
           <div className="checkout-card-title">
-            <h4>模擬金流結帳頁</h4>
-            <span>正式版會跳轉金流刷卡頁，並由 webhook 確認付款結果</span>
+            <h4>確認付款</h4>
+            <span>將前往付款頁</span>
           </div>
           <div className="mock-card-box">
             <div>
@@ -254,17 +348,19 @@ function PlanCheckoutPreview({
               <strong>{amount}</strong>
             </div>
             <div>
-              <span>付款方式</span>
-              <strong>信用卡刷卡</strong>
+              <span>帳號</span>
+              <strong>{currentUser?.email}</strong>
             </div>
           </div>
           <p className="checkout-safe-note">
-            測試版不會扣款，也不會更改會員方案。正式版付款成功後，系統會以金流 webhook 自動升級會員。
+            付款完成後系統會自動升級會員。若付款頁未完成，會員方案不會改變。
           </p>
+          {message && <div className="auth-alert success" style={{ marginTop: 14 }}>{message}</div>}
+          {error && <div className="auth-alert error" style={{ marginTop: 14 }}>{error}</div>}
           <div className="checkout-actions">
-            <button type="button" className="checkout-back-btn" onClick={() => setCheckoutStep(1)}>上一步</button>
-            <button type="button" className="checkout-next-btn" onClick={() => setCheckoutStep(3)}>
-              模擬付款完成
+            <button type="button" className="checkout-back-btn" onClick={() => setCheckoutStep(1)} disabled={loading}>上一步</button>
+            <button type="button" className="checkout-next-btn" onClick={startUpgradePayment} disabled={loading}>
+              {loading ? '建立訂單中...' : '前往付款'}
             </button>
           </div>
         </div>
@@ -281,7 +377,7 @@ function PlanCheckoutPreview({
   )
 }
 
-function PlanComparisonModal({ currentPlan, onClose }) {
+function PlanComparisonModal({ currentPlan, currentUser, onClose }) {
   const [showFullComparison, setShowFullComparison] = useState(false)
   const [checkoutPlan, setCheckoutPlan] = useState(null)
   const [billingCycle, setBillingCycle] = useState('annual')
@@ -317,7 +413,9 @@ function PlanComparisonModal({ currentPlan, onClose }) {
   const getUpgradeAction = (plan) => {
     if (currentPlan?.id === plan.id) return { label: '目前方案', disabled: true }
     if (currentPlan && plan.level < currentPlan.level) return { label: '已包含', disabled: true }
-    return { label: '即將開放', disabled: true }
+    if (nextPlan?.id !== plan.id) return { label: plan.id === 'managed' ? '聯繫官方帳號' : '依序升級', disabled: true }
+    if (plan.id === 'managed') return { label: '聯繫官方帳號', disabled: true }
+    return { label: '立即升級', disabled: false }
   }
 
   return (
@@ -367,6 +465,7 @@ function PlanComparisonModal({ currentPlan, onClose }) {
           {checkoutPlan && (
             <PlanCheckoutPreview
               plan={checkoutPlan}
+              currentUser={currentUser}
               billingCycle={billingCycle}
               setBillingCycle={setBillingCycle}
               acceptedContract={acceptedContract}
@@ -531,8 +630,8 @@ export default function Profile() {
                     ? '從 AI 選題體驗，升級到完整自媒體獲客系統課。'
                     : nextPlan.coreValue}
                 </p>
-                <button className="btn btn-primary btn-block btn-lg" disabled>
-                  升級即將開放
+                <button className="btn btn-primary btn-block btn-lg" onClick={() => setShowPlanModal(true)}>
+                  立即升級
                 </button>
               </div>
             </div>
@@ -631,7 +730,7 @@ export default function Profile() {
           </div>
         </div>
       </div>
-      {showPlanModal && <PlanComparisonModal currentPlan={currentPlan} onClose={() => setShowPlanModal(false)} />}
+      {showPlanModal && <PlanComparisonModal currentPlan={currentPlan} currentUser={currentUser} onClose={() => setShowPlanModal(false)} />}
     </div>
   )
 }

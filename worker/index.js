@@ -388,6 +388,11 @@ export default {
         return await handleCreateCheckoutOrder(request, env)
       }
 
+      // POST /api/checkout/upgrade → create a pending checkout order for the current member
+      if (path === '/api/checkout/upgrade' && request.method === 'POST') {
+        return await handleCreateUpgradeOrder(request, env)
+      }
+
       // POST /api/memberships/start → start current user's membership on first login
       if (path === '/api/memberships/start' && request.method === 'POST') {
         return await handleStartMembership(request, env)
@@ -1295,6 +1300,66 @@ async function handleCreateCheckoutOrder(request, env) {
     payment,
     ecpay: payment,
     message: '訂單已建立。付款確認後系統會開通學員帳號。',
+  })
+}
+
+async function handleCreateUpgradeOrder(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  const user = await requireUser(request, env)
+  const body = await request.json().catch(() => ({}))
+  const planId = String(body.planId || '').trim()
+  const phone = normalizeTaiwanMobilePhone(body.phone)
+  const legacyTier = planToLegacyTier(planId)
+  const amount = PLAN_AMOUNT[planId]
+
+  if (!amount || !['creator', 'master'].includes(planId)) return err('Invalid upgrade plan', 400)
+  if (!phone) return err('請輸入有效的台灣手機號碼（例：0912-345-678）', 400)
+
+  const profile = await getProfileById(env, user.id)
+  if (profile.status === 'inactive') return err('帳號已停用，請聯絡管理員。', 403)
+
+  const currentMembership = await getLatestActiveMembership(env, user.id)
+  const currentPlanId = currentMembership?.plan_id || tierToPlanId(currentMembership?.legacy_tier || '') || 'trial'
+  const levelByPlan = { trial: 1, creator: 2, master: 3, managed: 4 }
+  if ((levelByPlan[planId] || 0) <= (levelByPlan[currentPlanId] || 0)) {
+    return err('此方案已包含在目前會員權限內。', 409)
+  }
+  if ((levelByPlan[planId] || 0) !== (levelByPlan[currentPlanId] || 0) + 1) {
+    return err('請依照體驗升達人、達人升私塾的順序升級。', 409)
+  }
+
+  const order = await insertOrder(env, {
+    order_number: makeOrderNumber(),
+    user_id: user.id,
+    customer_name: profile.display_name || user.user_metadata?.display_name || profile.email?.split('@')[0] || '學員',
+    customer_email: profile.email || user.email,
+    customer_phone: phone,
+    plan_id: planId,
+    legacy_tier: legacyTier,
+    amount,
+    currency: 'TWD',
+    status: 'pending',
+    provider: ecpayConfigured(env) ? 'ecpay' : 'manual',
+    notes: `Created from profile upgrade. Previous plan: ${currentPlanId}`,
+  })
+  const payment = await buildEcpayCheckout(order, env)
+
+  return json({
+    success: true,
+    order: {
+      id: order.id,
+      orderNumber: order.order_number,
+      status: order.status,
+      amount: order.amount,
+      currency: order.currency,
+      planId: order.plan_id,
+    },
+    payment,
+    ecpay: payment,
+    message: '升級訂單已建立。付款確認後系統會自動升級會員。',
   })
 }
 
