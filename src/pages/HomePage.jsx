@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import ManualPaymentModal from '../components/ManualPaymentModal'
+import { SalesCheckoutModal } from './SalesPage'
 
 const TRIAL_PRICE = 980
-const TRIAL_PLAN_NAME = '自媒體獲客-定位體驗課'
 
 // ─────────────────────────────────────────────────
 //  Local mock — no API call needed
@@ -93,7 +92,7 @@ function HeroSection({ onPurchase }) {
 
         <div className="hp-hero-btns">
           <Link to="/trial-login" className="hp-btn-primary hp-btn-lg">免費體驗 AI 工具</Link>
-          <button type="button" className="hp-btn-ghost hp-btn-lg" onClick={onPurchase}>Line@ 匯款購買</button>
+          <button type="button" className="hp-btn-ghost hp-btn-lg" onClick={onPurchase}>綠界刷卡購買</button>
         </div>
       </section>
 
@@ -214,7 +213,7 @@ function AIDemoSection({ onPurchase }) {
             <p className="hp-ai-unlock-price">
               方案起售 <strong>$980</strong> · 含 AI 工具全功能
             </p>
-            <button type="button" className="hp-btn-primary" onClick={onPurchase}>Line@ 匯款購買</button>
+            <button type="button" className="hp-btn-primary" onClick={onPurchase}>綠界刷卡購買</button>
             <Link to="/trial-login" className="hp-ai-unlock-trial">先免費試用 &rarr;</Link>
           </div>
         </div>
@@ -445,7 +444,7 @@ function FinalCTA({ onPurchase }) {
         <p className="hp-final-cta-desc">加入 1,200+ 位創作者，用 AI 加速你的自媒體成長</p>
         <div className="hp-final-cta-btns">
           <button type="button" className="hp-btn-primary hp-btn-lg" onClick={onPurchase}>
-            Line@ 匯款購買 · 方案起售 $980
+            綠界刷卡購買 · 方案起售 $980
           </button>
           <Link to="/trial-login" className="hp-btn-ghost hp-btn-lg">
             先免費試用 AI 工具
@@ -482,26 +481,20 @@ function Footer() {
 //  Root export — no auth dependency
 // ─────────────────────────────────────────────────
 export default function HomePage() {
-  const [showManualPayment, setShowManualPayment] = useState(false)
+  const [showCheckout, setShowCheckout] = useState(false)
 
   return (
     <div className="hp-root">
       <HomeNav />
-      <HeroSection onPurchase={() => setShowManualPayment(true)} />
-      <AIDemoSection onPurchase={() => setShowManualPayment(true)} />
+      <HeroSection onPurchase={() => setShowCheckout(true)} />
+      <AIDemoSection onPurchase={() => setShowCheckout(true)} />
       <PainPointsSection />
       <CourseStagesSection />
       <AIFeaturesSection />
       <ResultsSection />
-      <FinalCTA onPurchase={() => setShowManualPayment(true)} />
+      <FinalCTA onPurchase={() => setShowCheckout(true)} />
       <Footer />
-      {showManualPayment && (
-        <ManualPaymentModal
-          planName={TRIAL_PLAN_NAME}
-          amount={TRIAL_PRICE}
-          onClose={() => setShowManualPayment(false)}
-        />
-      )}
+      {showCheckout && <SalesCheckoutModal onClose={() => setShowCheckout(false)} />}
     </div>
   )
 }

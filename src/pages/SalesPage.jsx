@@ -2,13 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import BrandLogo from '../components/BrandLogo'
-import ManualPaymentModal from '../components/ManualPaymentModal'
 import { initPixel, fbq } from '../utils/fbPixel'
 import { callAI } from '../services/aiService'
 
 const REGISTER_NOTICE = '目前僅開放已購買體驗課的學員註冊，請先購買體驗課後再完成會員註冊。'
 const TRIAL_PRICE = 980
-const TRIAL_PLAN_NAME = '自媒體獲客-定位體驗課'
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 function normalizeTaiwanMobilePhone(value) {
@@ -273,7 +271,7 @@ function SalesLoginModal({ onClose }) {
   )
 }
 
-function SalesCheckoutModal({ onClose }) {
+export function SalesCheckoutModal({ onClose }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', password: '' })
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -287,7 +285,7 @@ function SalesCheckoutModal({ onClose }) {
 
   const submitPaymentCheckout = (payment) => {
     if (!payment?.configured || !payment?.action || !payment?.params) {
-      throw new Error(payment?.message || '藍新付款尚未設定完成，請稍後再試。')
+      throw new Error(payment?.message || '綠界付款尚未設定完成，請稍後再試。')
     }
 
     const formEl = document.createElement('form')
@@ -339,8 +337,8 @@ function SalesCheckoutModal({ onClose }) {
       if (!response.ok || data.success === false) {
         throw new Error(data.error || '建立訂單失敗，請稍後再試。')
       }
-      setMessage(`訂單已建立：${data.order.orderNumber}。正在前往藍新付款頁...`)
-      submitPaymentCheckout(data.payment || data.newebpay || data.ecpay)
+      setMessage(`訂單已建立：${data.order.orderNumber}。正在前往綠界付款頁...`)
+      submitPaymentCheckout(data.ecpay || data.payment || data.newebpay)
     } catch (err) {
       setError(err.message || '建立訂單失敗，請稍後再試。')
       setLoading(false)
@@ -390,7 +388,7 @@ function SalesCheckoutModal({ onClose }) {
 
             <div className="sp-checkout-note">
               <strong>訂單與開通流程</strong>
-              <p>送出後會建立正式訂單與學員帳號，並前往藍新安全付款頁。付款成功後系統會自動開通體驗課會員權限。</p>
+              <p>送出後會建立正式訂單與學員帳號，並前往綠界安全付款頁。付款成功後系統會自動開通體驗課會員權限。</p>
             </div>
 
             {error && <div className="auth-alert error">{error}</div>}
@@ -400,7 +398,7 @@ function SalesCheckoutModal({ onClose }) {
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>取消</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? '前往藍新付款中...' : '前往藍新付款'}
+              {loading ? '前往綠界付款中...' : '前往綠界付款'}
             </button>
           </div>
         </form>
@@ -485,7 +483,6 @@ export default function SalesPage() {
   const scrollRef = useRef(false)
   const [showLogin, setShowLogin] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
-  const [showManualPayment, setShowManualPayment] = useState(false)
   const [industry, setIndustry] = useState('健身')
   const [topics, setTopics] = useState(() => makeTopics('健身'))
   const [generatingTopics, setGeneratingTopics] = useState(false)
@@ -531,7 +528,7 @@ export default function SalesPage() {
 
   const handlePurchaseClick = () => {
     fbq.initiateCheckout()
-    setShowManualPayment(true)
+    setShowCheckout(true)
   }
 
   return (
@@ -826,7 +823,7 @@ export default function SalesPage() {
                 <h3>還有 5 個爆款選題等你解鎖</h3>
                 <p>購買 自媒體獲客-定位體驗課，解鎖完整 8 個選題 + 腳本預覽 + 課程教學</p>
                 <button className="sp2-btn sp2-btn-primary" onClick={handlePurchaseClick}>
-                  Line@ 匯款購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
+                  綠界刷卡購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
                 </button>
                 <small>每天免費試用 3 次，明天可以再來</small>
               </div>
@@ -924,7 +921,7 @@ export default function SalesPage() {
             <div className="sp2-price">自媒體獲客-定位體驗課 ${TRIAL_PRICE} 起，完課後可升級享早鳥優惠</div>
             <div className="sp2-final-actions">
               <button className="sp2-btn sp2-btn-primary sp2-btn-lg" onClick={handlePurchaseClick}>
-                Line@ 匯款購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
+                綠界刷卡購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
               </button>
               <button className="sp2-btn sp2-btn-outline sp2-btn-lg" onClick={() => scrollToSection('#ai-tools')}>
                 先免費試用 AI →
@@ -953,13 +950,6 @@ export default function SalesPage() {
 
       {showLogin && <SalesLoginModal onClose={() => setShowLogin(false)} />}
       {showCheckout && <SalesCheckoutModal onClose={() => setShowCheckout(false)} />}
-      {showManualPayment && (
-        <ManualPaymentModal
-          planName={TRIAL_PLAN_NAME}
-          amount={TRIAL_PRICE}
-          onClose={() => setShowManualPayment(false)}
-        />
-      )}
     </div>
   )
 }

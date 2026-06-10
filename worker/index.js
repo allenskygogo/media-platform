@@ -1277,10 +1277,10 @@ async function handleCreateCheckoutOrder(request, env) {
     amount,
     currency: 'TWD',
     status: 'pending',
-    provider: newebPayConfigured(env) ? 'newebpay' : 'manual',
+    provider: ecpayConfigured(env) ? 'ecpay' : 'manual',
     notes: 'Created from sales checkout form',
   })
-  const payment = await buildNewebPayCheckout(order, env, { email, name, phone })
+  const payment = await buildEcpayCheckout(order, env)
 
   return json({
     success: true,
@@ -1293,7 +1293,7 @@ async function handleCreateCheckoutOrder(request, env) {
       planId: order.plan_id,
     },
     payment,
-    newebpay: payment,
+    ecpay: payment,
     message: '訂單已建立。付款確認後系統會開通學員帳號。',
   })
 }

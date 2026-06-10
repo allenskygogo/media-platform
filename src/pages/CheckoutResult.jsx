@@ -26,8 +26,8 @@ export default function CheckoutResult() {
           </div>
           <p style={{ color: 'var(--gray-600)', lineHeight: 1.8, marginTop: 12 }}>
             {paid
-              ? '藍新已回傳付款完成。系統會依背景通知自動開通課程權限，請使用購買時設定的 Email 與密碼登入。'
-              : '如果你已完成付款，系統會在藍新背景通知抵達後自動開通。若稍後仍無法登入，請保留訂單編號聯繫客服。'}
+              ? '綠界已回傳付款完成。系統會依背景通知自動開通課程權限，請使用購買時設定的 Email 與密碼登入。'
+              : '如果你已完成付款，系統會在綠界背景通知抵達後自動開通。若稍後仍無法登入，請保留訂單編號聯繫客服。'}
           </p>
           {orderNumber && (
             <div className="checkout-summary-line" style={{ marginTop: 18 }}>
