@@ -285,7 +285,7 @@ export function SalesCheckoutModal({ onClose }) {
 
   const submitPaymentCheckout = (payment) => {
     if (!payment?.configured || !payment?.action || !payment?.params) {
-      throw new Error(payment?.message || '綠界付款尚未設定完成，請稍後再試。')
+      throw new Error(payment?.message || '付款尚未設定完成，請稍後再試。')
     }
 
     const formEl = document.createElement('form')
@@ -337,7 +337,7 @@ export function SalesCheckoutModal({ onClose }) {
       if (!response.ok || data.success === false) {
         throw new Error(data.error || '建立訂單失敗，請稍後再試。')
       }
-      setMessage(`訂單已建立：${data.order.orderNumber}。正在前往綠界付款頁...`)
+      setMessage(`訂單已建立：${data.order.orderNumber}。正在前往付款頁...`)
       submitPaymentCheckout(data.ecpay || data.payment || data.newebpay)
     } catch (err) {
       setError(err.message || '建立訂單失敗，請稍後再試。')
@@ -388,7 +388,7 @@ export function SalesCheckoutModal({ onClose }) {
 
             <div className="sp-checkout-note">
               <strong>訂單與開通流程</strong>
-              <p>送出後會建立正式訂單與學員帳號，並前往綠界安全付款頁。付款成功後系統會自動開通體驗課會員權限。</p>
+              <p>送出後會建立正式訂單與學員帳號，並前往安全付款頁。付款成功後系統會自動開通體驗課會員權限。</p>
             </div>
 
             {error && <div className="auth-alert error">{error}</div>}
@@ -398,7 +398,7 @@ export function SalesCheckoutModal({ onClose }) {
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose}>取消</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? '前往綠界付款中...' : '前往綠界付款'}
+              {loading ? '前往付款中...' : '前往付款'}
             </button>
           </div>
         </form>
@@ -823,7 +823,7 @@ export default function SalesPage() {
                 <h3>還有 5 個爆款選題等你解鎖</h3>
                 <p>購買 自媒體獲客-定位體驗課，解鎖完整 8 個選題 + 腳本預覽 + 課程教學</p>
                 <button className="sp2-btn sp2-btn-primary" onClick={handlePurchaseClick}>
-                  綠界刷卡購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
+                  立即購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
                 </button>
                 <small>每天免費試用 3 次，明天可以再來</small>
               </div>
@@ -921,7 +921,7 @@ export default function SalesPage() {
             <div className="sp2-price">自媒體獲客-定位體驗課 ${TRIAL_PRICE} 起，完課後可升級享早鳥優惠</div>
             <div className="sp2-final-actions">
               <button className="sp2-btn sp2-btn-primary sp2-btn-lg" onClick={handlePurchaseClick}>
-                綠界刷卡購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
+                立即購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
               </button>
               <button className="sp2-btn sp2-btn-outline sp2-btn-lg" onClick={() => scrollToSection('#ai-tools')}>
                 先免費試用 AI →

@@ -92,7 +92,7 @@ function HeroSection({ onPurchase }) {
 
         <div className="hp-hero-btns">
           <Link to="/trial-login" className="hp-btn-primary hp-btn-lg">免費體驗 AI 工具</Link>
-          <button type="button" className="hp-btn-ghost hp-btn-lg" onClick={onPurchase}>綠界刷卡購買</button>
+          <button type="button" className="hp-btn-ghost hp-btn-lg" onClick={onPurchase}>立即購買</button>
         </div>
       </section>
 
@@ -213,7 +213,7 @@ function AIDemoSection({ onPurchase }) {
             <p className="hp-ai-unlock-price">
               方案起售 <strong>$980</strong> · 含 AI 工具全功能
             </p>
-            <button type="button" className="hp-btn-primary" onClick={onPurchase}>綠界刷卡購買</button>
+            <button type="button" className="hp-btn-primary" onClick={onPurchase}>立即購買</button>
             <Link to="/trial-login" className="hp-ai-unlock-trial">先免費試用 &rarr;</Link>
           </div>
         </div>
@@ -444,7 +444,7 @@ function FinalCTA({ onPurchase }) {
         <p className="hp-final-cta-desc">加入 1,200+ 位創作者，用 AI 加速你的自媒體成長</p>
         <div className="hp-final-cta-btns">
           <button type="button" className="hp-btn-primary hp-btn-lg" onClick={onPurchase}>
-            綠界刷卡購買 · 方案起售 $980
+            立即購買 · 方案起售 $980
           </button>
           <Link to="/trial-login" className="hp-btn-ghost hp-btn-lg">
             先免費試用 AI 工具
