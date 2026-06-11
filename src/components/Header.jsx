@@ -59,7 +59,6 @@ export default function Header() {
 
       {!isAdmin && !isManaged && (
         <nav className="header-nav">
-          {nl('/', '回到首頁', true)}
           {nl('/dashboard', '首頁', true)}
           {nl('/dashboard/courses', '課程')}
           {nl('/dashboard/ai-tools', '✨ AI 工具')}
