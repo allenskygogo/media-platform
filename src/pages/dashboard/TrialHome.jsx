@@ -139,11 +139,20 @@ export default function TrialHome() {
         <div className="th2-stat-card">
           <div className="th2-stat-icon"><IconBook size={16} strokeWidth={1.5}/></div>
           <p className="th2-stat-title">頂流達人方案</p>
-          <p className="th2-stat-val">$29,800</p>
-          <p className="th2-stat-sub">體驗完課 24H 內優惠，立即省 1 萬</p>
-          <button className="th2-stat-btn primary" onClick={() => setShowUpgradeModal(true)}>
-            聯繫官方帳號 @xgfx
-          </button>
+          {offerInfo.active && offerRemaining > 0 ? (
+            <>
+              <p className="th2-stat-val">$29,800</p>
+              <p className="th2-stat-sub">體驗完課 24H 內優惠，立即省 1 萬</p>
+              <button className="th2-stat-btn primary" onClick={() => setShowUpgradeModal(true)}>
+                聯繫官方帳號 @xgfx
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="th2-stat-val">完成體驗解鎖</p>
+              <p className="th2-stat-sub">看完體驗課後，才會顯示 24H 升級優惠</p>
+            </>
+          )}
         </div>
       </div>
 
