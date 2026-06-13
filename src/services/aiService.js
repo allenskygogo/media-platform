@@ -98,6 +98,144 @@ export function bumpScriptUsage(userId) {
 // ══════════════════════════════════════════════════════
 //  Mock data — replace with real API response later
 // ══════════════════════════════════════════════════════
+function getSocialSourceText(input) {
+  if (typeof input === 'string') return input.trim()
+  if (!input || typeof input !== 'object') return ''
+  return String(input.source || input.topic || input.text || input.idea || input.input || '').trim()
+}
+
+function getSelectedSocialAngle(input, angles) {
+  if (input && typeof input === 'object' && input.selectedAngle) return input.selectedAngle
+  return angles[0]
+}
+
+function buildSocialAngles(topic) {
+  const base = topic || '你的主題'
+  return [
+    {
+      name: `教育型：${base}最常被誤解的 3 件事`,
+      platforms: ['IG', 'Facebook'],
+      trigger: '降低受眾犯錯成本，讓人想收藏',
+      reason: '具體清單容易被保存，留言區也會出現補充問題',
+    },
+    {
+      name: `故事型：我第一次真正理解${base}的那一天`,
+      platforms: ['Facebook', 'Threads'],
+      trigger: '真實經歷與情緒代入',
+      reason: '故事能引發長留言，也容易被轉傳給同樣經歷的人',
+    },
+    {
+      name: `觀點型：做${base}，最可怕的不是不努力`,
+      platforms: ['Threads', 'IG'],
+      trigger: '替受眾說出卡住但不敢講的話',
+      reason: '強觀點適合引用、轉發與延伸討論',
+    },
+    {
+      name: `問題型：為什麼你做${base}一直沒有結果`,
+      platforms: ['IG', 'Facebook'],
+      trigger: '命中現況焦慮與自我檢查',
+      reason: '問題明確，讀者會想留言問自己的案例',
+    },
+    {
+      name: `反直覺型：${base}越急著做，反而越容易失敗`,
+      platforms: ['Threads', 'Facebook'],
+      trigger: '打破既有認知',
+      reason: '反常識句容易被分享，也能帶出高品質討論',
+    },
+    {
+      name: `社群互動型：你遇到的${base}卡點是哪一種`,
+      platforms: ['IG', 'Threads'],
+      trigger: '讓受眾快速對號入座',
+      reason: '分類式互動能引導回覆，但不使用空洞誘導互動',
+    },
+    {
+      name: `避坑型：新手做${base}最容易忽略的成本`,
+      platforms: ['IG', 'Facebook'],
+      trigger: '害怕白花時間與金錢',
+      reason: '避坑內容天然有收藏與分享價值',
+    },
+    {
+      name: `比較型：普通人和高手做${base}的差別`,
+      platforms: ['IG', 'Threads'],
+      trigger: '階段差距與進步路徑',
+      reason: '對比清楚，受眾容易截圖保存',
+    },
+    {
+      name: `案例型：一個人靠${base}翻轉結果的關鍵`,
+      platforms: ['Facebook', 'IG'],
+      trigger: '看到可複製的成功線索',
+      reason: '案例能建立信任，也能自然導向私訊或諮詢',
+    },
+    {
+      name: `信念型：如果你正在做${base}，先別急著放棄`,
+      platforms: ['Threads', 'Facebook'],
+      trigger: '被理解、被支持、被代言',
+      reason: '情緒支持型內容容易引發回覆與轉發',
+    },
+  ]
+}
+
+function buildSocialPostResult(input) {
+  const topic = getSocialSourceText(input) || '你的主題'
+  const angles = buildSocialAngles(topic)
+  if (input && typeof input === 'object' && input.task === 'angles') {
+    return { angles }
+  }
+
+  const selectedAngle = getSelectedSocialAngle(input, angles)
+  const angleName = selectedAngle?.name || `教育型：${topic}最常被誤解的 3 件事`
+
+  return {
+    strategy: {
+      coreAudience: `正在做「${topic}」，但覺得努力和成果不成正比的人`,
+      purpose: '建立信任，讓讀者理解問題本質，進一步願意互動或私訊',
+      funnelPosition: '中層信任與轉換前教育',
+      platformDifference: 'IG 重點放收藏與分享；Facebook 重點放故事與討論；Threads 重點放觀點與回覆',
+      claim: `做${topic}，真正拉開差距的不是更努力，而是先看懂問題在哪裡。`,
+      coreHook: angleName,
+      emotion: '讓讀者感覺被理解，也看到下一步能怎麼修正',
+      ctaDirection: '邀請讀者留言自己的狀況，或私訊取得下一步建議',
+      risk: '避免叫人無腦留言、避免空泛口號、避免堆疊無關 hashtag',
+    },
+    platforms: {
+      ig: {
+        hook: `做${topic}，很多人不是輸在不努力。`,
+        post: `你可能每天都在發內容，也一直調整方法。\n\n但成果沒有變好，通常不是因為你不夠拚。\n而是你還沒看懂：你的內容到底要幫誰解決什麼問題。\n\n先把受眾講清楚，再把問題講具體。\n最後才是技巧、版型、發文時間。\n\n如果順序反了，你會一直很忙，卻很難被記住。`,
+        shortVersion: `做${topic}，先別急著學技巧。\n先問自己：我到底在幫誰解決什麼問題？\n這句話講不清楚，後面再努力都會很散。`,
+        boldVersion: `很多人做${topic}卡住，不是因為能力差。\n是因為一直在優化表面，卻沒有先講清楚自己到底服務誰。`,
+        cta: '如果你現在也卡住，可以留言你正在做的主題，我幫你看第一個該調整的方向。',
+        firstComment: `補充：判斷內容有沒有方向，可以先看一句話能不能說清楚「我幫誰，解決什麼問題」。`,
+        visualNote: `畫面可用深色背景搭配三段關鍵字：「受眾」「問題」「記憶點」。Alt text：一張說明${topic}內容定位順序的社群貼文圖。`,
+      },
+      fb: {
+        hook: `最近我發現，很多人做${topic}最大的問題，不是沒有努力。`,
+        post: `有些人每天都在研究技巧。\n什麼時間發文、怎麼下標、怎麼排版、怎麼寫 CTA。\n\n這些當然重要。\n但如果前面那個問題沒有想清楚，後面做再多都會很累。\n\n那個問題是：你到底想讓誰看懂你？\n\n當你不知道自己在跟誰說話，文案就會變得很平均。\n看起來什麼都能講，但沒有人覺得「這就是在說我」。\n\n所以我會建議，先不要急著追流量。\n先把受眾、痛點、你能給的價值講清楚。\n方向對了，內容才會開始累積。`,
+        shortVersion: `做${topic}之前，先把一句話講清楚：你幫誰，解決什麼問題。這句話越清楚，後面的內容越容易被記住。`,
+        boldVersion: `很多人以為自己缺流量，其實是缺定位。流量來了也留不住，因為觀眾不知道為什麼要記住你。`,
+        cta: `你現在做${topic}最卡的是受眾、內容方向，還是轉換？可以留言，我想看大家卡在哪一步。`,
+        firstComment: `我會建議先寫下三句：我的受眾是誰、他現在卡在哪、我能提供什麼具體幫助。`,
+        visualNote: `可搭配一張「內容定位檢查表」。Alt text：用三個問題協助創作者檢查${topic}社群內容方向。`,
+      },
+      threads: {
+        hook: `做${topic}，不要一開始就追技巧。`,
+        post: `技巧會讓你變快。\n但定位會決定你是不是走對。\n\n很多人不是不會寫。\n是每篇都想講給所有人聽。\n結果誰都沒有被打中。\n\n先講清楚你幫誰。\n再講清楚你解決什麼問題。\n最後才是格式和技巧。`,
+        shortVersion: `如果你的內容誰都能看，通常也代表誰都不會特別記住你。`,
+        boldVersion: `你缺的可能不是更多發文技巧，而是一個讓觀眾知道「為什麼要追蹤你」的理由。`,
+        cta: `你現在一句話說得出自己的定位嗎？`,
+        firstComment: `公式：我幫【誰】解決【什麼問題】，讓他得到【什麼結果】。`,
+        visualNote: `可用純文字截圖風格。Alt text：一段提醒創作者先定位再追技巧的 Threads 文案。`,
+      },
+    },
+    selfCheck: {
+      brandVoice: '白話、直接、以人為中心',
+      clearPoint: '主張明確：先定位，再談技巧',
+      templateRisk: '已避免 AI 模板式萬用金句',
+      engagementSafety: '沒有使用求留言、求分享等 engagement bait',
+      sharePotential: '具備收藏、轉發與留言討論空間',
+    },
+  }
+}
+
 export function getMockData(feature, input) {
   const ind = (typeof input === 'string' ? input : '') || '你的行業'
 
@@ -406,56 +544,9 @@ Week 11–12「社群互動」系列
     }
 
     // ── Feature 9: 社群貼文 ──────────────────────────
-    case 'socialPost': {
-      const topic = (typeof input === 'string' ? input : '') || '你的主題'
-      return {
-        ig: `✨ 關於「${topic}」，90%的人都想錯了。
-
-今天我來說一個真實故事——
-
-一個學員問我：「我努力了三個月，為什麼還是沒有成長？」
-我看了她的帳號，馬上找到問題所在。
-不是她不夠努力，而是方向完全走偏了。
-
-這件事讓我明白：${topic}的關鍵，從來不是你以為的那樣。
-
-你有過類似的體驗嗎？留言告訴我 👇
-
-#${topic.slice(0, 8)} #創作者日常 #真實故事 #漲粉心法 #台灣創作者 #內容創作 #社群經營 #短影音`,
-        fb: `想跟大家分享一件關於「${topic}」的事，希望對你有幫助。
-
-很多人問我：「做${topic}最難的是什麼？」
-
-說實話，一開始我也不知道答案。直到遇到了一個讓我完全改觀的案例——
-
-一位從事${topic}的創作者，三個月內從 200 粉成長到破萬。
-她沒有特別的資源，也沒有完美的設備。
-她做對了一件事：找到自己真正的差異化。
-
-這個故事後來成為我最常分享的例子。
-
-你在${topic}這條路上遇過什麼困難？歡迎下方留言分享，我們一起討論！`,
-        threads: `說說關於「${topic}」我最近的體悟：
-
-大家都說要找對方法，但其實最重要的是——先找對心態。
-
-${topic}這件事，我花了兩年才搞懂一個核心：
-真正的突破，不是來自更努力，而是來自更清晰地看見自己。
-
-你同意嗎？`,
-        universal: `【關於「${topic}」，我想說一個你可能沒聽過的真相】
-
-很多人在${topic}這條路上卡關，不是因為不努力，而是找錯了方向。
-
-今天分享三個讓我頓悟的關鍵：
-1️⃣ 差異化比努力更重要——先想清楚你和別人的不同在哪裡
-2️⃣ 真實感比完美感更有力——不完美的真實，比完美的包裝更打動人
-3️⃣ 堅持選對的事，比什麼都強——方向對了，剩下的只是時間問題
-
-收藏起來，你一定用得到 💡
-有問題歡迎留言，我盡量一一回覆！`,
-      }
-    }
+    case 'social':
+    case 'socialPost':
+      return buildSocialPostResult(input)
 
     // ── Feature 10: 爆款解析 ─────────────────────────
     case 'videoAnalysis': {

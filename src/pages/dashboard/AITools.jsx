@@ -151,7 +151,7 @@ const SCRIPT_TYPES = [
   { id: 'process',   label: '曬過程', Icon: Video         },
 ]
 
-const PUBLIC_AI_TOOL_IDS = new Set(['topics'])
+const PUBLIC_AI_TOOL_IDS = new Set(['topics', 'material', 'social'])
 const PUBLIC_SCRIPT_TYPE_IDS = new Set(['knowledge', 'opinion', 'story', 'process'])
 const FULL_AI_TEST_EMAILS = new Set(['test-ai-pay@xgfx-tw.com', 'allen@xgfx-tw.com'])
 
@@ -733,10 +733,9 @@ const BENCHMARK_MOCK = {
 
 // ── Shared option lists for new pages ─────────────────
 const SOCIAL_TABS = [
-  { id: 'ig',      label: 'IG 貼文'  },
-  { id: 'fb',      label: 'FB 貼文'  },
+  { id: 'ig',      label: 'IG'       },
+  { id: 'fb',      label: 'Facebook' },
   { id: 'threads', label: 'Threads'  },
-  { id: 'general', label: '通用版'   },
 ]
 
 const LIVESTREAM_SECTIONS = [
@@ -2853,32 +2852,159 @@ function AnalysisPage() {
 //  社群貼文 page
 // ══════════════════════════════════════════════════════
 
+const SOCIAL_PLATFORM_FIELDS = [
+  ['hook', '開頭鉤子'],
+  ['post', '正式貼文'],
+  ['shortVersion', '短版備案'],
+  ['boldVersion', '較強話題版備案'],
+  ['cta', 'CTA'],
+  ['firstComment', '首則留言建議'],
+  ['visualNote', '視覺 / alt text 建議'],
+]
+
+function readSocialField(source, key) {
+  if (!source || typeof source !== 'object') return ''
+  const aliases = {
+    shortVersion: ['shortVersion', 'shortBackup', 'shortAlternative', 'short_version', 'short_backup'],
+    boldVersion: ['boldVersion', 'strongTopicVersion', 'strongerTopicBackup', 'bold_backup', 'stronger_backup'],
+    firstComment: ['firstComment', 'first_comment', 'commentSuggestion'],
+    visualNote: ['visualNote', 'visualAlt', 'altText', 'visualDescription', 'visual_note'],
+  }
+  const keys = aliases[key] || [key]
+  for (const item of keys) {
+    if (source[item]) return source[item]
+  }
+  return ''
+}
+
+function socialAngleName(angle, index) {
+  return angle?.name || angle?.angleName || angle?.title || angle?.type || `內容角度 ${index + 1}`
+}
+
+function normalizeSocialAngles(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.angles)) return payload.angles
+  if (Array.isArray(payload?.contentAngles)) return payload.contentAngles
+  return []
+}
+
+function normalizeSocialResult(payload) {
+  if (!payload) return null
+  if (payload.platforms) return payload
+  if (payload.ig || payload.fb || payload.threads) {
+    return {
+      strategy: payload.strategy || null,
+      platforms: {
+        ig: payload.ig,
+        fb: payload.fb,
+        threads: payload.threads,
+      },
+      selfCheck: payload.selfCheck || payload.selfEvaluation || null,
+    }
+  }
+  return payload
+}
+
+function platformSections(content) {
+  if (!content) return []
+  if (typeof content === 'string') {
+    return [{ label: '正式貼文', value: content }]
+  }
+  return SOCIAL_PLATFORM_FIELDS
+    .map(([key, label]) => ({ label, value: readSocialField(content, key) }))
+    .filter(section => section.value)
+}
+
+function formatPlatformContent(content) {
+  return platformSections(content)
+    .map(section => `【${section.label}】\n${section.value}`)
+    .join('\n\n')
+}
+
+function formatStrategy(strategy) {
+  if (!strategy || typeof strategy !== 'object') return []
+  const fields = [
+    ['coreAudience', '核心受眾'],
+    ['purpose', '貼文目的'],
+    ['funnelPosition', '漏斗位置'],
+    ['platformDifference', '平台差異'],
+    ['claim', '主張句'],
+    ['coreHook', '核心鉤子'],
+    ['emotion', '情緒切入點'],
+    ['ctaDirection', 'CTA 方向'],
+    ['risk', '禁用說法與風格風險'],
+  ]
+  return fields
+    .map(([key, label]) => ({ label, value: readSocialField(strategy, key) || strategy[key] }))
+    .filter(item => item.value)
+}
+
 function SocialPage() {
   const { currentUser } = useAuth()
   const canSeeAll = deriveAITier(currentUser) !== 'trial'
 
-  const [input,      setInput]      = useState('')
-  const [result,     setResult]     = useState(null)
-  const [generating, setGenerating] = useState(false)
-  const [activeTab,  setActiveTab]  = useState('ig')
-  const [copied,     setCopied]     = useState(false)
-  const [showModal,  setShowModal]  = useState(false)
+  const [input,           setInput]           = useState('')
+  const [angles,          setAngles]          = useState([])
+  const [selectedIndex,   setSelectedIndex]   = useState(null)
+  const [result,          setResult]          = useState(null)
+  const [generatingAngles,setGeneratingAngles]= useState(false)
+  const [generatingPost,  setGeneratingPost]  = useState(false)
+  const [activeTab,       setActiveTab]       = useState('ig')
+  const [copied,          setCopied]          = useState(false)
+  const [error,           setError]           = useState('')
+  const [showModal,       setShowModal]       = useState(false)
 
-  const handleGenerate = async () => {
-    if (!input.trim() || generating) return
-    setGenerating(true); setResult(null); setCopied(false)
-    await new Promise(r => setTimeout(r, 1100))
-    setResult(SOCIAL_MOCK); setActiveTab('ig')
-    setGenerating(false)
+  const selectedAngle = selectedIndex !== null ? angles[selectedIndex] : null
+  const normalizedResult = normalizeSocialResult(result)
+  const activeContent = normalizedResult?.platforms?.[activeTab] || ''
+  const visibleSections = platformSections(activeContent)
+  const shownSections = canSeeAll ? visibleSections : visibleSections.slice(0, 2)
+  const hiddenSections = canSeeAll ? [] : visibleSections.slice(2)
+
+  const handleGenerateAngles = async () => {
+    if (!input.trim() || generatingAngles) return
+    setGeneratingAngles(true)
+    setError('')
+    setAngles([])
+    setSelectedIndex(null)
+    setResult(null)
+    setCopied(false)
+    try {
+      const payload = await callAI('social', { task: 'angles', source: input }, deriveAITier(currentUser), currentUser?.id)
+      const nextAngles = normalizeSocialAngles(payload)
+      if (!nextAngles.length) throw new Error('AI 沒有回傳內容角度')
+      setAngles(nextAngles.slice(0, 10))
+    } catch (err) {
+      setError(err.message || '社群貼文角度產生失敗，請稍後再試。')
+    } finally {
+      setGeneratingAngles(false)
+    }
   }
 
-  const activeContent = result?.[activeTab] || ''
-  const lines         = activeContent.split('\n')
-  const visiblePart   = lines.slice(0, 2).join('\n')
-  const blurredPart   = lines.slice(2).join('\n')
+  const handleGeneratePost = async () => {
+    if (!selectedAngle || generatingPost) return
+    setGeneratingPost(true)
+    setError('')
+    setResult(null)
+    setCopied(false)
+    try {
+      const payload = await callAI(
+        'social',
+        { task: 'generate', source: input, selectedAngle },
+        deriveAITier(currentUser),
+        currentUser?.id,
+      )
+      setResult(normalizeSocialResult(payload))
+      setActiveTab('ig')
+    } catch (err) {
+      setError(err.message || '社群貼文產生失敗，請稍後再試。')
+    } finally {
+      setGeneratingPost(false)
+    }
+  }
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(activeContent).then(() => {
+    navigator.clipboard.writeText(formatPlatformContent(activeContent)).then(() => {
       setCopied(true); setTimeout(() => setCopied(false), 2000)
     })
   }
@@ -2887,28 +3013,92 @@ function SocialPage() {
     <>
       <div>
         <h1 className="ait-tool-title">社群貼文</h1>
-        <p className="ait-tool-desc">輸入你的想法或參考資料，AI 整理成各平台貼文</p>
+        <p className="ait-tool-desc">先產生 10 個內容角度，再生成 IG / Facebook / Threads 原生貼文</p>
       </div>
 
       <div className="ait-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <textarea
           className="ait-practice-ta"
-          rows={5}
-          placeholder="例如：我今天分享了一個客人從0到1漲粉的故事，想做成貼文..."
+          rows={6}
+          placeholder="貼上你的主題、產品、服務、活動資訊、長文內容、目標受眾或競品案例..."
           value={input}
-          onChange={e => setInput(e.target.value)}
+          onChange={e => {
+            setInput(e.target.value)
+            setError('')
+          }}
         />
         <button
           className="ait-btn-primary"
           style={{ alignSelf: 'flex-start' }}
-          onClick={handleGenerate}
-          disabled={!input.trim() || generating}
+          onClick={handleGenerateAngles}
+          disabled={!input.trim() || generatingAngles}
         >
-          {generating ? <Spinner /> : '生成貼文'}
+          {generatingAngles ? <Spinner /> : '產生 10 個內容角度'}
         </button>
       </div>
 
-      {result && (
+      {error && <div className="ait-inline-error">{error}</div>}
+
+      {angles.length > 0 && (
+        <div className="ait-social-workflow-card">
+          <div className="ait-social-workflow-hd">
+            <div>
+              <div className="ait-social-kicker">第一步</div>
+              <h2>選擇一個內容角度</h2>
+            </div>
+            <button className="ait-ghost-btn" onClick={handleGenerateAngles} disabled={generatingAngles}>
+              <RefreshCw size={13} strokeWidth={1.8} />
+              換一批
+            </button>
+          </div>
+
+          <div className="ait-social-angle-grid">
+            {angles.map((angle, index) => (
+              <button
+                key={`${socialAngleName(angle, index)}-${index}`}
+                className={`ait-social-angle-card${selectedIndex === index ? ' selected' : ''}`}
+                onClick={() => {
+                  setSelectedIndex(index)
+                  setResult(null)
+                  setCopied(false)
+                }}
+              >
+                <span className="ait-social-angle-no">{index + 1}</span>
+                <strong>{socialAngleName(angle, index)}</strong>
+                <p><span>平台</span>{Array.isArray(angle.platforms) ? angle.platforms.join(' / ') : angle.platform || angle.suitablePlatform || 'IG / FB / Threads'}</p>
+                <p><span>觸發點</span>{angle.trigger || angle.psychology || angle.audienceTrigger || '受眾痛點與情緒共鳴'}</p>
+                <p><span>互動理由</span>{angle.reason || angle.shareReason || angle.interactionReason || '具備留言、分享或收藏潛力'}</p>
+              </button>
+            ))}
+          </div>
+
+          <button
+            className="ait-btn-primary ait-social-generate-btn"
+            onClick={handleGeneratePost}
+            disabled={!selectedAngle || generatingPost}
+          >
+            {generatingPost ? <Spinner /> : '用這個角度生成三平台貼文'}
+          </button>
+        </div>
+      )}
+
+      {normalizedResult && (
+        <>
+          {formatStrategy(normalizedResult.strategy).length > 0 && (
+            <div className="ait-social-strategy-card">
+              <div className="ait-social-kicker">第二步</div>
+              <h2>內容策略卡</h2>
+              <div className="ait-social-strategy-grid">
+                {formatStrategy(normalizedResult.strategy).map(item => (
+                  <div key={item.label} className="ait-social-strategy-item">
+                    <span>{item.label}</span>
+                    <p>{Array.isArray(item.value) ? item.value.join('、') : item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
         <div className="ait-card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="ait-social-hd">
             <div className="ait-tab-bar" style={{ margin: 0 }}>
@@ -2931,26 +3121,47 @@ function SocialPage() {
           </div>
 
           <div className="ait-social-content">
-            <div className="ait-social-body">{visiblePart}</div>
-            {blurredPart && !canSeeAll ? (
+            {shownSections.map(section => (
+              <div className="ait-social-section" key={section.label}>
+                <div className="ait-social-section-label">{section.label}</div>
+                <div className="ait-social-body">{section.value}</div>
+              </div>
+            ))}
+            {hiddenSections.length > 0 && (
               <div className="ait-blur-zone" style={{ borderRadius: 0 }}>
                 <div className="ait-blur-inner">
-                  <div className="ait-social-body">{blurredPart}</div>
+                  {hiddenSections.map(section => (
+                    <div className="ait-social-section" key={section.label}>
+                      <div className="ait-social-section-label">{section.label}</div>
+                      <div className="ait-social-body">{section.value}</div>
+                    </div>
+                  ))}
                 </div>
                 <div className="ait-upgrade-wall">
                   <p className="ait-upgrade-wall-text">
-                    頂流達人學員專屬｜一鍵生成 IG、FB、Threads 完整貼文，附 hashtag 策略
+                    頂流達人學員專屬｜完整社群貼文策略、備案、CTA 與留言設計
                   </p>
                   <button className="ait-upgrade-wall-btn" disabled>
                     即將開放
                   </button>
                 </div>
               </div>
-            ) : (
-              blurredPart && <div className="ait-social-body">{blurredPart}</div>
             )}
           </div>
         </div>
+
+          {normalizedResult.selfCheck && canSeeAll && (
+            <div className="ait-social-check-card">
+              <div className="ait-social-kicker">第四步</div>
+              <h2>自我評估與優化</h2>
+              <div className="ait-social-body">
+                {typeof normalizedResult.selfCheck === 'string'
+                  ? normalizedResult.selfCheck
+                  : Object.entries(normalizedResult.selfCheck).map(([key, value]) => `【${key}】${Array.isArray(value) ? value.join('、') : value}`).join('\n')}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {showModal && <UpgradeModal onClose={() => setShowModal(false)} />}
