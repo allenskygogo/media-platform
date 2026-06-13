@@ -7,7 +7,7 @@ import {
   TrendingUp, Search, Share2, Mic,
   BarChart2, Bookmark, Flame, Target, Bot,
   RefreshCw, BookOpen, MessageSquare, BookMarked, Video,
-  Camera, Eye, Users, MessageCircle, X, Download,
+  Camera, Eye, Users, MessageCircle, X, Download, Lightbulb, Folder,
   Copy, Check,
   Plus, Trash2, Music2, Image, PlayCircle, Link, ChevronRight, Send,
 } from 'lucide-react'
@@ -758,6 +758,23 @@ function getPlatformInfo(url) {
   if (url.includes('youtube.com'))   return { Icon: PlayCircle,    label: 'YouTube' }
   if (url.includes('threads.net'))   return { Icon: MessageCircle, label: 'Threads' }
   return { Icon: Link, label: '連結' }
+}
+
+function normalizeMaterialUrl(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`)
+    parsed.protocol = parsed.protocol.toLowerCase()
+    parsed.hostname = parsed.hostname.toLowerCase()
+    parsed.hash = ''
+    parsed.search = ''
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '')
+    return parsed.toString().replace(/\/+$/, '')
+  } catch {
+    return raw.toLowerCase().replace(/\s+/g, '').replace(/\/+$/, '')
+  }
 }
 
 // ── Trending topic sets ───────────────────────────────
@@ -3386,20 +3403,19 @@ function MaterialCard({ item, onDelete }) {
   const { Icon, label } = getPlatformInfo(item.url)
   return (
     <div className="ait-material-card">
-      <div className="ait-material-card-hd">
-        <div className="ait-material-platform">
-          <Icon size={13} strokeWidth={1.8} />
-          <span>{label}</span>
-        </div>
-        <button className="ait-material-del" onClick={onDelete} title="刪除">
-          <Trash2 size={13} strokeWidth={1.8} />
-        </button>
+      <div className="ait-material-platform-tile" title={label}>
+        <Icon size={24} strokeWidth={1.8} />
       </div>
-      <a className="ait-material-url" href={item.url} target="_blank" rel="noopener noreferrer">
-        {item.url}
-      </a>
-      {item.note && <p className="ait-material-note">{item.note}</p>}
-      <span className="ait-material-time">{item.time}</span>
+      <div className="ait-material-card-main">
+        <a className="ait-material-url" href={item.url} target="_blank" rel="noopener noreferrer">
+          {item.url}
+        </a>
+        {item.note && <p className="ait-material-note">{item.note}</p>}
+        <span className="ait-material-time">{item.time}</span>
+      </div>
+      <button className="ait-material-del" onClick={onDelete} title="刪除">
+        <Trash2 size={15} strokeWidth={1.8} />
+      </button>
     </div>
   )
 }
@@ -3423,6 +3439,7 @@ function MaterialPage() {
   const [urlInput,      setUrlInput]      = useState('')
   const [noteInput,     setNoteInput]     = useState('')
   const [folderSelect,  setFolderSelect]  = useState('')
+  const [materialError, setMaterialError] = useState('')
   const [addingFolder,  setAddingFolder]  = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [showModal,     setShowModal]     = useState(false)
@@ -3436,8 +3453,18 @@ function MaterialPage() {
 
   useEffect(() => {
     try { setItems(JSON.parse(localStorage.getItem(`tlt_materials_${folder}`) || '[]')) } catch { setItems([]) }
-    setUrlInput(''); setNoteInput(''); setFolderSelect('')
+    setUrlInput(''); setNoteInput(''); setFolderSelect(''); setMaterialError('')
   }, [folder])
+
+  function readFolderItems(targetFolder) {
+    try { return JSON.parse(localStorage.getItem(`tlt_materials_${targetFolder}`) || '[]') } catch { return [] }
+  }
+
+  function isDuplicateInFolder(targetFolder, targetUrl) {
+    if (!targetFolder || !targetUrl.trim()) return false
+    const normalized = normalizeMaterialUrl(targetUrl)
+    return readFolderItems(targetFolder).some(item => normalizeMaterialUrl(item.url) === normalized)
+  }
 
   function handleAddFolder() {
     const name = newFolderName.trim()
@@ -3460,6 +3487,10 @@ function MaterialPage() {
 
   function handleAdd() {
     if (!urlInput.trim() || !noteInput.trim() || !folderSelect) return
+    if (isDuplicateInFolder(folderSelect, urlInput)) {
+      setMaterialError('這個分類已經保存過相同網址，請換分類或貼新的連結。')
+      return
+    }
     const now = new Date()
     const pad = n => String(n).padStart(2, '0')
     const timeStr = `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
@@ -3470,7 +3501,7 @@ function MaterialPage() {
     const next = [newItem, ...existing]
     localStorage.setItem(key, JSON.stringify(next))
     if (folderSelect === folder) setItems(next)
-    setUrlInput(''); setNoteInput(''); setFolderSelect('')
+    setUrlInput(''); setNoteInput(''); setFolderSelect(''); setMaterialError('')
   }
 
   function handleDelete(id) {
@@ -3479,25 +3510,39 @@ function MaterialPage() {
     localStorage.setItem(`tlt_materials_${folder}`, JSON.stringify(next))
   }
 
-  const canAdd = urlInput.trim() && noteInput.trim() && folderSelect
+  const duplicateInSelectedFolder = folderSelect && urlInput.trim() && isDuplicateInFolder(folderSelect, urlInput)
+  const canAdd = urlInput.trim() && noteInput.trim() && folderSelect && !duplicateInSelectedFolder
+  const duplicateMessage = duplicateInSelectedFolder
+    ? '這個分類已經保存過相同網址，換到其他分類可以重複保存。'
+    : ''
 
   return (
-    <>
-      <div>
-        <h1 className="ait-tool-title">素材靈感</h1>
-        <p className="ait-tool-desc">保存你喜歡的影片連結，建立專屬爆款靈感庫</p>
+    <div className="ait-material-page">
+      <div className="ait-material-hero">
+        <div className="ait-material-hero-copy">
+          <div className="ait-material-hero-icon">
+            <Lightbulb size={28} strokeWidth={1.8} />
+          </div>
+          <div>
+            <h1 className="ait-tool-title">素材靈感</h1>
+            <p className="ait-tool-desc">保存你喜歡的影片連結，建立專屬爆款靈感庫</p>
+          </div>
+        </div>
+        <button className="ait-material-folder-btn" onClick={() => setAddingFolder(true)}>
+          <Plus size={18} strokeWidth={2.2} />新增分類
+        </button>
       </div>
 
       {/* Folder tabs + add button */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <div className="ait-tab-bar" style={{ flex: 1, flexWrap: 'wrap', margin: 0 }}>
+      <div className="ait-material-folder-row">
+        <div className="ait-tab-bar ait-material-tabs">
           {folders.map(f => {
             const isDefault = MATERIAL_FOLDERS.includes(f)
             const isActive  = folder === f
             if (isDefault) {
               return (
                 <button key={f} className={`ait-tab${isActive ? ' active' : ''}`} onClick={() => setFolder(f)}>
-                  {f}
+                  <Folder size={13} strokeWidth={1.8} />{f}
                 </button>
               )
             }
@@ -3507,7 +3552,7 @@ function MaterialPage() {
                   style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, font: 'inherit', fontSize: 'inherit' }}
                   onClick={() => setFolder(f)}
                 >
-                  {f}
+                  <Folder size={13} strokeWidth={1.8} />{f}
                 </button>
                 <button className="ait-tab-x-btn" onClick={e => { e.stopPropagation(); handleDeleteFolder(f) }}>
                   <X size={10} strokeWidth={2} />
@@ -3533,49 +3578,57 @@ function MaterialPage() {
             <button className="ait-btn-primary" style={{ height: 32, fontSize: 12, padding: '0 12px' }} onClick={handleAddFolder}>確認</button>
             <button className="ait-ghost-btn" onClick={() => { setAddingFolder(false); setNewFolderName('') }}>取消</button>
           </div>
-        ) : (
-          <button className="ait-ghost-btn ait-material-add-folder" onClick={() => setAddingFolder(true)}>
-            <Plus size={13} strokeWidth={2} />新增分類
-          </button>
-        )}
+        ) : null}
       </div>
 
       {/* Add form */}
-      <div className="ait-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="ait-material-form-card">
+        <div className="ait-material-form-title">
+          <Bookmark size={15} strokeWidth={2} />
+          <span>新增素材靈感</span>
+        </div>
+        <label className="ait-material-label">影片連結（必填）</label>
         <input
-          className="ait-text-input"
-          style={{ width: '100%', boxSizing: 'border-box' }}
-          placeholder="貼上影片連結（必填）"
+          className="ait-text-input ait-material-input"
+          placeholder="貼上影片連結"
           value={urlInput}
-          onChange={e => setUrlInput(e.target.value)}
+          onChange={e => { setUrlInput(e.target.value); setMaterialError('') }}
         />
-        <input
-          className="ait-text-input"
-          style={{ width: '100%', boxSizing: 'border-box' }}
-          placeholder="說明這個素材的亮點或用途（必填）"
+        <label className="ait-material-label">素材用途說明（必填）</label>
+        <textarea
+          className="ait-text-input ait-material-textarea"
+          placeholder="說明這個素材的亮點或用途"
           value={noteInput}
-          onChange={e => setNoteInput(e.target.value)}
+          onChange={e => { setNoteInput(e.target.value); setMaterialError('') }}
+          rows={2}
         />
-        <div className="ait-row">
+        <label className="ait-material-label">選擇分類（必選）</label>
+        <div className="ait-material-add-row">
           <select
-            className="ait-text-input ait-select"
-            style={{ flex: 1 }}
+            className="ait-text-input ait-select ait-material-input"
             value={folderSelect}
-            onChange={e => setFolderSelect(e.target.value)}
+            onChange={e => { setFolderSelect(e.target.value); setMaterialError('') }}
           >
-            <option value="">選擇分類（必選）</option>
+            <option value="">選擇分類</option>
             {folders.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
           <button
-            className="ait-btn-primary"
+            className="ait-btn-primary ait-material-submit"
             onClick={handleAdd}
             disabled={!canAdd}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
           >
-            <Plus size={15} strokeWidth={2} />
+            <Plus size={18} strokeWidth={2.2} />
             新增
           </button>
         </div>
+        {(duplicateMessage || materialError) && (
+          <div className="ait-material-error">{materialError || duplicateMessage}</div>
+        )}
+      </div>
+
+      <div className="ait-material-section-title">
+        <Bookmark size={15} strokeWidth={2} />
+        <span>已保存的靈感</span>
       </div>
 
       {items.length === 0 ? (
@@ -3606,7 +3659,7 @@ function MaterialPage() {
       )}
 
       {showModal && <UpgradeModal onClose={() => setShowModal(false)} />}
-    </>
+    </div>
   )
 }
 
