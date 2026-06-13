@@ -728,6 +728,8 @@ const SOCIAL_TABS = [
   { id: 'ig',      label: 'IG'       },
   { id: 'fb',      label: 'Facebook' },
   { id: 'threads', label: 'Threads'  },
+  { id: 'xiaohongshu', label: '小紅書' },
+  { id: 'douyin', label: '抖音' },
 ]
 
 const LIVESTREAM_SECTIONS = [
@@ -2928,6 +2930,8 @@ function formatPlatformContent(content) {
 function formatStrategy(strategy) {
   if (!strategy || typeof strategy !== 'object') return []
   const fields = [
+    ['platform', '平台'],
+    ['style', '風格'],
     ['coreAudience', '核心受眾'],
     ['purpose', '貼文目的'],
     ['funnelPosition', '漏斗位置'],
@@ -2960,7 +2964,9 @@ function SocialPage() {
 
   const selectedAngle = selectedIndex !== null ? angles[selectedIndex] : null
   const normalizedResult = normalizeSocialResult(result)
-  const activeContent = normalizedResult?.platforms?.[activeTab] || ''
+  const availableSocialTabs = SOCIAL_TABS.filter(t => normalizedResult?.platforms?.[t.id])
+  const visibleSocialTabs = availableSocialTabs.length ? availableSocialTabs : SOCIAL_TABS.slice(0, 3)
+  const activeContent = normalizedResult?.platforms?.[activeTab] || normalizedResult?.platforms?.[visibleSocialTabs[0]?.id] || ''
   const visibleSections = platformSections(activeContent)
   const shownSections = canSeeAll ? visibleSections : visibleSections.slice(0, 2)
   const hiddenSections = canSeeAll ? [] : visibleSections.slice(2)
@@ -3017,7 +3023,7 @@ function SocialPage() {
     <>
       <div>
         <h1 className="ait-tool-title">社群貼文</h1>
-        <p className="ait-tool-desc">先產生批判、溫馨、開心、分析 4 個角度，再輸出 IG / Facebook / Threads 可直接貼上的成品文案</p>
+        <p className="ait-tool-desc">先產生批判、溫馨、開心、分析 4 個角度，再輸出符合平台語境、可直接貼上的成品文案</p>
       </div>
 
       <div className="ait-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -3070,7 +3076,9 @@ function SocialPage() {
                 <span className="ait-social-angle-no">{index + 1}</span>
                 <strong>{socialAngleName(angle, index)}</strong>
                 <p><span>角度</span>{angle.category || ['批判', '溫馨', '開心', '分析'][index] || '內容角度'}</p>
+                <p><span>風格</span>{angle.style || angle.tone || '依角度判斷'}</p>
                 <p><span>平台</span>{Array.isArray(angle.platforms) ? angle.platforms.join(' / ') : angle.platform || angle.suitablePlatform || 'IG / FB / Threads'}</p>
+                <p><span>受眾</span>{angle.targetAudience || angle.audience || '依主題推斷'}</p>
                 <p><span>觸發點</span>{angle.trigger || angle.psychology || angle.audienceTrigger || '受眾痛點與情緒共鳴'}</p>
                 <p><span>互動理由</span>{angle.reason || angle.shareReason || angle.interactionReason || '具備留言、分享或收藏潛力'}</p>
               </button>
@@ -3107,7 +3115,7 @@ function SocialPage() {
         <div className="ait-card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="ait-social-hd">
             <div className="ait-tab-bar" style={{ margin: 0 }}>
-              {SOCIAL_TABS.map(t => (
+              {visibleSocialTabs.map(t => (
                 <button
                   key={t.id}
                   className={`ait-tab${activeTab === t.id ? ' active' : ''}`}
