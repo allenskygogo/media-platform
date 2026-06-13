@@ -2853,11 +2853,11 @@ function AnalysisPage() {
 // ══════════════════════════════════════════════════════
 
 const SOCIAL_PLATFORM_FIELDS = [
-  ['hook', '開頭鉤子'],
-  ['post', '正式貼文'],
+  ['firstParagraphHook', '第一段鉤子'],
+  ['readyPost', '可直接貼文'],
   ['shortVersion', '短版備案'],
   ['boldVersion', '較強話題版備案'],
-  ['cta', 'CTA'],
+  ['hashtags', 'Hashtag'],
   ['firstComment', '首則留言建議'],
   ['visualNote', '視覺 / alt text 建議'],
 ]
@@ -2865,8 +2865,11 @@ const SOCIAL_PLATFORM_FIELDS = [
 function readSocialField(source, key) {
   if (!source || typeof source !== 'object') return ''
   const aliases = {
+    firstParagraphHook: ['firstParagraphHook', 'firstHook', 'openingHook', 'hook', 'first_paragraph_hook'],
+    readyPost: ['readyPost', 'fullPost', 'post', 'finalPost', 'ready_post'],
     shortVersion: ['shortVersion', 'shortBackup', 'shortAlternative', 'short_version', 'short_backup'],
     boldVersion: ['boldVersion', 'strongTopicVersion', 'strongerTopicBackup', 'bold_backup', 'stronger_backup'],
+    hashtags: ['hashtags', 'hashtag', 'tags'],
     firstComment: ['firstComment', 'first_comment', 'commentSuggestion'],
     visualNote: ['visualNote', 'visualAlt', 'altText', 'visualDescription', 'visual_note'],
   }
@@ -2875,6 +2878,12 @@ function readSocialField(source, key) {
     if (source[item]) return source[item]
   }
   return ''
+}
+
+function stringifySocialValue(value) {
+  if (Array.isArray(value)) return value.join(' ')
+  if (value === null || value === undefined) return ''
+  return String(value)
 }
 
 function socialAngleName(angle, index) {
@@ -2899,7 +2908,6 @@ function normalizeSocialResult(payload) {
         fb: payload.fb,
         threads: payload.threads,
       },
-      selfCheck: payload.selfCheck || payload.selfEvaluation || null,
     }
   }
   return payload
@@ -2911,11 +2919,15 @@ function platformSections(content) {
     return [{ label: '正式貼文', value: content }]
   }
   return SOCIAL_PLATFORM_FIELDS
-    .map(([key, label]) => ({ label, value: readSocialField(content, key) }))
+    .map(([key, label]) => ({ label, value: stringifySocialValue(readSocialField(content, key)) }))
     .filter(section => section.value)
 }
 
 function formatPlatformContent(content) {
+  if (content && typeof content === 'object') {
+    const readyPost = stringifySocialValue(readSocialField(content, 'readyPost'))
+    if (readyPost) return readyPost
+  }
   return platformSections(content)
     .map(section => `【${section.label}】\n${section.value}`)
     .join('\n\n')
@@ -3013,7 +3025,7 @@ function SocialPage() {
     <>
       <div>
         <h1 className="ait-tool-title">社群貼文</h1>
-        <p className="ait-tool-desc">先產生 10 個內容角度，再生成 IG / Facebook / Threads 原生貼文</p>
+        <p className="ait-tool-desc">先產生 10 個內容角度，再輸出 IG / Facebook / Threads 可直接貼上的成品文案</p>
       </div>
 
       <div className="ait-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -3139,7 +3151,7 @@ function SocialPage() {
                 </div>
                 <div className="ait-upgrade-wall">
                   <p className="ait-upgrade-wall-text">
-                    頂流達人學員專屬｜完整社群貼文策略、備案、CTA 與留言設計
+                    頂流達人學員專屬｜完整平台貼文、備案、Hashtag 與留言建議
                   </p>
                   <button className="ait-upgrade-wall-btn" disabled>
                     即將開放
@@ -3149,18 +3161,6 @@ function SocialPage() {
             )}
           </div>
         </div>
-
-          {normalizedResult.selfCheck && canSeeAll && (
-            <div className="ait-social-check-card">
-              <div className="ait-social-kicker">第四步</div>
-              <h2>自我評估與優化</h2>
-              <div className="ait-social-body">
-                {typeof normalizedResult.selfCheck === 'string'
-                  ? normalizedResult.selfCheck
-                  : Object.entries(normalizedResult.selfCheck).map(([key, value]) => `【${key}】${Array.isArray(value) ? value.join('、') : value}`).join('\n')}
-              </div>
-            </div>
-          )}
         </>
       )}
 
