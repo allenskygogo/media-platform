@@ -2977,7 +2977,7 @@ function SocialPage() {
       const payload = await callAI('social', { task: 'angles', source: input }, deriveAITier(currentUser), currentUser?.id)
       const nextAngles = normalizeSocialAngles(payload)
       if (!nextAngles.length) throw new Error('AI 沒有回傳內容角度')
-      setAngles(nextAngles.slice(0, 10))
+      setAngles(nextAngles.slice(0, 4))
     } catch (err) {
       setError(err.message || '社群貼文角度產生失敗，請稍後再試。')
     } finally {
@@ -3017,7 +3017,7 @@ function SocialPage() {
     <>
       <div>
         <h1 className="ait-tool-title">社群貼文</h1>
-        <p className="ait-tool-desc">先產生 10 個內容角度，再輸出 IG / Facebook / Threads 可直接貼上的成品文案</p>
+        <p className="ait-tool-desc">先產生批判、溫馨、開心、分析 4 個角度，再輸出 IG / Facebook / Threads 可直接貼上的成品文案</p>
       </div>
 
       <div className="ait-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -3037,7 +3037,7 @@ function SocialPage() {
           onClick={handleGenerateAngles}
           disabled={!input.trim() || generatingAngles}
         >
-          {generatingAngles ? <Spinner /> : '產生 10 個內容角度'}
+          {generatingAngles ? <Spinner /> : '產生 4 個內容角度'}
         </button>
       </div>
 
@@ -3069,6 +3069,7 @@ function SocialPage() {
               >
                 <span className="ait-social-angle-no">{index + 1}</span>
                 <strong>{socialAngleName(angle, index)}</strong>
+                <p><span>角度</span>{angle.category || ['批判', '溫馨', '開心', '分析'][index] || '內容角度'}</p>
                 <p><span>平台</span>{Array.isArray(angle.platforms) ? angle.platforms.join(' / ') : angle.platform || angle.suitablePlatform || 'IG / FB / Threads'}</p>
                 <p><span>觸發點</span>{angle.trigger || angle.psychology || angle.audienceTrigger || '受眾痛點與情緒共鳴'}</p>
                 <p><span>互動理由</span>{angle.reason || angle.shareReason || angle.interactionReason || '具備留言、分享或收藏潛力'}</p>
