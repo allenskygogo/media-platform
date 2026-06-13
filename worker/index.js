@@ -49,6 +49,18 @@ const ECPAY_PROD_URL = 'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5'
 const NEWEBPAY_STAGE_URL = 'https://ccore.newebpay.com/MPG/mpg_gateway'
 const NEWEBPAY_PROD_URL = 'https://core.newebpay.com/MPG/mpg_gateway'
 const NEWEBPAY_VERSION = '2.0'
+const SOCIAL_HUMAN_WRITING_RULE = `社群貼文真人感規則：
+- readyPost 要像真人把一段原始想法修順後發出去，不要像行銷顧問在寫教科書、懶人包或農場文。
+- 必須以使用者提供的原文、對話、事件、人物、場景或情緒為主軸；如果原文有可用的口語句子，至少保留一句或改寫成接近原句的語氣。
+- 開頭不要每次都用「很多人」「你是不是」「你有沒有發現」「真正的問題不是」「最近我發現」這類模板句；優先從一個具體對話、場景、時間點、反應或原文裡最有情緒的句子開始。
+- 不要寫成「不是 A，而是 B」「與其 A，不如 B」「與其...倒不如...」「方向對了，內容才會累積」「精準大於流量」「流量自然會來」「找到突破口」這種萬用金句，除非使用者原文真的這樣講。
+- 不要使用農場文詞：流量密碼、爆款公式、必看、收藏起來、你一定要知道、看完秒懂、逆襲、翻轉人生、品牌經營、行銷策略、精準行銷、社群心法、乾貨滿滿、突破口、打中需求。
+- 不要把原本很像人的內容改成制式教學。每篇貼文只抓一個主情緒或一個主要觀點，講深一點，不要塞很多條建議。
+- CTA 要像真人收尾，不要寫「歡迎留言分享你的經驗」「留言告訴我」「快分享給朋友」這種制式互動句。可以用「如果你也卡在這裡，可以把你的狀況丟給我看」或直接自然收尾。
+- Hashtag 只放 3 到 5 個，必須貼近主題，不要使用 #流量密碼 #品牌經營 #行銷策略 這種泛標籤。
+- Hashtag 不要使用 #精準行銷 #社群心法 #品牌經營 #行銷策略 這種泛標籤；優先使用從原文主題可直接看出的詞，例如 #發文頻率 #內容創作 #社群文案。
+- readyPost 的每一句都要通過檢查：如果這句換到其他主題也能成立，就刪掉或改成跟使用者原文事件有關的句子。
+- 完成後請自己刪掉任何聽起來像 AI、農場文、課綱、講義、模板、雞湯或空泛口號的句子，只留下像本人會發的內容。`
 const SOCIAL_AGENT_SYSTEM_PROMPT = `你是一位深諳受眾心理、社群平台文化、Meta 內容分發邏輯、品牌敘事與轉化設計的頂級社群文案策略師。
 你的任務不是單純把句子寫漂亮，也不是輸出分析報告，而是把使用者貼上的一段對話、想法、文案、產品資訊、活動資訊或長文，優化成適合 Instagram、Facebook、Threads 直接發布的原生貼文。
 
@@ -71,7 +83,9 @@ const SOCIAL_AGENT_SYSTEM_PROMPT = `你是一位深諳受眾心理、社群平�
 - 必要時可加入換行與條列，但不要寫得像公文或 EDM。
 - 不使用設計語言。
 - 內容要能直接複製貼上。
-- 只能回傳 JSON，不要輸出 Markdown，不要輸出 JSON 以外的文字。`
+- 只能回傳 JSON，不要輸出 Markdown，不要輸出 JSON 以外的文字。
+
+${SOCIAL_HUMAN_WRITING_RULE}`
 const SOCIAL_AGENT_USER_PROMPT = `請根據以下輸入執行 TOP LEVEL TRAFFIC 社群貼文 AI。
 
 使用者輸入 JSON：
@@ -177,16 +191,18 @@ const SOCIAL_AGENT_USER_PROMPT = `請根據以下輸入執行 TOP LEVEL TRAFFIC 
 }
 
 平台寫作規則：
-- IG：開頭要快、段落短、重點清楚，優先讓人停留、收藏、分享。readyPost 建議 120-260 字，hashtag 5-8 個。
-- Facebook：可以稍長，重視故事、脈絡、討論延展與留言深度。readyPost 建議 220-500 字，hashtag 3-6 個。
-- Threads：句子更短、更像真人即時觀點，能引發回覆、轉發、引用。readyPost 建議 80-220 字，hashtag 2-5 個。
+- IG：開頭要快、段落短、重點清楚，但不要像懶人包。readyPost 建議 120-260 字，hashtag 3-5 個。
+- Facebook：可以稍長，重視故事、脈絡、討論延展與留言深度。readyPost 建議 220-500 字，hashtag 3-5 個。
+- Threads：句子更短、更像真人即時觀點，能引發回覆、轉發、引用。readyPost 建議 80-220 字，hashtag 2-4 個。
 - CTA 不可使用「留言+1」「按讚分享」這種 engagement bait；要用自然、有意義的互動方向。
 - 不要使用 emoji，除非使用者原始品牌明確需要。
 - 不要輸出「以下是」「我幫你整理」「策略如下」這種前言。
 - 不要輸出像企劃案、EDM 或 AI 模板的文字。
 - 如果使用者貼的是一段對話或粗糙文案，請保留原本最有情緒、最像真人說話的核心句子，再修成更順、更有鉤子的貼文。
 - readyPost 必須把 hashtag 放在文末。
-- 所有文案都要可直接複製貼上。`
+- 所有文案都要可直接複製貼上。
+
+${SOCIAL_HUMAN_WRITING_RULE}`
 const DEFAULT_AI_AGENTS = {
   topics: {
     feature_key: 'topics',
@@ -272,7 +288,7 @@ const DEFAULT_AI_AGENTS = {
     feature_key: 'social',
     name: '社群貼文 Agent',
     model: 'gpt-4.1-mini',
-    temperature: 0.72,
+    temperature: 0.62,
     system_prompt: SOCIAL_AGENT_SYSTEM_PROMPT,
     user_prompt_template: SOCIAL_AGENT_USER_PROMPT,
   },
@@ -428,6 +444,16 @@ function ensureAgentRules(agent) {
     const withRule = text => String(text || '').includes('過程展示=紀錄我給學員訂製進階客腳本全過程')
     ? text
       : `${text || ''}\n\n${PROCESS_TOPIC_RULE}`.trim()
+    return {
+      ...agent,
+      system_prompt: withRule(agent.system_prompt),
+      user_prompt_template: withRule(agent.user_prompt_template),
+    }
+  }
+  if (agent.feature_key === 'social') {
+    const withRule = text => String(text || '').includes('社群貼文真人感規則')
+      ? text
+      : `${text || ''}\n\n${SOCIAL_HUMAN_WRITING_RULE}`.trim()
     return {
       ...agent,
       system_prompt: withRule(agent.system_prompt),
