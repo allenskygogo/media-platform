@@ -49,6 +49,7 @@ const ECPAY_PROD_URL = 'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5'
 const NEWEBPAY_STAGE_URL = 'https://ccore.newebpay.com/MPG/mpg_gateway'
 const NEWEBPAY_PROD_URL = 'https://core.newebpay.com/MPG/mpg_gateway'
 const NEWEBPAY_VERSION = '2.0'
+const AI_AGENT_ADMIN_PASSWORD = '0910858551'
 const SOCIAL_HUMAN_WRITING_RULE = `社群貼文真人感規則：
 - readyPost 要像真人把一段原始想法修順後發出去，不要像行銷顧問在寫教科書、懶人包或農場文。
 - 必須以使用者提供的原文、對話、事件、人物、場景或情緒為主軸；如果原文有可用的口語句子，至少保留一句或改寫成接近原句的語氣。
@@ -649,6 +650,16 @@ export default {
         return await handleAI(request, env)
       }
 
+      // GET /api/ai/agent-health?feature=social → prompt/database alignment health
+      if (path === '/api/ai/agent-health' && request.method === 'GET') {
+        return await handleAIAgentHealth(url, env)
+      }
+
+      // POST /api/admin/ai-agents/sync-default → upsert a built-in default agent into DB
+      if (path === '/api/admin/ai-agents/sync-default' && request.method === 'POST') {
+        return await handleSyncDefaultAIAgent(request, env)
+      }
+
       // POST /api/ai/writing/evaluate → evaluate a student's writing practice against agent knowledge
       if (path === '/api/ai/writing/evaluate' && request.method === 'POST') {
         return await handleWritingEvaluation(request, env)
@@ -1192,6 +1203,100 @@ async function handleAI(request, env) {
   const result = parseAIResult(outputText)
 
   return json({ success: true, result, provider: 'openai', agent: agent.feature_key || feature })
+}
+
+function getAIAgentRuleChecks(agent) {
+  const combined = `${agent?.system_prompt || ''}\n${agent?.user_prompt_template || ''}`
+  return {
+    fourAngles: combined.includes('社群貼文四角度規則'),
+    framework: combined.includes('社群貼文生成框架'),
+    critiquePattern: combined.includes('批判角度範例文法'),
+    xiaohongshuDouyin: combined.includes('xiaohongshu') && combined.includes('douyin'),
+    inputJsonTemplate: combined.includes('{{input_json}}'),
+  }
+}
+
+function allChecksPass(checks) {
+  return Object.values(checks || {}).every(Boolean)
+}
+
+async function handleAIAgentHealth(url, env) {
+  const feature = String(url.searchParams.get('feature') || 'social').trim()
+  if (!feature) return err('Missing AI feature', 400)
+
+  const runtimeAgent = await getAIAgent(feature, env)
+  const runtimeChecks = getAIAgentRuleChecks(runtimeAgent)
+  const rawAgent = await getRawAIAgent(feature, env)
+  const databaseChecks = rawAgent ? getAIAgentRuleChecks(rawAgent) : null
+
+  return json({
+    success: true,
+    feature,
+    hasDatabaseAgent: Boolean(rawAgent),
+    runtime: {
+      name: runtimeAgent?.name || null,
+      enabled: runtimeAgent?.enabled ?? true,
+      checks: runtimeChecks,
+      matched: allChecksPass(runtimeChecks),
+    },
+    database: rawAgent ? {
+      name: rawAgent.name || null,
+      enabled: rawAgent.enabled,
+      updated_at: rawAgent.updated_at || null,
+      checks: databaseChecks,
+      matched: allChecksPass(databaseChecks),
+    } : null,
+  })
+}
+
+async function handleSyncDefaultAIAgent(request, env) {
+  const password = request.headers.get('x-agent-admin-password') || ''
+  if (password !== AI_AGENT_ADMIN_PASSWORD) return err('Unauthorized', 401)
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service is not configured', 503)
+  }
+
+  const body = await request.json().catch(() => ({}))
+  const feature = String(body.feature || 'social').trim()
+  const agent = DEFAULT_AI_AGENTS[feature]
+  if (!agent) return err('Unsupported default agent', 400)
+
+  const payload = {
+    feature_key: agent.feature_key,
+    name: agent.name,
+    description: agent.description || null,
+    system_prompt: agent.system_prompt,
+    user_prompt_template: agent.user_prompt_template,
+    output_schema: agent.output_schema || {},
+    model: agent.model || 'gpt-4.1-mini',
+    temperature: Number(agent.temperature ?? 0.85),
+    required_plan: agent.required_plan || 'trial',
+    enabled: agent.enabled !== false,
+    notes: `Synced from Worker default on ${new Date().toISOString()}`,
+    updated_at: new Date().toISOString(),
+  }
+
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/ai_agents`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=representation',
+    },
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    return err(data?.message || data?.error || 'Failed to sync default AI agent', response.status)
+  }
+
+  return json({
+    success: true,
+    feature,
+    synced: true,
+    checks: getAIAgentRuleChecks(payload),
+  })
 }
 
 async function handleWritingEvaluation(request, env) {
@@ -2199,6 +2304,31 @@ async function getAIAgent(feature, env) {
     return ensureAgentRules(Array.isArray(data) && data[0] ? data[0] : fallback)
   } catch (_) {
     return ensureAgentRules(fallback)
+  }
+}
+
+async function getRawAIAgent(feature, env) {
+  const key = env.SUPABASE_SERVICE_ROLE_KEY || null
+  if (!feature || !env.SUPABASE_URL || !key) return null
+
+  try {
+    const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/ai_agents`)
+    url.searchParams.set('feature_key', `eq.${feature}`)
+    url.searchParams.set('select', 'feature_key,name,system_prompt,user_prompt_template,enabled,updated_at')
+    url.searchParams.set('limit', '1')
+
+    const response = await fetch(url.toString(), {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        Accept: 'application/json',
+      },
+    })
+    const data = await response.json().catch(() => [])
+    if (!response.ok) return null
+    return Array.isArray(data) && data[0] ? data[0] : null
+  } catch (_) {
+    return null
   }
 }
 

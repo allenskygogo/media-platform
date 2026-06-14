@@ -43,6 +43,39 @@ const EMPTY_AGENT = {
   notes: '',
 }
 
+function buildAgentTestInput(featureKey, rawInput) {
+  const text = String(rawInput || '').trim()
+  if (featureKey === 'social') {
+    return {
+      task: 'generate',
+      source: text || '平台：IG。風格：批判脆版。目標受眾：正在減肥的人。主題：批判速效減肥產品，提醒大家不要被30天瘦20公斤、不用運動不用節食這類廣告收割。',
+      selectedAngle: {
+        category: '批判',
+        style: '批判脆版',
+        name: '戳破速效產品話術',
+        platforms: ['IG', 'Facebook', 'Threads'],
+        targetAudience: '正在減肥的人',
+        trigger: '被速效承諾和焦慮廣告轟炸',
+        reason: '直接戳破假承諾，讓讀者覺得被保護，也願意轉給朋友',
+      },
+    }
+  }
+  return text
+}
+
+function getAgentHealthChecks(agent) {
+  if (!agent || agent.feature_key !== 'social') return []
+  const systemPrompt = String(agent.system_prompt || '')
+  const userPrompt = String(agent.user_prompt_template || '')
+  return [
+    ['四角度', systemPrompt.includes('社群貼文四角度規則') || userPrompt.includes('社群貼文四角度規則')],
+    ['生成框架', systemPrompt.includes('社群貼文生成框架') || userPrompt.includes('社群貼文生成框架')],
+    ['批判文法', systemPrompt.includes('批判角度範例文法') || userPrompt.includes('批判角度範例文法')],
+    ['小紅書/抖音', userPrompt.includes('xiaohongshu') && userPrompt.includes('douyin')],
+    ['input_json 模板', userPrompt.includes('{{input_json}}')],
+  ]
+}
+
 function stringifySchema(value) {
   try {
     return JSON.stringify(value || {}, null, 2)
@@ -77,6 +110,7 @@ export default function AIAgentsAdmin() {
   const [error, setError] = useState('')
   const [testInput, setTestInput] = useState('健身教練')
   const [testResult, setTestResult] = useState('')
+  const [agentHealth, setAgentHealth] = useState(null)
 
   const selectedAgent = useMemo(
     () => agents.find(agent => agent.feature_key === selectedKey) || null,
@@ -102,11 +136,15 @@ export default function AIAgentsAdmin() {
     setTestResult('')
     setError('')
     setMessage('')
+    setTestInput(selectedKey === 'social'
+      ? '平台：IG。風格：批判脆版。目標受眾：正在減肥的人。主題：批判速效減肥產品，提醒大家不要被30天瘦20公斤、不用運動不用節食這類廣告收割。'
+      : '健身教練')
   }, [selectedAgent, selectedKey])
 
   useEffect(() => {
     if (!unlocked) return
     loadKnowledgeFiles(selectedKey)
+    loadAgentHealth(selectedKey)
   }, [selectedKey, unlocked])
 
   const flash = (text, type = 'success') => {
@@ -176,6 +214,17 @@ export default function AIAgentsAdmin() {
       return
     }
     setKnowledgeFiles(data || [])
+  }
+
+  async function loadAgentHealth(featureKey = selectedKey) {
+    setAgentHealth(null)
+    try {
+      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/ai/agent-health?feature=${encodeURIComponent(featureKey)}`)
+      const data = await response.json().catch(() => ({}))
+      if (response.ok && data.success) setAgentHealth(data)
+    } catch {
+      setAgentHealth(null)
+    }
   }
 
   const updateForm = (key, value) => {
@@ -254,7 +303,7 @@ export default function AIAgentsAdmin() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           feature: form.feature_key,
-          input: testInput,
+          input: buildAgentTestInput(form.feature_key, testInput),
           userPlan: form.required_plan,
         }),
       })
@@ -478,6 +527,56 @@ export default function AIAgentsAdmin() {
 
                 <label className="form-group">
                   <span className="form-label">系統指令 system_prompt</span>
+                  {getAgentHealthChecks(form).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                      {getAgentHealthChecks(form).map(([label, ok]) => (
+                        <span
+                          key={label}
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 800,
+                            color: ok ? '#16a34a' : '#dc2626',
+                            border: `1px solid ${ok ? '#86efac' : '#fecaca'}`,
+                            background: ok ? '#f0fdf4' : '#fef2f2',
+                            borderRadius: 999,
+                            padding: '4px 8px',
+                          }}
+                        >
+                          {ok ? '已匹配' : '缺少'}：{label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {form.feature_key === 'social' && agentHealth && (
+                    <div style={{ marginBottom: 10, display: 'grid', gap: 8 }}>
+                      {[
+                        ['資料庫 Agent', agentHealth.database],
+                        ['Worker 實際執行', agentHealth.runtime],
+                      ].map(([label, health]) => (
+                        <div
+                          key={label}
+                          style={{
+                            border: '1px solid var(--gray-200)',
+                            borderRadius: 10,
+                            padding: '8px 10px',
+                            background: 'var(--gray-50)',
+                          }}
+                        >
+                          <strong style={{ fontSize: 13 }}>{label}</strong>
+                          <span style={{ marginLeft: 8, fontSize: 12, color: health?.matched ? '#16a34a' : '#dc2626', fontWeight: 800 }}>
+                            {health?.matched ? '已匹配' : '未完全匹配'}
+                          </span>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                            {Object.entries(health?.checks || {}).map(([key, ok]) => (
+                              <span key={key} style={{ fontSize: 11, color: ok ? '#15803d' : '#b91c1c' }}>
+                                {ok ? '✓' : '×'} {key}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <textarea
                     className="form-input ai-agent-textarea xl"
                     value={form.system_prompt}
@@ -571,7 +670,7 @@ export default function AIAgentsAdmin() {
                 <div className="ai-agent-test">
                   <div>
                     <h3>測試輸出</h3>
-                    <p>儲存後可用這裡確認 Worker 是否使用新版設定。</p>
+                    <p>{form.feature_key === 'social' ? '社群貼文會用正式前台格式測試：task/source/selectedAngle。' : '儲存後可用這裡確認 Worker 是否使用新版設定。'}</p>
                   </div>
                   <div className="ai-agent-test-row">
                     <input className="form-input" value={testInput} onChange={e => setTestInput(e.target.value)} placeholder="例：健身教練" />

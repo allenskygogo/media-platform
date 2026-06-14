@@ -2971,6 +2971,13 @@ function SocialPage() {
   const shownSections = canSeeAll ? visibleSections : visibleSections.slice(0, 2)
   const hiddenSections = canSeeAll ? [] : visibleSections.slice(2)
 
+  useEffect(() => {
+    if (!normalizedResult?.platforms) return
+    if (visibleSocialTabs.length && !visibleSocialTabs.some(tab => tab.id === activeTab)) {
+      setActiveTab(visibleSocialTabs[0].id)
+    }
+  }, [normalizedResult, visibleSocialTabs, activeTab])
+
   const handleGenerateAngles = async () => {
     if (!input.trim() || generatingAngles) return
     setGeneratingAngles(true)
