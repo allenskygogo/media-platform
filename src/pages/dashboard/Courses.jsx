@@ -89,7 +89,7 @@ export default function CoursesPage() {
             const ok = accessible(course)
             return (
               <div key={course.id} className={`course-card ${!ok ? 'locked' : ''}`}
-                onClick={() => ok && navigate(`/dashboard/courses/${course.id}`)}>
+                onClick={() => navigate(`/dashboard/courses/${course.id}`)}>
                 <div
                   className={`course-thumb course-thumb-${course.tier}`}
                   style={course.coverUrl ? { backgroundImage:`url(${course.coverUrl})`, backgroundSize:'cover', backgroundPosition:'center' } : undefined}
@@ -101,7 +101,7 @@ export default function CoursesPage() {
                   <div className="course-meta">
                     <span className={`badge badge-${course.tier}`}>{courseLevelText(course)}</span>
                     <span className="tag">{course.category}</span>
-                    {!ok && <span className="tag" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }}>🔒 {LOCK_LABEL[course.accessLevel] || '需升級'}</span>}
+                    {!ok && <span className="tag" style={{ background: 'var(--danger-light)', color: 'var(--danger)' }}>🔒 {LOCK_LABEL[course.accessLevel] || '可預覽目錄'}</span>}
                   </div>
                   <h3 className="course-title">{course.title}</h3>
                   <p className="course-desc">{course.description}</p>

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
-  getCourses, canAccessCourse, TIER_META,
+  getCourses, canAccessCourse,
   getLessonProgress, getLatestHomework, getHomeworkSpec, parseDurationToSec,
 } from '../../data/mockData'
 import { getCourseProgressRecords, saveCourseProgressRecord } from '../../services/courseProgress'
@@ -241,30 +241,16 @@ export default function CourseDetail() {
   )
 
   const ok = canAccessCourse(currentUser.tier, courseAccessLevels(course))
-  if (!ok) {
-    const meta = TIER_META[course.accessLevel] || TIER_META.standard
-    return (
-      <div className="page-content">
-        <button className="btn btn-ghost btn-sm" style={{ marginBottom:20 }} onClick={() => navigate(-1)}>← 返回</button>
-        <div className="card" style={{ maxWidth:560, margin:'0 auto', textAlign:'center' }}>
-          <div className="card-body" style={{ padding:48, display:'flex', flexDirection:'column', alignItems:'center', gap:16 }}>
-            <span style={{ fontSize:56 }}>🔒</span>
-            <h2 style={{ fontSize:20, fontWeight:700 }}>此課程需要{meta.label}</h2>
-            <p style={{ color:'var(--gray-500)', fontSize:14, maxWidth:360 }}>
-              《{course.title}》需要「{meta.label}」以上方案才能觀看。
-            </p>
-            <button className="btn btn-primary btn-lg" disabled>升級即將開放</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   const needsHomework = courseNeedsHomework(course, currentUser.tier)
   const needsSequentialWatch = courseNeedsSequentialWatch(course)
   const activeLesson  = course.lessons.find(l => l.id === activeLessonId) || null
 
   const handleLessonClick = (lesson, lessonIdx) => {
+    if (!ok) {
+      setActiveLessonId(lesson.id)
+      setView('player')
+      return
+    }
     if (!isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, lessonIdx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)) return
     setActiveLessonId(lesson.id)
     // If already completed and replaying, go straight to player in free mode
@@ -389,18 +375,56 @@ export default function CourseDetail() {
             </div>
           )}
 
+          {view === 'info' && !ok && (
+            <div className="course-upgrade-banner">
+              <div>
+                <span className="course-preview-kicker">可預覽目錄</span>
+                <h2>這門課屬於頂流達人完整系統課程</h2>
+                <p>你可以先看課程介紹與章節安排。升級後即可觀看影片，把體驗課的選題方向延伸成完整內容產出流程。</p>
+              </div>
+              <button className="btn btn-primary" onClick={() => navigate('/dashboard/profile')}>
+                了解頂流達人方案
+              </button>
+            </div>
+          )}
+
           {/* Player */}
           {view === 'player' && activeLesson && (
             <div style={{ marginBottom:24 }}>
-              <LessonPlayer
-                lesson={activeLesson}
-                courseId={course.id}
-                userId={currentUser.id}
-                initialProgress={progressByLesson[activeLesson.id]}
-                onProgressChange={handleProgressChange}
-                onComplete={handlePlayerComplete}
-                onClose={handleClose}
-              />
+              {ok ? (
+                <LessonPlayer
+                  lesson={activeLesson}
+                  courseId={course.id}
+                  userId={currentUser.id}
+                  initialProgress={progressByLesson[activeLesson.id]}
+                  onProgressChange={handleProgressChange}
+                  onComplete={handlePlayerComplete}
+                  onClose={handleClose}
+                />
+              ) : (
+                <div className="course-preview-lock">
+                  <div className="course-preview-lock-media">
+                    <span>🔒</span>
+                    <strong>{activeLesson.title}</strong>
+                    <p>{activeLesson.duration} · 章節內容可預覽，影片需升級後觀看</p>
+                  </div>
+                  <div className="course-preview-lock-body">
+                    <span className="course-preview-kicker">頂流達人解鎖</span>
+                    <h2>想把體驗課學到的方向，變成完整自媒體獲客系統？</h2>
+                    <p>
+                      升級頂流達人後可觀看完整系統課程，從選題、腳本、拍攝到內容產出流程一步一步做起來。
+                    </p>
+                    <div className="course-preview-points">
+                      <span>完整課程影片</span>
+                      <span>系統化腳本訓練</span>
+                      <span>內容產出方法</span>
+                    </div>
+                    <button className="btn btn-primary btn-lg" onClick={() => navigate('/dashboard/profile')}>
+                      了解頂流達人方案
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -433,7 +457,7 @@ export default function CourseDetail() {
                 {course.lessons.map((lesson, idx) => {
                   const isActive  = activeLessonId === lesson.id
                   const statusCfg = lessonStatusIcon(currentUser.id, course.id, course.lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
-                  const locked    = !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
+                  const locked    = ok && !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
 
                   return (
                     <div
@@ -462,6 +486,11 @@ export default function CourseDetail() {
                           {statusCfg && !isActive && (
                             <span style={{ marginLeft:6, fontSize:11, color: statusCfg.color, fontWeight:600 }}>
                               · {statusCfg.label}
+                            </span>
+                          )}
+                          {!ok && !isActive && (
+                            <span style={{ marginLeft:6, fontSize:11, color:'var(--gray-400)', fontWeight:600 }}>
+                              · 需升級觀看
                             </span>
                           )}
                         </div>
@@ -499,7 +528,7 @@ export default function CourseDetail() {
               <div className="lesson-list" style={{ padding:'8px 0' }}>
                 {course.lessons.map((lesson, idx) => {
                   const statusCfg = lessonStatusIcon(currentUser.id, course.id, course.lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
-                  const locked    = !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
+                  const locked    = ok && !isLessonUnlockedByProgress(currentUser.id, course.id, course.lessons, idx, needsSequentialWatch, needsHomework, progressByLesson, specByLesson, homeworkByLesson)
                   const prog      = lessonProgress(currentUser.id, course.id, lesson.id, progressByLesson)
 
                   return (
@@ -519,6 +548,11 @@ export default function CourseDetail() {
                           {statusCfg && (
                             <span style={{ color: statusCfg.color, fontWeight:600, fontSize:11 }}>
                               · {statusCfg.label}
+                            </span>
+                          )}
+                          {!ok && (
+                            <span style={{ color:'var(--gray-400)', fontWeight:600, fontSize:11 }}>
+                              · 需升級觀看
                             </span>
                           )}
                           {/* Progress bar for partially-watched lessons */}
