@@ -151,20 +151,60 @@ const SCRIPT_TYPES = [
   { id: 'process',   label: '曬過程', Icon: Video         },
 ]
 
-const PUBLIC_AI_TOOL_IDS = new Set(['topics', 'material', 'social'])
 const PUBLIC_SCRIPT_TYPE_IDS = new Set(['knowledge', 'opinion', 'story', 'process'])
 const FULL_AI_TEST_EMAILS = new Set(['test-ai-pay@xgfx-tw.com', 'allen@xgfx-tw.com'])
+
+const AI_TOOL_ACCESS = {
+  topics: { minTier: 'trial', trialLabel: '體驗使用選題', unlockedLabel: '可使用' },
+  material: { minTier: 'standard', lockedLabel: '頂流達人解鎖', unlockedLabel: '可使用' },
+  social: { minTier: 'standard', lockedLabel: '頂流達人解鎖', unlockedLabel: '可使用' },
+  trending: { minTier: 'standard', lockedLabel: '頂流達人解鎖', unlockedLabel: '可使用' },
+  planning: { minTier: 'advanced', lockedLabel: '頂流私塾解鎖', unlockedLabel: '可使用' },
+  analysis: { minTier: 'advanced', lockedLabel: '頂流私塾解鎖', unlockedLabel: '可使用' },
+  livestream: { minTier: 'advanced', lockedLabel: '頂流私塾解鎖', unlockedLabel: '可使用' },
+  chat: { minTier: 'advanced', lockedLabel: '頂流私塾解鎖', unlockedLabel: '可使用' },
+  benchmark: { minTier: 'advanced', lockedLabel: '頂流私塾解鎖', unlockedLabel: '可使用' },
+}
 
 function hasFullAITestAccess(user) {
   return FULL_AI_TEST_EMAILS.has(String(user?.email || '').trim().toLowerCase())
 }
 
 function canUseAITool(id, user) {
-  return PUBLIC_AI_TOOL_IDS.has(id) || hasFullAITestAccess(user)
+  if (hasFullAITestAccess(user)) return true
+  const access = AI_TOOL_ACCESS[id]
+  if (!access) return false
+  const tier = deriveAITier(user)
+  if (access.minTier === 'trial') return true
+  if (access.minTier === 'standard') return tier === 'standard' || tier === 'advanced'
+  if (access.minTier === 'advanced') return tier === 'advanced'
+  return false
 }
 
 function canUseScriptType(id, user) {
   return PUBLIC_SCRIPT_TYPE_IDS.has(id) || hasFullAITestAccess(user)
+}
+
+function getAIToolStatusLabel(id, user) {
+  const access = AI_TOOL_ACCESS[id]
+  if (!access) return '即將開放'
+  if (!canUseAITool(id, user)) return access.lockedLabel || '升級解鎖'
+  if (id === 'topics' && deriveAITier(user) === 'trial') return access.trialLabel
+  return access.unlockedLabel || '可使用'
+}
+
+function ToolStatusLabel({ id, user }) {
+  const locked = !canUseAITool(id, user)
+  return (
+    <span style={{
+      marginLeft: 'auto',
+      fontSize: 11,
+      color: locked ? 'var(--gray-500)' : '#60a5fa',
+      flexShrink: 0,
+    }}>
+      {getAIToolStatusLabel(id, user)}
+    </span>
+  )
 }
 
 function ComingSoonLabel() {
@@ -3887,7 +3927,7 @@ function MaterialPage() {
 
 function TrendingPage() {
   const { currentUser } = useAuth()
-  const canSeeAll = deriveAITier(currentUser) === 'advanced'
+  const canSeeAll = deriveAITier(currentUser) !== 'trial'
 
   const [trendSet,    setTrendSet]    = useState(0)
   const [selectedIdx, setSelectedIdx] = useState(null)
@@ -4695,7 +4735,7 @@ export default function AITools() {
               >
                 <Icon size={15} strokeWidth={1.7} style={{ flexShrink: 0 }} />
                 <span className="ait-nav-flat-label">{label}</span>
-                {locked && <ComingSoonLabel />}
+                <ToolStatusLabel id={id} user={currentUser} />
               </button>
               )
             })}
