@@ -4,6 +4,11 @@ import { buildManualPaymentMessage, openLineOfficial } from '../utils/manualPaym
 export default function ManualPaymentModal({
   planName,
   amount,
+  amountLabel = '',
+  email = '',
+  defaultName = '',
+  defaultPhone = '',
+  requireContact = false,
   onClose,
   title = 'Line@ 匯款購買',
   kicker = 'Line@ Payment',
@@ -13,12 +18,33 @@ export default function ManualPaymentModal({
   primaryLabel = '複製並前往 Line@',
 }) {
   const [copied, setCopied] = useState(false)
+  const [name, setName] = useState(defaultName)
+  const [phone, setPhone] = useState(defaultPhone)
+  const [fieldError, setFieldError] = useState('')
+  const cleanPhone = String(phone || '').trim()
+  const cleanName = String(name || '').trim()
+  const contactReady = !requireContact || (cleanName.length >= 2 && cleanPhone.length >= 8)
 
   const message = useMemo(() => (
-    customMessage || buildManualPaymentMessage({ planName, amount })
-  ), [amount, customMessage, planName])
+    customMessage || buildManualPaymentMessage({ planName, amount, name: cleanName, email, phone: cleanPhone })
+  ), [amount, cleanName, cleanPhone, customMessage, email, planName])
+
+  const validateContact = () => {
+    if (!requireContact) return true
+    if (cleanName.length < 2) {
+      setFieldError('請填寫真實姓名，至少 2 個字。')
+      return false
+    }
+    if (cleanPhone.length < 8) {
+      setFieldError('請填寫可聯繫的電話。')
+      return false
+    }
+    setFieldError('')
+    return true
+  }
 
   const copyMessage = async () => {
+    if (!validateContact()) return false
     try {
       await navigator.clipboard.writeText(message)
       setCopied(true)
@@ -31,7 +57,8 @@ export default function ManualPaymentModal({
   }
 
   const handleLineClick = async () => {
-    await copyMessage()
+    const copiedOk = await copyMessage()
+    if (!copiedOk) return
     openLineOfficial()
   }
 
@@ -53,8 +80,42 @@ export default function ManualPaymentModal({
               <strong>{planName}</strong>
               <p>{description}</p>
             </div>
-            <div className="sp-checkout-price">${amount}</div>
+            <div className="sp-checkout-price">{amountLabel || (amount ? `NT$${amount}` : '')}</div>
           </div>
+
+          {requireContact && (
+            <div className="manual-payment-fields">
+              <div className="form-group">
+                <label className="form-label">真實姓名 <span>*</span></label>
+                <input
+                  className="form-input"
+                  value={name}
+                  onChange={event => {
+                    setName(event.target.value)
+                    setFieldError('')
+                    setCopied(false)
+                  }}
+                  placeholder="請填寫真實姓名"
+                  autoComplete="name"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">聯絡電話 <span>*</span></label>
+                <input
+                  className="form-input"
+                  value={phone}
+                  onChange={event => {
+                    setPhone(event.target.value)
+                    setFieldError('')
+                    setCopied(false)
+                  }}
+                  placeholder="例：0912-345-678"
+                  inputMode="tel"
+                  autoComplete="tel"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="sp-checkout-note">
             <strong>{messageLabel}</strong>
@@ -66,14 +127,15 @@ export default function ManualPaymentModal({
             />
           </div>
 
+          {fieldError && <div className="auth-alert error">{fieldError}</div>}
           {copied && <div className="auth-alert success">已複製文字，可以貼到 Line@ 了。</div>}
         </div>
 
         <div className="modal-footer">
-          <button type="button" className="btn btn-secondary" onClick={copyMessage}>
+          <button type="button" className="btn btn-secondary" onClick={copyMessage} disabled={!contactReady}>
             {copied ? '已複製' : '複製文字'}
           </button>
-          <button type="button" className="btn btn-primary" onClick={handleLineClick}>
+          <button type="button" className="btn btn-primary" onClick={handleLineClick} disabled={!contactReady}>
             {primaryLabel}
           </button>
         </div>

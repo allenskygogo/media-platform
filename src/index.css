@@ -3522,6 +3522,14 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   margin: 0;
   line-height: 1.7;
 }
+.manual-payment-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.manual-payment-fields .form-label span {
+  color: #f87171;
+}
 .manual-payment-message {
   margin-top: 10px;
   min-height: 170px;
@@ -6651,6 +6659,9 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
     flex-direction: column;
   }
   .sp-checkout-grid {
+    grid-template-columns: 1fr;
+  }
+  .manual-payment-fields {
     grid-template-columns: 1fr;
   }
   .sp-checkout-price {

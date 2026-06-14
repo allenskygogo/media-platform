@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { TIER_META } from '../../data/mockData'
 import { plans, planComparisonRows, getPlanByTier, getNextPlanByTier } from '../../data/plans'
+import ManualPaymentModal from '../../components/ManualPaymentModal'
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
@@ -160,10 +161,12 @@ function PlanCheckoutPreview({
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [manualMonthlyOpen, setManualMonthlyOpen] = useState(false)
   const price = planPriceDetails[plan.id]
   const isQuote = price?.kind === 'quote'
   const isAnnualPlan = price?.kind === 'annual'
   const amount = getCheckoutAmount(plan.id, billingCycle)
+  const monthlyAmount = price?.monthly?.replace(/^月付\s*/, '') || ''
 
   const startUpgradePayment = async () => {
     if (loading) return
@@ -260,10 +263,10 @@ function PlanCheckoutPreview({
                 <button
                   type="button"
                   className="billing-option"
-                  disabled
+                  onClick={() => setManualMonthlyOpen(true)}
                 >
                   <strong>{price.monthly}</strong>
-                  <span>分期請聯繫官方帳號 @xgfx</span>
+                  <span>點選複製報名訊息，前往官方 Line@ 辦理月付</span>
                 </button>
                 <button
                   type="button"
@@ -373,6 +376,23 @@ function PlanCheckoutPreview({
           <p>正式版會在付款成功後自動升級為 {plan.name}。目前是前端預覽，因此沒有扣款，也沒有修改會員資料。</p>
           <button type="button" className="checkout-next-btn" onClick={onClose}>回到方案比較</button>
         </div>
+      )}
+
+      {manualMonthlyOpen && (
+        <ManualPaymentModal
+          planName={`${plan.name}｜月付`}
+          amount={monthlyAmount}
+          amountLabel={price.monthly}
+          email={currentUser?.email}
+          defaultName={currentUser?.name || ''}
+          requireContact
+          title="Line@ 月付報名"
+          kicker="Monthly Plan"
+          description="月付需由官方 Line@ 協助確認資料與開通。請填寫真實姓名與電話，複製報名訊息後貼給客服。"
+          messageLabel="請複製這段報名訊息貼到 Line@"
+          primaryLabel="複製並前往官方 Line"
+          onClose={() => setManualMonthlyOpen(false)}
+        />
       )}
     </section>
   )
