@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-const FALLBACK_SUPABASE_URL = 'https://otqhrpbxhxkrhrnjqbba.supabase.co'
+const FALLBACK_SUPABASE_URL = 'https://fgxpuojhzwpndkzjuriq.supabase.co'
 
 const url = import.meta.env.VITE_SUPABASE_URL  || FALLBACK_SUPABASE_URL
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
