@@ -20,8 +20,8 @@ const NAV_TOOLS = [
   { id: 'topics',     label: '爆款選題腳本', Icon: TrendingUp },
   { id: 'material',   label: '素材靈感', Icon: Bookmark   },
   { id: 'social',     label: '社群貼文', Icon: Share2     },
-  { id: 'planning',   label: '企劃定位', Icon: Target     },
   { id: 'trending',   label: '流量熱點', Icon: Flame      },
+  { id: 'planning',   label: '企劃定位', Icon: Target     },
   { id: 'analysis',   label: '爆款解析', Icon: Search     },
   { id: 'livestream', label: '直播話術', Icon: Mic        },
   { id: 'chat',       label: '頂流助理', Icon: Bot        },
@@ -2949,7 +2949,7 @@ function formatStrategy(strategy) {
 
 function SocialPage() {
   const { currentUser } = useAuth()
-  const canSeeAll = deriveAITier(currentUser) !== 'trial'
+  const canSeeAll = true
 
   const [input,           setInput]           = useState('')
   const [angles,          setAngles]          = useState([])
@@ -3640,8 +3640,7 @@ function MaterialCard({ item, onDelete }) {
 }
 
 function MaterialPage() {
-  const { currentUser } = useAuth()
-  const canSeeAll = deriveAITier(currentUser) === 'advanced'
+  const canSeeAll = true
 
   const [folders, setFolders] = useState(() => {
     try {
