@@ -153,12 +153,11 @@ const SCRIPT_TYPES = [
 
 const PUBLIC_SCRIPT_TYPE_IDS = new Set(['knowledge', 'opinion', 'story', 'process'])
 const FULL_AI_TEST_EMAILS = new Set(['test-ai-pay@xgfx-tw.com', 'allen@xgfx-tw.com'])
-const OPEN_AI_TOOL_IDS = new Set(['topics', 'material', 'social'])
 
 const AI_TOOL_ACCESS = {
   topics: { unlockedLabel: '可使用' },
-  material: { unlockedLabel: '可使用' },
-  social: { unlockedLabel: '可使用' },
+  material: { lockedLabel: '頂流達人解鎖', unlockedLabel: '可使用' },
+  social: { lockedLabel: '頂流達人解鎖', unlockedLabel: '可使用' },
   trending: { lockedLabel: '即將開放' },
   planning: { lockedLabel: '即將開放' },
   analysis: { lockedLabel: '即將開放' },
@@ -172,7 +171,10 @@ function hasFullAITestAccess(user) {
 }
 
 function canUseAITool(id, user) {
-  return OPEN_AI_TOOL_IDS.has(id)
+  const tier = deriveAITier(user)
+  if (id === 'topics') return true
+  if (id === 'material' || id === 'social') return tier !== 'trial'
+  return false
 }
 
 function canUseScriptType(id, user) {
@@ -210,8 +212,17 @@ function ComingSoonLabel() {
 
 function getAITierInfo(user) {
   const tier = deriveAITier(user)
+  if (tier === 'trial') {
+    return {
+      name: '體驗學生',
+      count: 1,
+      total: NAV_TOOLS.length,
+      summary: '目前只開放爆款選題。腳本內容僅可預覽前兩行，完整腳本需升級頂流達人。',
+      next: '升級頂流達人可解鎖完整腳本、素材靈感與社群貼文。',
+    }
+  }
   const base = {
-    count: OPEN_AI_TOOL_IDS.size,
+    count: 3,
     total: NAV_TOOLS.length,
     summary: '目前開放爆款選題腳本、素材靈感與社群貼文。',
     next: '流量熱點、企劃定位、爆款解析、直播話術、頂流助理與對標分析即將開放。',
@@ -228,10 +239,7 @@ function getAITierInfo(user) {
       name: '頂流達人',
     }
   }
-  return {
-    ...base,
-    name: '體驗學生',
-  }
+  return { ...base, name: '頂流達人' }
 }
 
 function AITierNotice({ user }) {
@@ -1429,37 +1437,40 @@ function Spinner() {
   )
 }
 
-function splitScriptPreview(body, maxSentences = 2) {
-  const text = String(body || '').trim()
-  if (!text) return { preview: '', hidden: '' }
+function splitScriptByLines(sections, maxLines = 2) {
+  const previewSections = []
+  const hiddenSections = []
+  let remainingPreviewLines = maxLines
 
-  const sentenceEnd = /[。！？!?]\s*/g
-  let match
-  let count = 0
-  let splitAt = -1
-  while ((match = sentenceEnd.exec(text)) !== null) {
-    count += 1
-    if (count >= maxSentences) {
-      splitAt = sentenceEnd.lastIndex
-      break
-    }
-  }
+  sections.forEach(section => {
+    const rawBody = String(section?.body || '').trim()
+    if (!rawBody) return
+    const lines = rawBody
+      .split(/\n+/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .flatMap(line => {
+        if (line.length <= 70) return [line]
+        const sentenceParts = line.split(/(?<=[。！？!?])\s*/).map(part => part.trim()).filter(Boolean)
+        return sentenceParts.length > 1 ? sentenceParts : [line]
+      })
 
-  if (splitAt < 0) {
-    const lines = text.split(/\n+/).map(line => line.trim()).filter(Boolean)
-    if (lines.length > maxSentences) {
-      return {
-        preview: lines.slice(0, maxSentences).join('\n'),
-        hidden: lines.slice(maxSentences).join('\n'),
+    if (remainingPreviewLines > 0) {
+      const previewLines = lines.slice(0, remainingPreviewLines)
+      const restLines = lines.slice(remainingPreviewLines)
+      if (previewLines.length > 0) {
+        previewSections.push({ ...section, body: previewLines.join('\n') })
+        remainingPreviewLines -= previewLines.length
       }
+      if (restLines.length > 0) {
+        hiddenSections.push({ ...section, body: restLines.join('\n') })
+      }
+    } else {
+      hiddenSections.push(section)
     }
-    return { preview: text, hidden: '' }
-  }
+  })
 
-  return {
-    preview: text.slice(0, splitAt).trim(),
-    hidden: text.slice(splitAt).trim(),
-  }
+  return { previewSections, hiddenSections }
 }
 
 function ScriptSection({ section, index }) {
@@ -1478,24 +1489,17 @@ function ScriptPreviewGate({ script, canSeeAll, onUpgrade, upgradeText }) {
     return sections.map((sec, i) => <ScriptSection key={i} section={sec} index={i} />)
   }
 
-  const first = sections[0] || null
-  const second = sections[1] || null
-  const secondPreview = second ? splitScriptPreview(second.body, 2) : null
-  const blurredSections = [
-    ...(secondPreview?.hidden ? [{ ...second, body: secondPreview.hidden }] : []),
-    ...sections.slice(2),
-  ]
+  const { previewSections, hiddenSections } = splitScriptByLines(sections, 2)
 
   return (
     <>
-      {first && <ScriptSection section={first} index="first" />}
-      {second && secondPreview?.preview && (
-        <ScriptSection section={{ ...second, body: secondPreview.preview }} index="second-preview" />
-      )}
-      {blurredSections.length > 0 && (
+      {previewSections.map((sec, i) => (
+        <ScriptSection key={i} section={sec} index={`preview-${i}`} />
+      ))}
+      {hiddenSections.length > 0 && (
         <div className="ait-blur-zone">
           <div className="ait-blur-inner">
-            {blurredSections.map((sec, i) => (
+            {hiddenSections.map((sec, i) => (
               <ScriptSection key={i} section={sec} index={`blur-${i}`} />
             ))}
           </div>
