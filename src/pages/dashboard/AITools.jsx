@@ -153,17 +153,18 @@ const SCRIPT_TYPES = [
 
 const PUBLIC_SCRIPT_TYPE_IDS = new Set(['knowledge', 'opinion', 'story', 'process'])
 const FULL_AI_TEST_EMAILS = new Set(['test-ai-pay@xgfx-tw.com', 'allen@xgfx-tw.com'])
+const OPEN_AI_TOOL_IDS = new Set(['topics', 'material', 'social'])
 
 const AI_TOOL_ACCESS = {
-  topics: { minTier: 'trial', trialLabel: '體驗使用選題', unlockedLabel: '可使用' },
-  material: { minTier: 'standard', lockedLabel: '頂流達人解鎖', unlockedLabel: '可使用' },
-  social: { minTier: 'standard', lockedLabel: '頂流達人解鎖', unlockedLabel: '可使用' },
-  trending: { minTier: 'standard', lockedLabel: '頂流達人解鎖', unlockedLabel: '可使用' },
-  planning: { minTier: 'advanced', lockedLabel: '頂流私塾解鎖', unlockedLabel: '可使用' },
-  analysis: { minTier: 'advanced', lockedLabel: '頂流私塾解鎖', unlockedLabel: '可使用' },
-  livestream: { minTier: 'advanced', lockedLabel: '頂流私塾解鎖', unlockedLabel: '可使用' },
-  chat: { minTier: 'advanced', lockedLabel: '頂流私塾解鎖', unlockedLabel: '可使用' },
-  benchmark: { minTier: 'advanced', lockedLabel: '頂流私塾解鎖', unlockedLabel: '可使用' },
+  topics: { unlockedLabel: '可使用' },
+  material: { unlockedLabel: '可使用' },
+  social: { unlockedLabel: '可使用' },
+  trending: { lockedLabel: '即將開放' },
+  planning: { lockedLabel: '即將開放' },
+  analysis: { lockedLabel: '即將開放' },
+  livestream: { lockedLabel: '即將開放' },
+  chat: { lockedLabel: '即將開放' },
+  benchmark: { lockedLabel: '即將開放' },
 }
 
 function hasFullAITestAccess(user) {
@@ -171,14 +172,7 @@ function hasFullAITestAccess(user) {
 }
 
 function canUseAITool(id, user) {
-  if (hasFullAITestAccess(user)) return true
-  const access = AI_TOOL_ACCESS[id]
-  if (!access) return false
-  const tier = deriveAITier(user)
-  if (access.minTier === 'trial') return true
-  if (access.minTier === 'standard') return tier === 'standard' || tier === 'advanced'
-  if (access.minTier === 'advanced') return tier === 'advanced'
-  return false
+  return OPEN_AI_TOOL_IDS.has(id)
 }
 
 function canUseScriptType(id, user) {
@@ -189,7 +183,6 @@ function getAIToolStatusLabel(id, user) {
   const access = AI_TOOL_ACCESS[id]
   if (!access) return '即將開放'
   if (!canUseAITool(id, user)) return access.lockedLabel || '升級解鎖'
-  if (id === 'topics' && deriveAITier(user) === 'trial') return access.trialLabel
   return access.unlockedLabel || '可使用'
 }
 
@@ -217,30 +210,27 @@ function ComingSoonLabel() {
 
 function getAITierInfo(user) {
   const tier = deriveAITier(user)
+  const base = {
+    count: OPEN_AI_TOOL_IDS.size,
+    total: NAV_TOOLS.length,
+    summary: '目前開放爆款選題腳本、素材靈感與社群貼文。',
+    next: '流量熱點、企劃定位、爆款解析、直播話術、頂流助理與對標分析即將開放。',
+  }
   if (tier === 'advanced') {
     return {
+      ...base,
       name: '頂流私塾',
-      count: NAV_TOOLS.length,
-      total: NAV_TOOLS.length,
-      summary: '全部 AI 工具已開放，從選題、內容產出到策略分析都可以使用。',
-      next: '私塾完整工具已解鎖',
     }
   }
   if (tier === 'standard') {
     return {
+      ...base,
       name: '頂流達人',
-      count: 4,
-      total: NAV_TOOLS.length,
-      summary: '已開放爆款選題腳本、素材靈感、社群貼文與流量熱點。',
-      next: '升級頂流私塾可解鎖企劃定位、爆款解析、直播話術、頂流助理與對標分析。',
     }
   }
   return {
+    ...base,
     name: '體驗學生',
-    count: 1,
-    total: NAV_TOOLS.length,
-    summary: '目前可使用爆款選題，腳本生成與完整內容工具尚未開放。',
-    next: '升級頂流達人可解鎖素材靈感、社群貼文與流量熱點。',
   }
 }
 
