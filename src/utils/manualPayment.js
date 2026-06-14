@@ -13,7 +13,7 @@ export function buildManualPaymentMessage({ planName, amount, orderNumber, name,
     name ? `真實姓名：${name}` : '真實姓名：',
     email ? `Email：${email}` : 'Email：',
     phone ? `聯絡電話：${phone}` : '聯絡電話：',
-    '我會完成匯款，請協助確認並開通課程帳號。',
+    '我會協助完成分期方案，請協助確認並開通課程帳號。',
   ].filter(Boolean).join('\n')
 }
 
