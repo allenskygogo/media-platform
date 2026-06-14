@@ -94,6 +94,31 @@ export default function UsersAdmin() {
     return data
   }
 
+  const downloadContract = async (contract) => {
+    if (!contract?.id) return
+    try {
+      const token = await getAdminToken()
+      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/admin/contracts/${encodeURIComponent(contract.id)}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || '下載合約失敗')
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `頂級流量_${contract.planName || contract.planId}_合作協議書_${contract.signerName || '學員'}_${String(contract.signedAt || '').slice(0, 10)}.html`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      flashError(error.message || '下載合約失敗')
+    }
+  }
+
   const loadStudents = async () => {
     if (!hasSupabase || !supabase) {
       refreshLocalUsers()
@@ -442,14 +467,14 @@ export default function UsersAdmin() {
                 <th style={{ width: 42 }}>
                   <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAllFiltered} disabled={!filtered.length || loading || deleting} />
                 </th>
-                <th>學員</th><th>電子郵件</th><th>會員等級</th><th>效期</th><th>上次登入</th><th>狀態</th><th>操作</th>
+                <th>學員</th><th>電子郵件</th><th>會員等級</th><th>效期</th><th>合約</th><th>上次登入</th><th>狀態</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>讀取正式會員中...</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>讀取正式會員中...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>沒有符合條件的學員</td></tr>
+                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 40, color: 'var(--gray-400)' }}>沒有符合條件的學員</td></tr>
               ) : filtered.map(user => (
                 <tr key={user.id}>
                   <td>
@@ -472,6 +497,19 @@ export default function UsersAdmin() {
                   </td>
                   <td style={{ fontSize: 13, color: user.expiresAt && new Date(user.expiresAt) < new Date() ? 'var(--danger)' : 'var(--gray-600)' }}>
                     {user.expiresAt || '尚未起算'}
+                  </td>
+                  <td style={{ fontSize: 13, color: 'var(--gray-600)', whiteSpace: 'nowrap' }}>
+                    {user.latestContract ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                        <span className="badge badge-active">已簽署</span>
+                        <span style={{ color: 'var(--gray-500)' }}>{formatDateTime(user.latestContract.signedAt)}</span>
+                        <button className="btn btn-secondary btn-sm" onClick={() => downloadContract(user.latestContract)}>
+                          下載合約
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={{ color: 'var(--gray-400)' }}>未簽署</span>
+                    )}
                   </td>
                   <td style={{ fontSize: 13, color: user.lastLoginAt ? 'var(--gray-600)' : 'var(--gray-400)', whiteSpace: 'nowrap' }}>
                     {formatDateTime(user.lastLoginAt)}

@@ -116,6 +116,10 @@ function getCheckoutAmount(planId, billingCycle) {
   return price.primary
 }
 
+function parsePriceNumber(value) {
+  return Number(String(value || '').replace(/[^\d]/g, '')) || 0
+}
+
 function normalizeTaiwanMobilePhone(value) {
   let digits = String(value || '').trim().replace(/[^\d+]/g, '')
   if (digits.startsWith('+886')) digits = `0${digits.slice(4)}`
@@ -168,6 +172,36 @@ function PlanCheckoutPreview({
   const amount = getCheckoutAmount(plan.id, billingCycle)
   const monthlyAmount = price?.monthly?.replace(/^月付\s*/, '') || ''
 
+  const signContract = async ({ cycle = billingCycle, signerName = currentUser?.name, signerPhone = phone } = {}) => {
+    const normalizedPhone = normalizeTaiwanMobilePhone(signerPhone) || String(signerPhone || '').trim()
+    const amountLabel = getCheckoutAmount(plan.id, cycle)
+    const { data: sessionData } = supabase ? await supabase.auth.getSession() : { data: { session: null } }
+    const token = sessionData?.session?.access_token
+    if (!token) throw new Error('登入狀態已過期，請重新登入後再升級。')
+
+    const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/contracts/sign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        planId: plan.id,
+        billingCycle: cycle,
+        amount: parsePriceNumber(amountLabel),
+        amountLabel: amountLabel.replace(/^年付\s*/, '').replace(/^月付\s*/, ''),
+        signerName,
+        signerEmail: currentUser?.email,
+        signerPhone: normalizedPhone,
+      }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || '合約簽署紀錄建立失敗，請稍後再試。')
+    }
+    return data.contract
+  }
+
   const startUpgradePayment = async () => {
     if (loading) return
     const normalizedPhone = normalizeTaiwanMobilePhone(phone)
@@ -181,6 +215,7 @@ function PlanCheckoutPreview({
     setMessage('')
 
     try {
+      await signContract({ cycle: billingCycle, signerPhone: normalizedPhone })
       const { data: sessionData } = supabase ? await supabase.auth.getSession() : { data: { session: null } }
       const token = sessionData?.session?.access_token
       if (!token) throw new Error('登入狀態已過期，請重新登入後再升級。')
@@ -297,7 +332,7 @@ function PlanCheckoutPreview({
           </div>
           <div className="contract-placeholder">
             <p>本次升級方案：{plan.name}，付款金額：{amount}。</p>
-            <p>付款成功後，系統會自動開通新的會員方案；若付款中斷，訂單會維持待付款狀態。</p>
+            <p>系統會保存你的線上簽署紀錄，後台可下載個人合約。付款成功後，系統會自動開通新的會員方案。</p>
           </div>
           <div className="form-group" style={{ marginTop: 14 }}>
             <label className="form-label">聯絡手機</label>
@@ -319,7 +354,7 @@ function PlanCheckoutPreview({
               checked={acceptedContract}
               onChange={event => setAcceptedContract(event.target.checked)}
             />
-            <span>我已確認升級方案與付款金額，並同意付款成功後開通對應會員權限。</span>
+            <span>我已閱讀並同意本合作協議書內容，確認以上資料為本人真實資料，並同意以線上點擊確認作為簽署意思表示。</span>
           </label>
           {error && <div className="auth-alert error" style={{ marginTop: 14 }}>{error}</div>}
           <div className="checkout-actions">
@@ -391,6 +426,11 @@ function PlanCheckoutPreview({
           description="月付需由官方 Line@ 協助確認資料與開通。請填寫真實姓名與電話，複製報名訊息後貼給客服。"
           messageLabel="請複製這段報名訊息貼到 Line@"
           primaryLabel="複製並前往官方 Line"
+          onBeforeCopy={({ name, phone: modalPhone }) => signContract({
+            cycle: 'monthly',
+            signerName: name,
+            signerPhone: modalPhone,
+          })}
           onClose={() => setManualMonthlyOpen(false)}
         />
       )}

@@ -16,6 +16,7 @@ export default function ManualPaymentModal({
   messageLabel = '請複製這段文字貼到 Line@',
   customMessage = '',
   primaryLabel = '複製並前往 Line@',
+  onBeforeCopy,
 }) {
   const [copied, setCopied] = useState(false)
   const [name, setName] = useState(defaultName)
@@ -46,11 +47,13 @@ export default function ManualPaymentModal({
   const copyMessage = async () => {
     if (!validateContact()) return false
     try {
+      if (onBeforeCopy) await onBeforeCopy({ name: cleanName, phone: cleanPhone, message })
       await navigator.clipboard.writeText(message)
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
       return true
-    } catch (_) {
+    } catch (error) {
+      if (onBeforeCopy) setFieldError(error.message || '合約簽署紀錄建立失敗，請稍後再試。')
       setCopied(false)
       return false
     }

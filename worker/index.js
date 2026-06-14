@@ -44,6 +44,19 @@ const PLAN_AMOUNT = {
   creator: 39800,
   master: 129800,
 }
+const PLAN_LABELS = {
+  trial: '自媒體獲客-定位體驗課',
+  creator: '頂流達人',
+  master: '頂流私塾',
+  managed: '頂流代操',
+}
+const BILLING_CYCLE_LABELS = {
+  annual: '年付',
+  monthly: '月付',
+  single: '一次付清',
+}
+const CONTRACT_VERSION = 'creator-online-v1'
+const CONTRACT_CONSENT_TEXT = '我已閱讀並同意本合作協議書內容，確認以上資料為本人真實資料，並同意以線上點擊確認作為簽署意思表示。'
 const ECPAY_STAGE_URL = 'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5'
 const ECPAY_PROD_URL = 'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5'
 const NEWEBPAY_STAGE_URL = 'https://ccore.newebpay.com/MPG/mpg_gateway'
@@ -685,6 +698,11 @@ export default {
         return await handleCreateUpgradeOrder(request, env)
       }
 
+      // POST /api/contracts/sign → store current user's online contract signature
+      if (path === '/api/contracts/sign' && request.method === 'POST') {
+        return await handleSignContract(request, env)
+      }
+
       // POST /api/memberships/start → start current user's membership on first login
       if (path === '/api/memberships/start' && request.method === 'POST') {
         return await handleStartMembership(request, env)
@@ -748,6 +766,18 @@ export default {
       // GET /api/admin/students → list formal student memberships
       if (path === '/api/admin/students' && request.method === 'GET') {
         return await handleListStudents(request, env)
+      }
+
+      // GET /api/admin/students/:id/contracts → list a student's signed contracts
+      if (path.startsWith('/api/admin/students/') && path.endsWith('/contracts') && request.method === 'GET') {
+        const userId = decodeURIComponent(path.slice('/api/admin/students/'.length, -'/contracts'.length))
+        return await handleListStudentContracts(request, userId, env)
+      }
+
+      // GET /api/admin/contracts/:id/download → download a rendered contract file
+      if (path.startsWith('/api/admin/contracts/') && path.endsWith('/download') && request.method === 'GET') {
+        const contractId = decodeURIComponent(path.slice('/api/admin/contracts/'.length, -'/download'.length))
+        return await handleDownloadContract(request, contractId, env)
       }
 
       // GET /api/admin/learning-progress → list all student course watch progress
@@ -1788,9 +1818,6 @@ async function handleCreateUpgradeOrder(request, env) {
   if ((levelByPlan[planId] || 0) <= (levelByPlan[currentPlanId] || 0)) {
     return err('此方案已包含在目前會員權限內。', 409)
   }
-  if ((levelByPlan[planId] || 0) !== (levelByPlan[currentPlanId] || 0) + 1) {
-    return err('請依照體驗升達人、達人升私塾的順序升級。', 409)
-  }
 
   const order = await insertOrder(env, {
     order_number: makeOrderNumber(),
@@ -1821,6 +1848,91 @@ async function handleCreateUpgradeOrder(request, env) {
     payment,
     ecpay: payment,
     message: '升級訂單已建立。付款確認後系統會自動升級會員。',
+  })
+}
+
+async function handleSignContract(request, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  const user = await requireUser(request, env)
+  const body = await request.json().catch(() => ({}))
+  const profile = await getProfileById(env, user.id)
+  if (profile.status === 'inactive') return err('帳號已停用，請聯絡管理員。', 403)
+
+  const planId = String(body.planId || '').trim()
+  const billingCycle = String(body.billingCycle || 'annual').trim()
+  const signerName = String(body.signerName || body.name || profile.display_name || '').trim()
+  const signerEmail = String(body.signerEmail || body.email || profile.email || user.email || '').trim().toLowerCase()
+  const signerPhone = normalizeTaiwanMobilePhone(body.signerPhone || body.phone) || String(body.signerPhone || body.phone || '').trim()
+  const amount = Number(body.amount || contractAmountFor(planId, billingCycle) || 0)
+  const amountLabel = String(body.amountLabel || formatContractAmount(planId, billingCycle, amount)).trim()
+  const orderId = String(body.orderId || '').trim()
+
+  if (!['creator', 'master'].includes(planId)) return err('Invalid contract plan', 400)
+  if (!['annual', 'monthly'].includes(billingCycle)) return err('Invalid billing cycle', 400)
+  if (!signerName || signerName.length < 2) return err('請填寫真實姓名。', 400)
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) return err('Email 格式不正確。', 400)
+  if (!signerPhone || signerPhone.length < 8) return err('請填寫聯絡電話。', 400)
+
+  const contract = await insertContractSignature(env, {
+    user_id: user.id,
+    order_id: /^[0-9a-f-]{36}$/i.test(orderId) ? orderId : null,
+    contract_version: CONTRACT_VERSION,
+    plan_id: planId,
+    legacy_tier: planToLegacyTier(planId),
+    billing_cycle: billingCycle,
+    amount,
+    amount_label: amountLabel,
+    currency: 'TWD',
+    signer_name: signerName,
+    signer_email: signerEmail,
+    signer_phone: signerPhone,
+    signer_identity: String(body.signerIdentity || '').trim() || null,
+    signer_address: String(body.signerAddress || '').trim() || null,
+    line_id: String(body.lineId || '').trim() || null,
+    consent_text: CONTRACT_CONSENT_TEXT,
+    ip_address: request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || '',
+    user_agent: request.headers.get('User-Agent') || '',
+    status: 'signed',
+  })
+
+  return json({ success: true, contract: mapContractSignature(contract) })
+}
+
+async function handleListStudentContracts(request, userId, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) return err('Invalid user id', 400)
+
+  const contracts = await listContractsByUserIds(env, [userId])
+  return json({ success: true, contracts: contracts.map(mapContractSignature) })
+}
+
+async function handleDownloadContract(request, contractId, env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service key is not configured', 503)
+  }
+
+  await requireAdmin(request, env)
+  if (!/^[0-9a-f-]{36}$/i.test(contractId)) return err('Invalid contract id', 400)
+
+  const contract = await getContractById(env, contractId)
+  if (!contract) return err('Contract not found', 404)
+
+  const html = renderContractHtml(contract)
+  const filename = encodeURIComponent(`頂級流量_${PLAN_LABELS[contract.plan_id] || contract.plan_id}_合作協議書_${contract.signer_name}_${String(contract.signed_at || '').slice(0, 10)}.html`)
+  return new Response(html, {
+    status: 200,
+    headers: {
+      ...CORS,
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Disposition': `attachment; filename*=UTF-8''${filename}`,
+    },
   })
 }
 
@@ -2028,6 +2140,14 @@ async function handleListStudents(request, env) {
   const profiles = await listStudentProfiles(env)
   const memberships = await listLatestActiveMemberships(env, profiles.map(profile => profile.id))
   const membershipByUserId = Object.fromEntries(memberships.map(item => [item.user_id, item]))
+  const contracts = await listContractsByUserIds(env, profiles.map(profile => profile.id)).catch(error => {
+    if (isMissingContractsTable(error)) return []
+    throw error
+  })
+  const latestContractByUserId = {}
+  for (const contract of contracts) {
+    if (!latestContractByUserId[contract.user_id]) latestContractByUserId[contract.user_id] = contract
+  }
   const authUsers = await listAuthUsers(env).catch(error => {
     console.error('Failed to list auth users for last login:', error)
     return []
@@ -2039,6 +2159,7 @@ async function handleListStudents(request, env) {
     students: profiles.map(profile => {
       const membership = membershipByUserId[profile.id] || null
       const authUser = authUserById[profile.id] || null
+      const contract = latestContractByUserId[profile.id] || null
       const name = profile.display_name || profile.email?.split('@')[0] || '學員'
       return {
         id: profile.id,
@@ -2054,6 +2175,7 @@ async function handleListStudents(request, env) {
         tier: membership?.plan_id ? planToLegacyTier(membership.plan_id) : membership?.legacy_tier || 'basic',
         expiresAt: membership?.expires_at || null,
         trialCompletedAt: membership?.trial_completed_at || null,
+        latestContract: contract ? mapContractSignature(contract) : null,
         source: 'supabase',
       }
     }),
@@ -2568,6 +2690,160 @@ function mapOrder(order) {
     createdAt: order.created_at,
     updatedAt: order.updated_at,
   }
+}
+
+function mapContractSignature(contract) {
+  return {
+    id: contract.id,
+    userId: contract.user_id,
+    orderId: contract.order_id,
+    contractVersion: contract.contract_version,
+    planId: contract.plan_id,
+    planName: PLAN_LABELS[contract.plan_id] || contract.plan_id,
+    legacyTier: contract.legacy_tier,
+    billingCycle: contract.billing_cycle,
+    billingCycleLabel: BILLING_CYCLE_LABELS[contract.billing_cycle] || contract.billing_cycle,
+    amount: contract.amount,
+    amountLabel: contract.amount_label,
+    currency: contract.currency,
+    signerName: contract.signer_name,
+    signerEmail: contract.signer_email,
+    signerPhone: contract.signer_phone,
+    consentText: contract.consent_text,
+    signedAt: contract.signed_at,
+    status: contract.status,
+    createdAt: contract.created_at,
+    updatedAt: contract.updated_at,
+  }
+}
+
+function contractAmountFor(planId, billingCycle) {
+  if (billingCycle === 'monthly') {
+    if (planId === 'creator') return 3980
+    if (planId === 'master') return 14800
+  }
+  return PLAN_AMOUNT[planId] || 0
+}
+
+function formatContractAmount(planId, billingCycle, amount) {
+  const suffix = billingCycle === 'monthly' ? '／月' : billingCycle === 'annual' ? '／年' : ''
+  return `NT$${Number(amount || contractAmountFor(planId, billingCycle) || 0).toLocaleString()}${suffix}`
+}
+
+function htmlEscape(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function dateZh(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
+}
+
+function renderContractHtml(contract) {
+  const planName = PLAN_LABELS[contract.plan_id] || contract.plan_id
+  const billing = BILLING_CYCLE_LABELS[contract.billing_cycle] || contract.billing_cycle
+  const amountLabel = contract.amount_label || formatContractAmount(contract.plan_id, contract.billing_cycle, contract.amount)
+  const signedAt = dateZh(contract.signed_at)
+  const isMonthly = contract.billing_cycle === 'monthly'
+
+  return `<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <title>${htmlEscape(planName)} 合作協議書 - ${htmlEscape(contract.signer_name)}</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "Microsoft JhengHei", Arial, sans-serif; color: #15151a; line-height: 1.75; margin: 40px auto; max-width: 880px; padding: 0 28px; }
+    h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: .04em; }
+    h2 { font-size: 18px; margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #d8dbe6; }
+    p { margin: 8px 0; }
+    .subtitle { color: #606575; margin-bottom: 24px; }
+    .meta { display: grid; grid-template-columns: 140px 1fr; border: 1px solid #d8dbe6; border-bottom: 0; margin: 16px 0 24px; }
+    .meta div { padding: 9px 12px; border-bottom: 1px solid #d8dbe6; }
+    .meta div:nth-child(odd) { background: #f6f7fb; font-weight: 700; }
+    .signature { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+    .box { border: 1px solid #d8dbe6; padding: 16px; min-height: 150px; }
+    .stamp { margin-top: 10px; padding: 10px 12px; background: #f6f7fb; border-radius: 8px; font-weight: 700; }
+    .small { color: #606575; font-size: 13px; }
+    @media print { body { margin: 0 auto; } }
+  </style>
+</head>
+<body>
+  <h1>${htmlEscape(planName)}合作協議書</h1>
+  <p class="subtitle">線上簽署版｜合約版本：${htmlEscape(contract.contract_version || CONTRACT_VERSION)}</p>
+
+  <div class="meta">
+    <div>甲方姓名</div><div>${htmlEscape(contract.signer_name)}</div>
+    <div>甲方 Email</div><div>${htmlEscape(contract.signer_email)}</div>
+    <div>聯絡電話</div><div>${htmlEscape(contract.signer_phone || '')}</div>
+    <div>方案</div><div>${htmlEscape(planName)}｜${htmlEscape(billing)}</div>
+    <div>合作費用</div><div>${htmlEscape(amountLabel)}${isMonthly ? '（分期/月付由官方 Line@ 協助確認）' : '（線上付款）'}</div>
+    <div>簽署時間</div><div>${htmlEscape(signedAt)}</div>
+  </div>
+
+  <p>立合約書人（以下簡稱甲方）與遐光映畫工作室（以下簡稱乙方），就「${htmlEscape(planName)}」課程與陪跑服務合作案，經雙方協議訂定本合約，以茲共同信守。</p>
+
+  <h2>專案內容</h2>
+  <p>1. 一年陪跑學習：服務期間自本合約簽署並完成付款或分期資料確認之日起算一年。</p>
+  <p>2. 一年內兩次實體課：依乙方開課梯次與場地安排通知甲方參與。</p>
+  <p>3. 每週線上內訓：提供短影音經營、內容系統化與商業轉換相關訓練。</p>
+  <p>4. 短影音商業定位、個人 IP 內容定位、爆款選題系統、腳本寫作訓練、自然風拍攝技巧、鏡頭表達訓練、剪輯與上架優化、流量數據分析與變現路徑規劃。</p>
+
+  <h2>第一條 費用與付款</h2>
+  <p>1. 本次合作費用為 ${htmlEscape(amountLabel)}，未稅。如甲方需乙方開立統一發票，應另加 5% 營業稅。</p>
+  <p>2. 年付方案於付款成功後由系統或乙方協助開通課程權限。</p>
+  <p>3. 月付/分期方案須由乙方官方 Line@ 協助確認資料與首期款；乙方確認後依約提供課程與陪跑服務。</p>
+
+  <h2>第二條 雙方義務</h2>
+  <p>甲方應指定主要聯絡窗口，配合乙方課程通知、作業提交、檢討與相關溝通，並確保提供之文字、圖片、影片、品牌資料及商業資料均具合法使用權。</p>
+  <p>乙方應依本合約約定提供課程、內訓、陪跑與相關學習資源；乙方提供之課程與工具內容屬教學與方法輔助，不保證特定流量、粉絲數、營收或成交結果。</p>
+
+  <h2>第三條 服務期間與交付方式</h2>
+  <p>本服務期間自本合約完成線上簽署並完成付款或分期資料確認之日起算一年。課程與陪跑服務以線上課程、線上內訓、群組通知、實體課程及其他乙方指定方式提供。</p>
+
+  <h2>第四條 智慧財產權與使用限制</h2>
+  <p>乙方提供之課程教材、簡報、錄影、作業範例、AI 工具、社群內容與相關方法論，均為乙方或其授權人所有，甲方僅得於個人學習目的範圍內使用，不得重製、錄影、截圖散布、公開傳輸、改作、轉售、出租、授權或提供帳號予他人使用。</p>
+
+  <h2>第五條 保密約定</h2>
+  <p>雙方因本合作所知悉之商業資訊、課程內容、學員資料、策略建議、帳號數據及其他未公開資訊，均負保密義務。</p>
+
+  <h2>第六條 退費與解除</h2>
+  <p>本服務包含數位課程、實體課程服務、社群資源及實體課程名額安排，甲方完成付款並取得課程或社群存取權後，除法律另有規定或乙方重大違約外，甲方不得任意要求解除或退費。</p>
+
+  <h2>第七條 不可抗力與爭議處理</h2>
+  <p>因天災、戰爭、疫情、政府命令、網路服務中斷、平台政策變動或其他不可抗力因素，致任一方無法依約履行時，受影響之一方得於合理範圍內延期或調整履行方式。本合約以中華民國法律為準據法，雙方同意以臺灣高雄地方法院為第一審管轄法院。</p>
+
+  <h2>第八條 線上簽署與合約效力</h2>
+  <p>雙方同意本合約得以線上簽署、電子簽章或其他可辨識簽署人身分之電子方式完成簽署。以線上簽署方式完成時，與紙本親筆簽名或蓋章具有同等效力。</p>
+  <p class="stamp">${htmlEscape(contract.consent_text || CONTRACT_CONSENT_TEXT)}</p>
+
+  <div class="signature">
+    <div class="box">
+      <strong>甲方（客戶）</strong>
+      <p>姓名：${htmlEscape(contract.signer_name)}</p>
+      <p>Email：${htmlEscape(contract.signer_email)}</p>
+      <p>電話：${htmlEscape(contract.signer_phone || '')}</p>
+      <p>線上簽署：已確認</p>
+      <p>簽署時間：${htmlEscape(signedAt)}</p>
+    </div>
+    <div class="box">
+      <strong>乙方</strong>
+      <p>名稱：遐光映畫工作室</p>
+      <p>統一編號：71622113</p>
+      <p>負責人：張峻翔</p>
+      <p>Email：web@xgfx-tw.com</p>
+      <p>電話：07-2367660</p>
+    </div>
+  </div>
+  <p class="small">系統紀錄：contract_id=${htmlEscape(contract.id)}｜user_id=${htmlEscape(contract.user_id)}｜IP=${htmlEscape(contract.ip_address || '')}</p>
+</body>
+</html>`
 }
 
 function newebPayConfigured(env) {
@@ -3269,6 +3545,67 @@ async function deleteOrder(env, orderId) {
   }
 }
 
+async function insertContractSignature(env, payload) {
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/contract_signatures`, {
+    method: 'POST',
+    headers: supabaseServiceHeaders(env, {
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    if (isMissingContractsTable(data)) {
+      throw new Error('合約資料表尚未建立，請先在 Supabase SQL Editor 執行 contract_signatures migration。')
+    }
+    throw new Error(data.message || 'Failed to save contract signature')
+  }
+  return Array.isArray(data) ? data[0] : data
+}
+
+async function listContractsByUserIds(env, userIds = []) {
+  const ids = userIds.filter(Boolean)
+  if (!ids.length) return []
+
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/contract_signatures`)
+  url.searchParams.set('user_id', `in.(${ids.join(',')})`)
+  url.searchParams.set('select', 'id,user_id,order_id,contract_version,plan_id,legacy_tier,billing_cycle,amount,amount_label,currency,signer_name,signer_email,signer_phone,signer_identity,signer_address,line_id,consent_text,signed_at,ip_address,user_agent,status,created_at,updated_at')
+  url.searchParams.set('order', 'signed_at.desc')
+  url.searchParams.set('limit', '500')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    if (isMissingContractsTable(data)) {
+      throw new Error('合約資料表尚未建立，請先在 Supabase SQL Editor 執行 contract_signatures migration。')
+    }
+    throw new Error(data.message || 'Failed to list contract signatures')
+  }
+  return Array.isArray(data) ? data : []
+}
+
+async function getContractById(env, contractId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/contract_signatures`)
+  url.searchParams.set('id', `eq.${contractId}`)
+  url.searchParams.set('select', 'id,user_id,order_id,contract_version,plan_id,legacy_tier,billing_cycle,amount,amount_label,currency,signer_name,signer_email,signer_phone,signer_identity,signer_address,line_id,consent_text,signed_at,ip_address,user_agent,status,created_at,updated_at')
+  url.searchParams.set('limit', '1')
+
+  const response = await fetch(url.toString(), {
+    headers: supabaseServiceHeaders(env, { Accept: 'application/json' }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) {
+    if (isMissingContractsTable(data)) {
+      throw new Error('合約資料表尚未建立，請先在 Supabase SQL Editor 執行 contract_signatures migration。')
+    }
+    throw new Error(data.message || 'Failed to read contract signature')
+  }
+  return Array.isArray(data) ? data[0] || null : null
+}
+
 function normalizeTaiwanMobilePhone(value) {
   const raw = String(value || '').trim()
   if (!raw) return ''
@@ -3282,6 +3619,11 @@ function normalizeTaiwanMobilePhone(value) {
 function isMissingOrdersTable(data) {
   const message = String(data?.message || data?.error || '')
   return data?.code === 'PGRST205' || message.includes("public.orders") || message.includes("'orders'")
+}
+
+function isMissingContractsTable(data) {
+  const message = String(data?.message || data?.error || data || '')
+  return data?.code === 'PGRST205' || message.includes("public.contract_signatures") || message.includes("'contract_signatures'") || message.includes('合約資料表')
 }
 
 function isMissingColumn(data, column) {
