@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { TIER_META } from '../../data/mockData'
@@ -377,12 +378,13 @@ function PlanCheckoutPreview({
   )
 }
 
-function PlanComparisonModal({ currentPlan, currentUser, onClose }) {
+function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose }) {
   const [showFullComparison, setShowFullComparison] = useState(false)
   const [checkoutPlan, setCheckoutPlan] = useState(null)
   const [billingCycle, setBillingCycle] = useState('annual')
   const [acceptedContract, setAcceptedContract] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState(0)
+  const [autoStartedPlanId, setAutoStartedPlanId] = useState('')
   const nextPlan = plans.find(plan => plan.level === (currentPlan?.level || 0) + 1) || null
 
   const getPlanBadge = (plan) => {
@@ -409,6 +411,16 @@ function PlanComparisonModal({ currentPlan, currentUser, onClose }) {
     setAcceptedContract(false)
     setCheckoutStep(0)
   }
+
+  useEffect(() => {
+    if (!initialPlanId || autoStartedPlanId === initialPlanId) return
+    const plan = plans.find(item => item.id === initialPlanId)
+    if (!plan) return
+    const action = getUpgradeAction(plan)
+    if (action.disabled) return
+    startCheckout(plan)
+    setAutoStartedPlanId(initialPlanId)
+  }, [initialPlanId, autoStartedPlanId])
 
   const getUpgradeAction = (plan) => {
     if (currentPlan?.id === plan.id) return { label: '目前方案', disabled: true }
@@ -548,6 +560,7 @@ function PlanComparisonModal({ currentPlan, currentUser, onClose }) {
 
 export default function Profile() {
   const { currentUser, updateCurrentUser, updatePassword } = useAuth()
+  const location = useLocation()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ name: currentUser.name })
   const [passwordForm, setPasswordForm] = useState({ password: '', confirm: '' })
@@ -555,6 +568,7 @@ export default function Profile() {
   const [passwordErr, setPasswordErr] = useState('')
   const [msg, setMsg] = useState('')
   const [showPlanModal, setShowPlanModal] = useState(false)
+  const upgradePlanId = new URLSearchParams(location.search).get('upgrade') || ''
 
   const meta = TIER_META[currentUser.tier] || {}
   const perks = TIER_PERKS[currentUser.tier] || { perks: [], locked: [] }
@@ -598,6 +612,10 @@ export default function Profile() {
   const daysLeft = currentUser.expiresAt
     ? Math.ceil((new Date(currentUser.expiresAt) - new Date()) / 86400000)
     : null
+
+  useEffect(() => {
+    if (upgradePlanId) setShowPlanModal(true)
+  }, [upgradePlanId])
 
   return (
     <div className="page-content">
@@ -730,7 +748,7 @@ export default function Profile() {
           </div>
         </div>
       </div>
-      {showPlanModal && <PlanComparisonModal currentPlan={currentPlan} currentUser={currentUser} onClose={() => setShowPlanModal(false)} />}
+      {showPlanModal && <PlanComparisonModal currentPlan={currentPlan} currentUser={currentUser} initialPlanId={upgradePlanId} onClose={() => setShowPlanModal(false)} />}
     </div>
   )
 }

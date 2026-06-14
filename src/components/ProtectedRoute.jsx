@@ -30,10 +30,11 @@ export default function ProtectedRoute({ children, requireAdmin = false, require
   if (isManaged) return <Navigate to="/managed" replace />
 
   // Basic tier without expiresAt → must complete trial first
-  // Allow /dashboard/trial, /dashboard/trial-player, and /dashboard/ai-tools (shows blur UI for trial tier)
+  // Allow trial, AI tools, and profile so upgrade CTAs can route directly to checkout.
   const onTrialRoute = location.pathname.startsWith('/dashboard/trial')
   const onAITools   = location.pathname.startsWith('/dashboard/ai-tools')
-  if (currentUser.tier === 'basic' && !currentUser.expiresAt && !onTrialRoute && !onAITools) {
+  const onProfile   = location.pathname.startsWith('/dashboard/profile')
+  if (currentUser.tier === 'basic' && !currentUser.expiresAt && !onTrialRoute && !onAITools && !onProfile) {
     return <Navigate to="/dashboard/trial" replace />
   }
 

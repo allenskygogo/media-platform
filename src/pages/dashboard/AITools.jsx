@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { callAI } from '../../services/aiService'
 import { supabase, hasSupabase, allowLocalFallback } from '../../lib/supabase'
@@ -251,7 +252,12 @@ function AITierNotice({ user }) {
         <strong>已開放 {info.count} / {info.total} 個 AI 工具</strong>
         <p>{info.summary}</p>
       </div>
-      <div className="ait-tier-notice-next">{info.next}</div>
+      <div className="ait-tier-notice-next">
+        <span>{info.next}</span>
+        {deriveAITier(user) === 'trial' && (
+          <a href="/dashboard/profile?upgrade=creator">立即升級頂流達人</a>
+        )}
+      </div>
     </div>
   )
 }
@@ -1505,7 +1511,7 @@ function ScriptPreviewGate({ script, canSeeAll, onUpgrade, upgradeText }) {
           </div>
           <div className="ait-upgrade-wall">
             <p className="ait-upgrade-wall-text">{upgradeText}</p>
-            <button className="ait-upgrade-wall-btn" disabled>即將開放</button>
+            <button className="ait-upgrade-wall-btn" onClick={onUpgrade}>立即升級頂流達人</button>
           </div>
         </div>
       )}
@@ -1573,6 +1579,7 @@ function UpgradeModal({ onClose }) {
 
 function TopicsPage() {
   const { currentUser } = useAuth()
+  const navigate = useNavigate()
   const canSeeAll = deriveAITier(currentUser) !== 'trial'
 
   const [input,            setInput]            = useState('')
@@ -1736,7 +1743,7 @@ function TopicsPage() {
               <ScriptPreviewGate
                 script={script}
                 canSeeAll={canSeeAll}
-                onUpgrade={() => setShowModal(true)}
+                onUpgrade={() => navigate('/dashboard/profile?upgrade=creator')}
                 upgradeText="頂流達人學員專屬｜掌握四大腳本公式，完整架構不再對著鏡頭不知道說什麼"
               />
             </div>
@@ -1762,6 +1769,7 @@ function TopicsPage() {
 
 function CopyPage() {
   const { currentUser } = useAuth()
+  const navigate = useNavigate()
   const canSeeAll = deriveAITier(currentUser) !== 'trial'
   const skipAutoGenerateRef = useRef(false)
   const copyStateCacheRef = useRef({})
@@ -2629,7 +2637,7 @@ function CopyPage() {
               <ScriptPreviewGate
                 script={script}
                 canSeeAll={canSeeAll}
-                onUpgrade={() => setShowModal(true)}
+                onUpgrade={() => navigate('/dashboard/profile?upgrade=creator')}
                 upgradeText="頂流達人學員專屬｜掌握四大腳本公式，每支影片都有完整架構，不再對著鏡頭不知道說什麼"
               />
             </div>
