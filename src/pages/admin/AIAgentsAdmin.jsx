@@ -7,19 +7,15 @@ const BOSS_AGENT_PASSWORD = '0910858551'
 const AGENT_UNLOCK_KEY = 'tlt_ai_agents_unlocked'
 
 const FEATURE_OPTIONS = [
-  { key: 'topics', label: '爆款選題' },
-  { key: 'script', label: '爆款選題腳本' },
-  { key: 'shooting', label: '拍攝形式' },
-  { key: 'planning', label: '三個月策劃' },
-  { key: 'marketing', label: '行銷文案' },
-  { key: 'livestream', label: '直播話術' },
-  { key: 'account', label: '帳號定位' },
-  { key: 'analysis', label: '爆款解析' },
-  { key: 'social', label: '社群貼文' },
-  { key: 'benchmark', label: '對標分析' },
+  { key: 'topics', label: '爆款選題腳本' },
   { key: 'material', label: '素材靈感' },
+  { key: 'social', label: '社群貼文' },
+  { key: 'planning', label: '企劃定位' },
   { key: 'trending', label: '流量熱點' },
+  { key: 'analysis', label: '爆款解析' },
+  { key: 'livestream', label: '直播話術' },
   { key: 'chat', label: '頂流助理' },
+  { key: 'benchmark', label: '對標分析' },
 ]
 
 const PLAN_OPTIONS = [
