@@ -410,12 +410,14 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
   const getPlanBadge = (plan) => {
     if (currentPlan?.id === plan.id) return '目前方案'
     if (nextPlan?.id === plan.id) return currentPlan?.id === 'master' ? '可了解' : '推薦升級'
+    if (currentPlan && plan.level > currentPlan.level && plan.id !== 'managed') return '可直接升級'
     return ''
   }
 
   const getPlanCellClass = (plan) => {
     if (currentPlan?.id === plan.id) return 'is-current'
     if (nextPlan?.id === plan.id) return 'is-recommended'
+    if (currentPlan && plan.level > currentPlan.level && plan.id !== 'managed') return 'is-recommended'
     return ''
   }
 
@@ -445,8 +447,8 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
   const getUpgradeAction = (plan) => {
     if (currentPlan?.id === plan.id) return { label: '目前方案', disabled: true }
     if (currentPlan && plan.level < currentPlan.level) return { label: '已包含', disabled: true }
-    if (nextPlan?.id !== plan.id) return { label: plan.id === 'managed' ? '聯繫官方帳號' : '依序升級', disabled: true }
     if (plan.id === 'managed') return { label: '聯繫官方帳號', disabled: true }
+    if (currentPlan && plan.level <= currentPlan.level) return { label: '已包含', disabled: true }
     return { label: '立即升級', disabled: false }
   }
 
