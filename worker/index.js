@@ -660,6 +660,11 @@ export default {
         return await handleSyncDefaultAIAgent(request, env)
       }
 
+      // POST /api/admin/bootstrap-admin → create/update a protected admin account
+      if (path === '/api/admin/bootstrap-admin' && request.method === 'POST') {
+        return await handleBootstrapAdmin(request, env)
+      }
+
       // POST /api/ai/writing/evaluate → evaluate a student's writing practice against agent knowledge
       if (path === '/api/ai/writing/evaluate' && request.method === 'POST') {
         return await handleWritingEvaluation(request, env)
@@ -1297,6 +1302,81 @@ async function handleSyncDefaultAIAgent(request, env) {
     synced: true,
     checks: getAIAgentRuleChecks(payload),
   })
+}
+
+async function handleBootstrapAdmin(request, env) {
+  const password = request.headers.get('x-agent-admin-password') || ''
+  if (password !== AI_AGENT_ADMIN_PASSWORD) return err('Unauthorized', 401)
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return err('Supabase service is not configured', 503)
+  }
+
+  const body = await request.json().catch(() => ({}))
+  const email = String(body.email || '').trim().toLowerCase()
+  const adminPassword = String(body.password || '')
+  const displayName = String(body.name || '平台管理員').trim() || '平台管理員'
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return err('Invalid email', 400)
+  }
+  if (adminPassword.length < 6) {
+    return err('Password must be at least 6 characters', 400)
+  }
+
+  try {
+    let authUser = await getAuthUserByEmail(env, email)
+    const authPayload = {
+      email,
+      password: adminPassword,
+      email_confirm: true,
+      user_metadata: {
+        display_name: displayName,
+      },
+    }
+
+    authUser = authUser?.id
+      ? await updateSupabaseAuthUser(env, authUser.id, authPayload)
+      : await createSupabaseAuthUser(env, authPayload)
+
+    const profile = await upsertProfile(env, {
+      id: authUser.id,
+      email,
+      display_name: displayName,
+      role: 'admin',
+      status: 'active',
+    })
+    const loginVerified = await verifySupabasePasswordLogin(env, email, adminPassword)
+
+    return json({
+      success: true,
+      login_verified: loginVerified,
+      admin: {
+        id: authUser.id,
+        email,
+        display_name: profile?.display_name || displayName,
+        role: profile?.role || 'admin',
+        status: profile?.status || 'active',
+      },
+    })
+  } catch (error) {
+    console.error('Bootstrap admin failed:', error)
+    return err(error?.message || 'Failed to bootstrap admin account', 500)
+  }
+}
+
+async function verifySupabasePasswordLogin(env, email, password) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return null
+
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      apikey: env.SUPABASE_ANON_KEY,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  })
+  return response.ok
 }
 
 async function handleWritingEvaluation(request, env) {
