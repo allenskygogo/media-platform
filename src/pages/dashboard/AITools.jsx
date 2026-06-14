@@ -215,6 +215,49 @@ function ComingSoonLabel() {
   )
 }
 
+function getAITierInfo(user) {
+  const tier = deriveAITier(user)
+  if (tier === 'advanced') {
+    return {
+      name: '頂流私塾',
+      count: NAV_TOOLS.length,
+      total: NAV_TOOLS.length,
+      summary: '全部 AI 工具已開放，從選題、內容產出到策略分析都可以使用。',
+      next: '私塾完整工具已解鎖',
+    }
+  }
+  if (tier === 'standard') {
+    return {
+      name: '頂流達人',
+      count: 4,
+      total: NAV_TOOLS.length,
+      summary: '已開放爆款選題腳本、素材靈感、社群貼文與流量熱點。',
+      next: '升級頂流私塾可解鎖企劃定位、爆款解析、直播話術、頂流助理與對標分析。',
+    }
+  }
+  return {
+    name: '體驗學生',
+    count: 1,
+    total: NAV_TOOLS.length,
+    summary: '目前可使用爆款選題，腳本生成與完整內容工具尚未開放。',
+    next: '升級頂流達人可解鎖素材靈感、社群貼文與流量熱點。',
+  }
+}
+
+function AITierNotice({ user }) {
+  const info = getAITierInfo(user)
+  return (
+    <div className="ait-tier-notice">
+      <div className="ait-tier-notice-main">
+        <span className="ait-tier-chip">目前方案：{info.name}</span>
+        <strong>已開放 {info.count} / {info.total} 個 AI 工具</strong>
+        <p>{info.summary}</p>
+      </div>
+      <div className="ait-tier-notice-next">{info.next}</div>
+    </div>
+  )
+}
+
 const KNOWLEDGE_SCRIPT_SOP = {
   title: '教知識腳本 SOP',
   topicDimensions: ['追求更好', '解決難題', '避免踩坑', '降低成本', '豐富談資'],
@@ -4744,6 +4787,7 @@ export default function AITools() {
 
         {/* ── Right content ── */}
         <main className="ait-main">
+          <AITierNotice user={currentUser} />
           <div className="ait-content">
             {activeId === 'topics'     && <CopyPage />}
             {activeId === 'analysis'   && <AnalysisPage />}
