@@ -4098,6 +4098,72 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   margin: 0;
 }
 
+.contract-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.contract-preview-head span,
+.contract-preview-meta span {
+  display: block;
+  color: rgba(255,255,255,0.46);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.contract-preview-head strong {
+  display: block;
+  margin-top: 2px;
+  color: #fff;
+  font-size: 17px;
+}
+
+.contract-preview-head em {
+  flex-shrink: 0;
+  color: rgba(154,167,255,0.78);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.contract-preview-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.contract-preview-meta p {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.035);
+  color: rgba(255,255,255,0.78);
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.contract-preview-scroll {
+  max-height: 210px;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.18);
+}
+
+.contract-preview-scroll h5 {
+  margin: 0 0 8px;
+  color: #fff;
+  font-size: 14px;
+}
+
+.contract-preview-scroll p {
+  color: rgba(255,255,255,0.68);
+  font-size: 13px;
+  line-height: 1.72;
+}
+
 .contract-check {
   display: flex;
   align-items: flex-start;

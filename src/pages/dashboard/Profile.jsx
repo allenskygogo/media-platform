@@ -331,8 +331,30 @@ function PlanCheckoutPreview({
             <span>{currentUser?.email}</span>
           </div>
           <div className="contract-placeholder">
-            <p>本次升級方案：{plan.name}，付款金額：{amount}。</p>
-            <p>系統會保存你的線上簽署紀錄，後台可下載個人合約。付款成功後，系統會自動開通新的會員方案。</p>
+            <div className="contract-preview-head">
+              <div>
+                <span>線上簽署合約</span>
+                <strong>{plan.name}合作協議書</strong>
+              </div>
+              <em>簽署後後台可下載</em>
+            </div>
+            <div className="contract-preview-meta">
+              <p><span>甲方</span>{currentUser?.name || '目前登入學員'}</p>
+              <p><span>Email</span>{currentUser?.email}</p>
+              <p><span>方案</span>{plan.name}</p>
+              <p><span>付款金額</span>{amount}</p>
+            </div>
+            <div className="contract-preview-scroll">
+              <h5>合作協議重點</h5>
+              <p>本合約由甲方與遐光映畫工作室（乙方）就「{plan.name}」課程與陪跑服務合作案成立。</p>
+              <p>服務期間自完成線上簽署並完成付款或分期資料確認之日起算一年。</p>
+              <p>乙方提供線上課程、線上內訓、群組通知、實體課程及其他乙方指定之學習資源。</p>
+              <p>課程內容包含短影音商業定位、個人 IP 內容定位、爆款選題系統、腳本寫作訓練、拍攝表達、剪輯上架、數據分析與變現路徑規劃。</p>
+              <p>乙方提供之課程、教材、錄影、AI 工具、社群內容與方法論，甲方僅得於個人學習目的範圍內使用，不得轉售、公開散布、重製或提供第三人使用。</p>
+              <p>本服務包含數位課程、實體課程服務、社群資源及名額安排，甲方完成付款並取得課程或社群存取權後，除法律另有規定或乙方重大違約外，不得任意要求解除或退費。</p>
+              <p>乙方提供之課程與工具內容屬教學與方法輔助，不保證特定流量、粉絲數、營收或成交結果。</p>
+              <p>雙方同意本合約得以線上簽署、電子簽章或可辨識簽署人身分之電子方式完成，與紙本親筆簽名或蓋章具有同等效力。</p>
+            </div>
           </div>
           <div className="form-group" style={{ marginTop: 14 }}>
             <label className="form-label">聯絡手機</label>
