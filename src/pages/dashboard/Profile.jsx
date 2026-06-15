@@ -675,7 +675,7 @@ function PlanCheckoutPreview({
       </div>
 
       <div className="checkout-steps" aria-label="升級流程">
-        {['選擇付款', '確認資料', '前往付款'].map((step, index) => (
+        {(isMonthlyCheckout ? ['選擇月付', '簽署資料', '通知客服'] : ['選擇付款', '確認資料', '前往付款']).map((step, index) => (
           <span key={step} className={checkoutStep === index ? 'active' : checkoutStep > index ? 'done' : ''}>
             {step}
           </span>
@@ -938,7 +938,7 @@ function PlanCheckoutPreview({
           defaultName={contractName || currentUser?.name || ''}
           title="Line@ 月付報名"
           kicker="Monthly Plan"
-          description="月付需由官方 Line@ 協助確認資料與開通。請填寫真實姓名與電話，複製報名訊息後貼給客服。"
+          description="已完成線上合作協議與報價單簽署。請複製報名訊息，前往官方 Line@ 通知客服協助確認與開通。"
           messageLabel="請複製這段報名訊息貼到 Line@"
           primaryLabel="複製並前往官方 Line"
           defaultPhone={phone}
