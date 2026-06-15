@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /managed
+Disallow: /login
+Disallow: /register
+Disallow: /checkout
+Disallow: /trial-login
+
+Sitemap: https://toplevel-tw.com/sitemap.xml
