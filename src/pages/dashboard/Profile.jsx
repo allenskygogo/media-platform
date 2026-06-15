@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
@@ -182,6 +182,134 @@ const contractClauses = [
   },
 ]
 
+function SignaturePadModal({ onClose, onSave, existingSignature = '' }) {
+  const canvasRef = useRef(null)
+  const drawingRef = useRef(false)
+  const hasStrokeRef = useRef(false)
+  const [emptyError, setEmptyError] = useState('')
+
+  const getPoint = event => {
+    const canvas = canvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    const point = event.touches?.[0] || event
+    return {
+      x: point.clientX - rect.left,
+      y: point.clientY - rect.top,
+    }
+  }
+
+  const prepareCanvas = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ratio = window.devicePixelRatio || 1
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * ratio
+    canvas.height = rect.height * ratio
+    const context = canvas.getContext('2d')
+    context.scale(ratio, ratio)
+    context.lineWidth = 2.4
+    context.lineCap = 'round'
+    context.lineJoin = 'round'
+    context.strokeStyle = '#111827'
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, rect.width, rect.height)
+
+    if (existingSignature) {
+      const image = new Image()
+      image.onload = () => {
+        context.drawImage(image, 0, 0, rect.width, rect.height)
+        hasStrokeRef.current = true
+      }
+      image.src = existingSignature
+    }
+  }
+
+  useEffect(() => {
+    prepareCanvas()
+    const onResize = () => prepareCanvas()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const startDrawing = event => {
+    event.preventDefault()
+    setEmptyError('')
+    const canvas = canvasRef.current
+    const context = canvas.getContext('2d')
+    const point = getPoint(event)
+    drawingRef.current = true
+    context.beginPath()
+    context.moveTo(point.x, point.y)
+  }
+
+  const draw = event => {
+    if (!drawingRef.current) return
+    event.preventDefault()
+    const canvas = canvasRef.current
+    const context = canvas.getContext('2d')
+    const point = getPoint(event)
+    context.lineTo(point.x, point.y)
+    context.stroke()
+    hasStrokeRef.current = true
+  }
+
+  const stopDrawing = event => {
+    if (event) event.preventDefault()
+    drawingRef.current = false
+  }
+
+  const clear = () => {
+    const canvas = canvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    const context = canvas.getContext('2d')
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, rect.width, rect.height)
+    hasStrokeRef.current = false
+    setEmptyError('')
+  }
+
+  const save = () => {
+    if (!hasStrokeRef.current) {
+      setEmptyError('請在簽名框內完成親筆簽名。')
+      return
+    }
+    onSave(canvasRef.current.toDataURL('image/png'))
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal signature-modal" onClick={event => event.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <p className="sp-checkout-kicker">Online Signature</p>
+            <h2 className="modal-title">線上親筆簽名</h2>
+          </div>
+          <button className="modal-close" onClick={onClose} aria-label="關閉簽名視窗">✕</button>
+        </div>
+        <div className="modal-body">
+          <p className="signature-modal-note">請用滑鼠、觸控板或手機手寫簽名。完成後，系統會把簽名、日期與合約一起保存，後台可下載。</p>
+          <canvas
+            ref={canvasRef}
+            className="signature-pad"
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+            onTouchStart={startDrawing}
+            onTouchMove={draw}
+            onTouchEnd={stopDrawing}
+          />
+          {emptyError && <div className="auth-alert error">{emptyError}</div>}
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={clear}>重新簽名</button>
+          <button type="button" className="btn btn-primary" onClick={save}>確認簽名</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PlanPriceBlock({ plan }) {
   const price = planPriceDetails[plan.id]
   if (!price) return null
@@ -268,6 +396,9 @@ function PlanCheckoutPreview({
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [manualMonthlyOpen, setManualMonthlyOpen] = useState(false)
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false)
+  const [signatureDataUrl, setSignatureDataUrl] = useState('')
+  const [pendingSignatureAction, setPendingSignatureAction] = useState('')
   const price = planPriceDetails[plan.id]
   const isQuote = price?.kind === 'quote'
   const isAnnualPlan = price?.kind === 'annual'
@@ -295,6 +426,7 @@ function PlanCheckoutPreview({
         signerName,
         signerEmail: currentUser?.email,
         signerPhone: normalizedPhone,
+        signerSignatureDataUrl: signatureDataUrl,
       }),
     })
     const data = await response.json().catch(() => ({}))
@@ -309,6 +441,12 @@ function PlanCheckoutPreview({
     const normalizedPhone = normalizeTaiwanMobilePhone(phone)
     if (!normalizedPhone) {
       setError('請輸入有效的台灣手機號碼（例：0912-345-678）。')
+      return
+    }
+    if (!signatureDataUrl) {
+      setError('請先完成線上親筆簽名。')
+      setPendingSignatureAction('checkout')
+      setSignatureModalOpen(true)
       return
     }
 
@@ -344,6 +482,36 @@ function PlanCheckoutPreview({
       setError(err.message || '建立升級訂單失敗，請稍後再試。')
       setLoading(false)
     }
+  }
+
+  const handleContractNext = () => {
+    if (!acceptedContract) return
+    if (!signatureDataUrl) {
+      setError('請先完成線上親筆簽名。')
+      setPendingSignatureAction('checkout')
+      setSignatureModalOpen(true)
+      return
+    }
+    setError('')
+    setCheckoutStep(2)
+  }
+
+  const handleMonthlyClick = () => {
+    if (!signatureDataUrl) {
+      setPendingSignatureAction('monthly')
+      setSignatureModalOpen(true)
+      return
+    }
+    setManualMonthlyOpen(true)
+  }
+
+  const handleSignatureSave = dataUrl => {
+    setSignatureDataUrl(dataUrl)
+    setSignatureModalOpen(false)
+    setError('')
+    if (pendingSignatureAction === 'monthly') setManualMonthlyOpen(true)
+    if (pendingSignatureAction === 'checkout' && acceptedContract) setCheckoutStep(2)
+    setPendingSignatureAction('')
   }
 
   if (isQuote) {
@@ -400,7 +568,7 @@ function PlanCheckoutPreview({
                 <button
                   type="button"
                   className="billing-option"
-                  onClick={() => setManualMonthlyOpen(true)}
+                  onClick={handleMonthlyClick}
                 >
                   <strong>{price.monthly}</strong>
                   <span>點選複製報名訊息，前往官方 Line@ 辦理月付</span>
@@ -503,10 +671,28 @@ function PlanCheckoutPreview({
                   <p>電話：07-2367660</p>
                   <p>線上簽署：乙方系統紀錄</p>
                   <p>簽署日期：完成付款流程時紀錄</p>
+                  <img className="contract-company-seal" src="/contract-assets/xgfx-company-seal.png" alt="遐光映畫工作室印章" />
                 </div>
               </div>
               <p className="contract-company-line">遐光映畫工作室｜高雄市苓雅區中山二路 412 號 11 樓之 5｜TEL: 07-2367660｜E-mail: xgfxstudio.ks01@gmail.com｜統一編號：71622113｜負責人：張峻翔</p>
             </div>
+          </div>
+          <div className="signature-status-card">
+            <div>
+              <span>甲方線上親筆簽名</span>
+              <strong>{signatureDataUrl ? '已完成簽名' : '尚未簽名'}</strong>
+            </div>
+            {signatureDataUrl && <img src={signatureDataUrl} alt="甲方親筆簽名預覽" />}
+            <button
+              type="button"
+              className="checkout-back-btn"
+              onClick={() => {
+                setPendingSignatureAction('')
+                setSignatureModalOpen(true)
+              }}
+            >
+              {signatureDataUrl ? '重新簽名' : '開啟簽名視窗'}
+            </button>
           </div>
           <div className="form-group" style={{ marginTop: 14 }}>
             <label className="form-label">聯絡手機</label>
@@ -537,7 +723,7 @@ function PlanCheckoutPreview({
               type="button"
               className="checkout-next-btn"
               disabled={!acceptedContract}
-              onClick={() => setCheckoutStep(2)}
+              onClick={handleContractNext}
             >
               下一步，確認付款
             </button>
@@ -606,6 +792,16 @@ function PlanCheckoutPreview({
             signerPhone: modalPhone,
           })}
           onClose={() => setManualMonthlyOpen(false)}
+        />
+      )}
+      {signatureModalOpen && (
+        <SignaturePadModal
+          existingSignature={signatureDataUrl}
+          onClose={() => {
+            setSignatureModalOpen(false)
+            setPendingSignatureAction('')
+          }}
+          onSave={handleSignatureSave}
         />
       )}
     </section>

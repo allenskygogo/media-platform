@@ -19,6 +19,7 @@ create table if not exists public.contract_signatures (
   signer_identity text,
   signer_address text,
   line_id text,
+  signer_signature_data_url text,
   consent_text text not null,
   signed_at timestamptz not null default now(),
   ip_address text,

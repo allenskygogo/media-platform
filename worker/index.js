@@ -1966,6 +1966,7 @@ async function handleSignContract(request, env) {
   const signerName = String(body.signerName || body.name || profile.display_name || '').trim()
   const signerEmail = String(body.signerEmail || body.email || profile.email || user.email || '').trim().toLowerCase()
   const signerPhone = normalizeTaiwanMobilePhone(body.signerPhone || body.phone) || String(body.signerPhone || body.phone || '').trim()
+  const signerSignatureDataUrl = normalizeSignatureDataUrl(body.signerSignatureDataUrl || body.signatureDataUrl)
   const amount = Number(body.amount || contractAmountFor(planId, billingCycle) || 0)
   const amountLabel = String(body.amountLabel || formatContractAmount(planId, billingCycle, amount)).trim()
   const orderId = String(body.orderId || '').trim()
@@ -1975,6 +1976,7 @@ async function handleSignContract(request, env) {
   if (!signerName || signerName.length < 2) return err('請填寫真實姓名。', 400)
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) return err('Email 格式不正確。', 400)
   if (!signerPhone || signerPhone.length < 8) return err('請填寫聯絡電話。', 400)
+  if (!signerSignatureDataUrl) return err('請完成線上親筆簽名。', 400)
 
   const contract = await insertContractSignature(env, {
     user_id: user.id,
@@ -1992,6 +1994,7 @@ async function handleSignContract(request, env) {
     signer_identity: String(body.signerIdentity || '').trim() || null,
     signer_address: String(body.signerAddress || '').trim() || null,
     line_id: String(body.lineId || '').trim() || null,
+    signer_signature_data_url: signerSignatureDataUrl,
     consent_text: CONTRACT_CONSENT_TEXT,
     ip_address: request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || '',
     user_agent: request.headers.get('User-Agent') || '',
@@ -2024,7 +2027,7 @@ async function handleDownloadContract(request, contractId, env) {
   const contract = await getContractById(env, contractId)
   if (!contract) return err('Contract not found', 404)
 
-  const html = renderContractHtml(contract)
+  const html = renderContractHtml(contract, env)
   const filename = encodeURIComponent(`頂級流量_${PLAN_LABELS[contract.plan_id] || contract.plan_id}_合作協議書_${contract.signer_name}_${String(contract.signed_at || '').slice(0, 10)}.html`)
   return new Response(html, {
     status: 200,
@@ -2809,6 +2812,7 @@ function mapContractSignature(contract) {
     signerName: contract.signer_name,
     signerEmail: contract.signer_email,
     signerPhone: contract.signer_phone,
+    signerSignatureDataUrl: contract.signer_signature_data_url,
     consentText: contract.consent_text,
     signedAt: contract.signed_at,
     status: contract.status,
@@ -2828,6 +2832,13 @@ function contractAmountFor(planId, billingCycle) {
 function formatContractAmount(planId, billingCycle, amount) {
   const suffix = billingCycle === 'monthly' ? '／月' : billingCycle === 'annual' ? '／年' : ''
   return `NT$${Number(amount || contractAmountFor(planId, billingCycle) || 0).toLocaleString()}${suffix}`
+}
+
+function normalizeSignatureDataUrl(value) {
+  const text = String(value || '').trim()
+  if (!text || text.length > 180000) return ''
+  if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(text)) return ''
+  return text
 }
 
 function htmlEscape(value) {
@@ -2865,12 +2876,14 @@ function renderContractClausesHtml() {
   }).join('\n')
 }
 
-function renderContractHtml(contract) {
+function renderContractHtml(contract, env = {}) {
   const planName = PLAN_LABELS[contract.plan_id] || contract.plan_id
   const billing = BILLING_CYCLE_LABELS[contract.billing_cycle] || contract.billing_cycle
   const amountLabel = contract.amount_label || formatContractAmount(contract.plan_id, contract.billing_cycle, contract.amount)
   const signedAt = dateZh(contract.signed_at)
   const isMonthly = contract.billing_cycle === 'monthly'
+  const appUrl = String(env.PUBLIC_APP_URL || '').replace(/\/$/, '') || 'https://toplevel-tw.com'
+  const companySealUrl = `${appUrl}/contract-assets/xgfx-company-seal.png`
 
   return `<!doctype html>
 <html lang="zh-Hant">
@@ -2892,6 +2905,8 @@ function renderContractHtml(contract) {
     .party div:nth-child(odd) { background: #fbfbfd; color: #555b6c; }
     .signature { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
     .box { border: 1px solid #d8dbe6; padding: 16px; min-height: 150px; }
+    .signature-image { display: block; width: 220px; height: 72px; object-fit: contain; margin: 8px 0 12px; border: 1px solid #e2e5ef; border-radius: 8px; background: #fff; }
+    .company-seal { display: block; width: 110px; height: 110px; object-fit: contain; margin: 8px 0 12px; }
     .stamp { margin-top: 10px; padding: 10px 12px; background: #f6f7fb; border-radius: 8px; font-weight: 700; }
     .small { color: #606575; font-size: 13px; }
     @media print { body { margin: 0 auto; } }
@@ -2939,7 +2954,8 @@ function renderContractHtml(contract) {
       <p>簽署人：${htmlEscape(contract.signer_name)}</p>
       <p>電子信箱：${htmlEscape(contract.signer_email)}</p>
       <p>電話：${htmlEscape(contract.signer_phone || '')}</p>
-      <p>線上簽署：已確認</p>
+      ${contract.signer_signature_data_url ? `<img class="signature-image" src="${htmlEscape(contract.signer_signature_data_url)}" alt="甲方親筆簽名">` : ''}
+      <p>線上簽署：已親筆簽名確認</p>
       <p>簽署時間：${htmlEscape(signedAt)}</p>
     </div>
     <div class="box">
@@ -2949,6 +2965,7 @@ function renderContractHtml(contract) {
       <p>負責人：張峻翔</p>
       <p>E-mail：web@xgfx-tw.com</p>
       <p>電話：07-2367660</p>
+      <img class="company-seal" src="${htmlEscape(companySealUrl)}" alt="遐光映畫工作室印章">
       <p>線上簽署：乙方系統紀錄</p>
       <p>簽署時間：${htmlEscape(signedAt)}</p>
     </div>
@@ -3683,7 +3700,7 @@ async function listContractsByUserIds(env, userIds = []) {
 
   const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/contract_signatures`)
   url.searchParams.set('user_id', `in.(${ids.join(',')})`)
-  url.searchParams.set('select', 'id,user_id,order_id,contract_version,plan_id,legacy_tier,billing_cycle,amount,amount_label,currency,signer_name,signer_email,signer_phone,signer_identity,signer_address,line_id,consent_text,signed_at,ip_address,user_agent,status,created_at,updated_at')
+  url.searchParams.set('select', 'id,user_id,order_id,contract_version,plan_id,legacy_tier,billing_cycle,amount,amount_label,currency,signer_name,signer_email,signer_phone,signer_identity,signer_address,line_id,signer_signature_data_url,consent_text,signed_at,ip_address,user_agent,status,created_at,updated_at')
   url.searchParams.set('order', 'signed_at.desc')
   url.searchParams.set('limit', '500')
 
@@ -3703,7 +3720,7 @@ async function listContractsByUserIds(env, userIds = []) {
 async function getContractById(env, contractId) {
   const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/contract_signatures`)
   url.searchParams.set('id', `eq.${contractId}`)
-  url.searchParams.set('select', 'id,user_id,order_id,contract_version,plan_id,legacy_tier,billing_cycle,amount,amount_label,currency,signer_name,signer_email,signer_phone,signer_identity,signer_address,line_id,consent_text,signed_at,ip_address,user_agent,status,created_at,updated_at')
+  url.searchParams.set('select', 'id,user_id,order_id,contract_version,plan_id,legacy_tier,billing_cycle,amount,amount_label,currency,signer_name,signer_email,signer_phone,signer_identity,signer_address,line_id,signer_signature_data_url,consent_text,signed_at,ip_address,user_agent,status,created_at,updated_at')
   url.searchParams.set('limit', '1')
 
   const response = await fetch(url.toString(), {
