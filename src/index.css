@@ -2968,6 +2968,103 @@ tbody tr:hover { background: rgba(255,255,255,0.045); }
 tbody tr:last-child { border-bottom: none; }
 tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
 
+.admin-students-table {
+  min-width: 1180px;
+  table-layout: fixed;
+}
+
+.admin-students-table .col-select { width: 44px; }
+.admin-students-table .col-student { width: 150px; }
+.admin-students-table .col-email { width: 240px; }
+.admin-students-table .col-tier { width: 170px; }
+.admin-students-table .col-expiry { width: 120px; }
+.admin-students-table .col-contract { width: 170px; }
+.admin-students-table .col-login { width: 150px; }
+.admin-students-table .col-status { width: 80px; }
+.admin-students-table .col-actions { width: 300px; }
+
+.admin-students-table th,
+.admin-students-table td {
+  vertical-align: middle;
+}
+
+.student-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.student-name {
+  min-width: 0;
+  color: rgba(232,238,255,0.88);
+  font-weight: 800;
+  line-height: 1.35;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.student-email {
+  color: var(--gray-500);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.student-tier-select {
+  width: 142px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--gray-300);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.date-cell {
+  color: var(--gray-600);
+  font-size: 13px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.date-cell.expired {
+  color: var(--danger);
+}
+
+.date-cell.empty {
+  color: var(--gray-400);
+}
+
+.contract-cell {
+  color: var(--gray-600);
+  font-size: 13px;
+}
+
+.contract-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.contract-stack span:not(.badge) {
+  color: var(--gray-500);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.student-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.student-row-actions .btn {
+  flex: 0 0 auto;
+}
+
 /* ── Stat Cards ── */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 .stat-card {

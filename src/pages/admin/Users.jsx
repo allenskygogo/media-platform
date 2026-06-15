@@ -57,6 +57,16 @@ export default function UsersAdmin() {
   }, [])
 
   const toDateValue = (value) => value ? String(value).split('T')[0] : ''
+  const formatDateOnly = (value) => {
+    if (!value) return '尚未起算'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return '尚未起算'
+    return date.toLocaleDateString('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+  }
   const formatDateTime = (value) => {
     if (!value) return '尚無紀錄'
     const date = new Date(value)
@@ -461,13 +471,13 @@ export default function UsersAdmin() {
 
       <div className="card">
         <div className="table-wrap">
-          <table>
+          <table className="admin-students-table">
             <thead>
               <tr>
-                <th style={{ width: 42 }}>
+                <th className="col-select">
                   <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAllFiltered} disabled={!filtered.length || loading || deleting} />
                 </th>
-                <th>學員</th><th>電子郵件</th><th>會員等級</th><th>效期</th><th>合約</th><th>上次登入</th><th>狀態</th><th>操作</th>
+                <th className="col-student">學員</th><th className="col-email">電子郵件</th><th className="col-tier">會員等級</th><th className="col-expiry">效期</th><th className="col-contract">合約</th><th className="col-login">上次登入</th><th className="col-status">狀態</th><th className="col-actions">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -480,29 +490,30 @@ export default function UsersAdmin() {
                   <td>
                     <input type="checkbox" checked={selectedIds.includes(user.id)} onChange={() => toggleSelected(user.id)} disabled={deleting || updatingId === user.id} />
                   </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <td className="student-cell">
+                    <div className="student-identity">
                       <div className="avatar" style={{ width: 32, height: 32, fontSize: 13 }}>{user.avatar}</div>
-                      <span style={{ fontWeight: 600 }}>{user.name}</span>
+                      <span className="student-name">{user.name}</span>
                     </div>
                   </td>
-                  <td style={{ color: 'var(--gray-500)', fontSize: 13 }}>{user.email}</td>
-                  <td>
+                  <td className="student-email">{user.email}</td>
+                  <td className="tier-cell">
                     <select value={user.tier || 'basic'} onChange={e => changeTier(user, e.target.value)} disabled={updatingId === user.id}
-                      style={{ padding: '4px 8px', borderRadius: 'var(--radius-sm)', border: '1.5px solid var(--gray-300)', fontSize: 13, cursor: 'pointer',
+                      className="student-tier-select"
+                      style={{
                         background: user.tier === 'basic' ? 'var(--basic-light)' : user.tier === 'standard' ? 'var(--standard-light)' : 'var(--advanced-light)',
                         color: user.tier === 'basic' ? 'var(--basic-text)' : user.tier === 'standard' ? 'var(--standard-text)' : 'var(--advanced-text)', fontWeight: 700 }}>
                       {TIERS.map(t => <option key={t} value={t}>{TIER_MARK[t]} {TIER_META[t]?.label}</option>)}
                     </select>
                   </td>
-                  <td style={{ fontSize: 13, color: user.expiresAt && new Date(user.expiresAt) < new Date() ? 'var(--danger)' : 'var(--gray-600)' }}>
-                    {user.expiresAt || '尚未起算'}
+                  <td className={user.expiresAt && new Date(user.expiresAt) < new Date() ? 'date-cell expired' : 'date-cell'}>
+                    {formatDateOnly(user.expiresAt)}
                   </td>
-                  <td style={{ fontSize: 13, color: 'var(--gray-600)', whiteSpace: 'nowrap' }}>
+                  <td className="contract-cell">
                     {user.latestContract ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                      <div className="contract-stack">
                         <span className="badge badge-active">已簽署</span>
-                        <span style={{ color: 'var(--gray-500)' }}>{formatDateTime(user.latestContract.signedAt)}</span>
+                        <span>{formatDateTime(user.latestContract.signedAt)}</span>
                         <button className="btn btn-secondary btn-sm" onClick={() => downloadContract(user.latestContract)}>
                           下載合約
                         </button>
@@ -511,12 +522,12 @@ export default function UsersAdmin() {
                       <span style={{ color: 'var(--gray-400)' }}>未簽署</span>
                     )}
                   </td>
-                  <td style={{ fontSize: 13, color: user.lastLoginAt ? 'var(--gray-600)' : 'var(--gray-400)', whiteSpace: 'nowrap' }}>
+                  <td className={user.lastLoginAt ? 'date-cell' : 'date-cell empty'}>
                     {formatDateTime(user.lastLoginAt)}
                   </td>
                   <td><span className={`badge badge-${user.status}`}>{user.status === 'active' ? '啟用' : '停用'}</span></td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 6 }}>
+                  <td className="actions-cell">
+                    <div className="student-row-actions">
                       <button className="btn btn-secondary btn-sm" onClick={() => openEdit(user)} disabled={updatingId === user.id}>編輯</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => openResetPassword(user)} disabled={updatingId === user.id}>
                         重設密碼
