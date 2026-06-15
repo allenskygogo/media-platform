@@ -1222,22 +1222,32 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
           </div>
 
           {showFullComparison && (
-            <div className="plan-table-scroll full" role="region" aria-label="完整方案比較">
-              <div className="plan-full-grid comparison-row comparison-head">
-                <div className="comparison-label">比較項目</div>
-                {plans.map(plan => <div key={plan.id} className={getPlanCellClass(plan)}>{plan.name}</div>)}
+            <div className="plan-full-compare-wrap">
+              <div className="plan-swipe-hint" aria-hidden="true">
+                <span>←</span>
+                左右滑動查看完整方案
+                <span>→</span>
               </div>
-              <div className="plan-full-grid-body">
-                {planComparisonRows.map(row => (
-                  <div key={row.key} className="plan-full-grid comparison-row">
-                    <div className="comparison-label">{row.label}</div>
-                    {plans.map(plan => (
-                      <div key={plan.id} className={getPlanCellClass(plan)} title={plan[row.key]}>
-                        {plan[row.key]}
-                      </div>
-                    ))}
-                  </div>
-                ))}
+              <div className="plan-table-scroll full" role="region" aria-label="完整方案比較">
+                <div className="plan-full-grid comparison-row comparison-head">
+                  <div className="comparison-label">比較項目</div>
+                  {plans.map(plan => <div key={plan.id} className={getPlanCellClass(plan)}>{plan.name}</div>)}
+                </div>
+                <div className="plan-full-grid-body">
+                  {planComparisonRows.map(row => (
+                    <div key={row.key} className="plan-full-grid comparison-row">
+                      <div className="comparison-label">{row.label}</div>
+                      {plans.map(plan => (
+                        <div key={plan.id} className={getPlanCellClass(plan)} title={plan[row.key]}>
+                          {plan[row.key]}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <div className="plan-scroll-cue" aria-hidden="true">
+                  <ChevronRight size={22} />
+                </div>
               </div>
             </div>
           )}
