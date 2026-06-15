@@ -57,6 +57,7 @@ const BILLING_CYCLE_LABELS = {
 }
 const CONTRACT_VERSION = 'creator-online-v2-word-full'
 const CONTRACT_CONSENT_TEXT = '我已閱讀並同意本合作協議書內容，確認以上資料為本人真實資料，並同意以線上點擊確認作為簽署意思表示。'
+const CREATOR_QUOTE_FILE = 'creator-quote-39800.pdf'
 const CONTRACT_PROJECT_ITEMS = [
   '一年陪跑學習：服務期間自本合約簽署並完成付款之日起算一年。',
   '一年內兩次實體課：依乙方開課梯次與場地安排通知甲方參與。',
@@ -2884,6 +2885,7 @@ function renderContractHtml(contract, env = {}) {
   const isMonthly = contract.billing_cycle === 'monthly'
   const appUrl = String(env.PUBLIC_APP_URL || '').replace(/\/$/, '') || 'https://toplevel-tw.com'
   const companySealUrl = `${appUrl}/contract-assets/xgfx-company-seal.png`
+  const quoteUrl = `${appUrl}/contract-assets/${CREATOR_QUOTE_FILE}`
 
   return `<!doctype html>
 <html lang="zh-Hant">
@@ -2907,6 +2909,9 @@ function renderContractHtml(contract, env = {}) {
     .box { border: 1px solid #d8dbe6; padding: 16px; min-height: 150px; }
     .signature-image { display: block; width: 220px; height: 72px; object-fit: contain; margin: 8px 0 12px; border: 1px solid #e2e5ef; border-radius: 8px; background: #fff; }
     .company-seal { display: block; width: 110px; height: 110px; object-fit: contain; margin: 8px 0 12px; }
+    .quote-box { margin: 24px 0; padding: 16px; border: 1px solid #cbd3ef; border-radius: 10px; background: #f7f8ff; }
+    .quote-box strong { display: block; margin-bottom: 6px; font-size: 16px; }
+    .quote-box a { color: #3448d9; font-weight: 700; }
     .stamp { margin-top: 10px; padding: 10px 12px; background: #f6f7fb; border-radius: 8px; font-weight: 700; }
     .small { color: #606575; font-size: 13px; }
     @media print { body { margin: 0 auto; } }
@@ -2926,6 +2931,14 @@ function renderContractHtml(contract, env = {}) {
   </div>
 
   <p>立合約書人（以下簡稱甲方）與遐光映畫工作室（以下簡稱乙方），就「短影音一年陪跑達人班」課程與陪跑服務合作案，經雙方協議訂定本合約，以茲共同信守。</p>
+
+  ${isMonthly ? `
+  <div class="quote-box">
+    <strong>月付 / 分期方案報價單</strong>
+    <p>本合約為月付 / 分期方案，系統已同步建立「一年陪跑達人班報價單 NT$39,800」作為客服確認與後台留存附件。</p>
+    <p><a href="${htmlEscape(quoteUrl)}" target="_blank" rel="noopener">下載報價單 PDF：${htmlEscape(CREATOR_QUOTE_FILE)}</a></p>
+  </div>
+  ` : ''}
 
   <h2>甲方客戶聯絡資訊（線上簽署前填寫）</h2>
   <div class="party">

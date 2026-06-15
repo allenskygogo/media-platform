@@ -485,6 +485,7 @@ function PlanCheckoutPreview({
   setCheckoutStep,
   onClose,
 }) {
+  const [contractName, setContractName] = useState(currentUser?.name || '')
   const [phone, setPhone] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
@@ -493,20 +494,24 @@ function PlanCheckoutPreview({
   const [signatureModalOpen, setSignatureModalOpen] = useState(false)
   const [signatureDataUrl, setSignatureDataUrl] = useState('')
   const [pendingSignatureAction, setPendingSignatureAction] = useState('')
+  const [monthlyContractReady, setMonthlyContractReady] = useState(false)
   const price = planPriceDetails[plan.id]
   const isQuote = price?.kind === 'quote'
   const isAnnualPlan = price?.kind === 'annual'
   const amount = getCheckoutAmount(plan.id, billingCycle)
   const monthlyAmount = price?.monthly?.replace(/^月付\s*/, '') || ''
+  const isMonthlyCheckout = isAnnualPlan && billingCycle === 'monthly'
+  const normalizedContractName = String(contractName || '').trim()
   const normalizedContractPhone = normalizeTaiwanMobilePhone(phone)
-  const canProceedToPayment = Boolean(acceptedContract && signatureDataUrl && normalizedContractPhone)
+  const canProceedToPayment = Boolean(acceptedContract && signatureDataUrl && normalizedContractName.length >= 2 && normalizedContractPhone)
   const missingContractItems = [
+    normalizedContractName.length < 2 ? '填寫真實姓名' : '',
     !normalizedContractPhone ? '填寫有效手機' : '',
     !signatureDataUrl ? '完成電子簽名' : '',
     !acceptedContract ? '勾選同意合約' : '',
   ].filter(Boolean)
 
-  const signContract = async ({ cycle = billingCycle, signerName = currentUser?.name, signerPhone = phone } = {}) => {
+  const signContract = async ({ cycle = billingCycle, signerName = contractName || currentUser?.name, signerPhone = phone } = {}) => {
     const normalizedPhone = normalizeTaiwanMobilePhone(signerPhone) || String(signerPhone || '').trim()
     const amountLabel = getCheckoutAmount(plan.id, cycle)
     const { data: sessionData } = supabase ? await supabase.auth.getSession() : { data: { session: null } }
@@ -528,6 +533,8 @@ function PlanCheckoutPreview({
         signerEmail: currentUser?.email,
         signerPhone: normalizedPhone,
         signerSignatureDataUrl: signatureDataUrl,
+        includeQuotation: cycle === 'monthly',
+        quotationFileName: cycle === 'monthly' ? 'creator-quote-39800.pdf' : '',
       }),
     })
     const data = await response.json().catch(() => ({}))
@@ -540,6 +547,11 @@ function PlanCheckoutPreview({
   const startUpgradePayment = async () => {
     if (loading) return
     const normalizedPhone = normalizeTaiwanMobilePhone(phone)
+    const normalizedName = String(contractName || '').trim()
+    if (normalizedName.length < 2) {
+      setError('請填寫真實姓名，至少 2 個字。')
+      return
+    }
     if (!normalizedPhone) {
       setError('請輸入有效的台灣手機號碼（例：0912-345-678）。')
       return
@@ -602,23 +614,35 @@ function PlanCheckoutPreview({
       return
     }
     setError('')
+    if (isMonthlyCheckout) {
+      setLoading(true)
+      signContract({ cycle: 'monthly', signerName: normalizedName, signerPhone: normalizedPhone })
+        .then(() => {
+          setMonthlyContractReady(true)
+          setManualMonthlyOpen(true)
+        })
+        .catch(err => {
+          setError(err.message || '合約簽署紀錄建立失敗，請稍後再試。')
+        })
+        .finally(() => {
+          setLoading(false)
+        })
+      return
+    }
     setCheckoutStep(2)
   }
 
   const handleMonthlyClick = () => {
-    if (!signatureDataUrl) {
-      setPendingSignatureAction('monthly')
-      setSignatureModalOpen(true)
-      return
-    }
-    setManualMonthlyOpen(true)
+    setBillingCycle('monthly')
+    setMonthlyContractReady(false)
+    setError('')
+    setCheckoutStep(1)
   }
 
   const handleSignatureSave = dataUrl => {
     setSignatureDataUrl(dataUrl)
     setSignatureModalOpen(false)
     setError('')
-    if (pendingSignatureAction === 'monthly') setManualMonthlyOpen(true)
     setPendingSignatureAction('')
   }
 
@@ -675,11 +699,11 @@ function PlanCheckoutPreview({
               <>
                 <button
                   type="button"
-                  className="billing-option"
+                  className={`billing-option ${billingCycle === 'monthly' ? 'active' : ''}`}
                   onClick={handleMonthlyClick}
                 >
                   <strong>{price.monthly}</strong>
-                  <span>點選複製報名訊息，前往官方 Line@ 辦理月付</span>
+                  <span>先簽署合約與報價單，再前往官方 Line@ 通知客服</span>
                 </button>
                 <button
                   type="button"
@@ -708,6 +732,11 @@ function PlanCheckoutPreview({
             <h4>確認升級資料</h4>
             <span>{currentUser?.email}</span>
           </div>
+          {isMonthlyCheckout && (
+            <div className="contract-monthly-notice">
+              月付 / 分期方案會同步建立合作協議書與達人班報價單，送出後會跳出 Line@ 通知客服。
+            </div>
+          )}
           <div className="contract-placeholder">
             <div className="contract-preview-head">
               <div>
@@ -718,9 +747,11 @@ function PlanCheckoutPreview({
             </div>
             <div className="contract-preview-meta">
               <p><span>甲方</span>{currentUser?.name || '目前登入學員'}</p>
+              <p><span>真實姓名</span>{contractName || '請於下方填寫'}</p>
               <p><span>Email</span>{currentUser?.email}</p>
               <p><span>方案</span>{plan.name}</p>
               <p><span>付款金額</span>{amount}</p>
+              {isMonthlyCheckout && <p><span>報價單</span>一年陪跑達人班報價單 NT$39,800</p>}
             </div>
             <div className="contract-preview-scroll">
               <h5>短影音一年達人班合作協議書</h5>
@@ -729,9 +760,9 @@ function PlanCheckoutPreview({
               <div className="contract-party-card">
                 <strong>甲方客戶聯絡資訊（線上簽署前填寫）</strong>
                 <dl>
-                  <div><dt>甲方名稱</dt><dd>{currentUser?.name || '目前登入學員'}</dd></div>
+                  <div><dt>甲方名稱</dt><dd>{contractName || currentUser?.name || '目前登入學員'}</dd></div>
                   <div><dt>統一編號 / 身分證字號</dt><dd>線上簽署未填寫</dd></div>
-                  <div><dt>負責人 / 簽署人</dt><dd>{currentUser?.name || '目前登入學員'}</dd></div>
+                  <div><dt>負責人 / 簽署人</dt><dd>{contractName || currentUser?.name || '目前登入學員'}</dd></div>
                   <div><dt>聯絡電話</dt><dd>{phone || '請於下方填寫'}</dd></div>
                   <div><dt>電子信箱</dt><dd>{currentUser?.email}</dd></div>
                   <div><dt>聯絡地址</dt><dd>線上簽署未填寫</dd></div>
@@ -762,9 +793,9 @@ function PlanCheckoutPreview({
               <div className="contract-sign-grid">
                 <div>
                   <strong>甲方（客戶）</strong>
-                  <p>名稱：{currentUser?.name || '目前登入學員'}</p>
+                  <p>名稱：{contractName || currentUser?.name || '目前登入學員'}</p>
                   <p>統一編號 / 身分證字號：線上簽署未填寫</p>
-                  <p>簽署人：{currentUser?.name || '目前登入學員'}</p>
+                  <p>簽署人：{contractName || currentUser?.name || '目前登入學員'}</p>
                   <p>電子信箱：{currentUser?.email}</p>
                   <p>電話：{phone || '請於下方填寫'}</p>
                   {signatureDataUrl && <img className="contract-signer-signature" src={signatureDataUrl} alt="甲方電子簽名" />}
@@ -804,6 +835,19 @@ function PlanCheckoutPreview({
             </button>
           </div>
           <div className="form-group" style={{ marginTop: 14 }}>
+            <label className="form-label">真實姓名</label>
+            <input
+              className="form-input"
+              value={contractName}
+              onChange={event => {
+                setContractName(event.target.value)
+                setError('')
+              }}
+              placeholder="請填寫真實姓名"
+              autoComplete="name"
+            />
+          </div>
+          <div className="form-group" style={{ marginTop: 14 }}>
             <label className="form-label">聯絡手機</label>
             <input
               className="form-input"
@@ -834,10 +878,10 @@ function PlanCheckoutPreview({
             <button
               type="button"
               className="checkout-next-btn"
-              disabled={!canProceedToPayment}
+              disabled={!canProceedToPayment || loading}
               onClick={handleContractNext}
             >
-              下一步，確認付款
+              {loading ? '送出中...' : isMonthlyCheckout ? '送出並通知客服' : '下一步，確認付款'}
             </button>
           </div>
         </div>
@@ -891,18 +935,24 @@ function PlanCheckoutPreview({
           amount={monthlyAmount}
           amountLabel={price.monthly}
           email={currentUser?.email}
-          defaultName={currentUser?.name || ''}
-          requireContact
+          defaultName={contractName || currentUser?.name || ''}
           title="Line@ 月付報名"
           kicker="Monthly Plan"
           description="月付需由官方 Line@ 協助確認資料與開通。請填寫真實姓名與電話，複製報名訊息後貼給客服。"
           messageLabel="請複製這段報名訊息貼到 Line@"
           primaryLabel="複製並前往官方 Line"
-          onBeforeCopy={({ name, phone: modalPhone }) => signContract({
-            cycle: 'monthly',
-            signerName: name,
-            signerPhone: modalPhone,
-          })}
+          defaultPhone={phone}
+          customMessage={({ name, phone: modalPhone, email }) => (
+            `你好，我想購買「${plan.name}｜月付」\n金額：${price.monthly.replace('月付 ', '')}\n真實姓名：${name}\nEmail：${email}\n聯絡電話：${modalPhone}\n\n我已完成線上合作協議與報價單簽署，請協助確認並開通課程帳號。`
+          )}
+          onBeforeCopy={({ name, phone: modalPhone }) => {
+            if (monthlyContractReady) return Promise.resolve()
+            return signContract({
+              cycle: 'monthly',
+              signerName: name || contractName,
+              signerPhone: modalPhone,
+            }).then(() => setMonthlyContractReady(true))
+          }}
           onClose={() => setManualMonthlyOpen(false)}
         />
       )}

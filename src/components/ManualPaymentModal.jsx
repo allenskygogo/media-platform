@@ -26,9 +26,12 @@ export default function ManualPaymentModal({
   const cleanName = String(name || '').trim()
   const contactReady = !requireContact || (cleanName.length >= 2 && cleanPhone.length >= 8)
 
-  const message = useMemo(() => (
-    customMessage || buildManualPaymentMessage({ planName, amount, name: cleanName, email, phone: cleanPhone })
-  ), [amount, cleanName, cleanPhone, customMessage, email, planName])
+  const message = useMemo(() => {
+    if (typeof customMessage === 'function') {
+      return customMessage({ name: cleanName, phone: cleanPhone, email, planName, amount, amountLabel })
+    }
+    return customMessage || buildManualPaymentMessage({ planName, amount, name: cleanName, email, phone: cleanPhone })
+  }, [amount, amountLabel, cleanName, cleanPhone, customMessage, email, planName])
 
   const validateContact = () => {
     if (!requireContact) return true

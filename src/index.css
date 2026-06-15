@@ -4199,6 +4199,18 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   border: 1px solid rgba(255,255,255,0.07);
 }
 
+.contract-monthly-notice {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(126,145,255,0.22);
+  background: rgba(80,96,255,0.08);
+  color: rgba(225,230,255,0.82);
+  font-size: 13px;
+  line-height: 1.7;
+  font-weight: 700;
+}
+
 .contract-placeholder p {
   margin: 0;
 }

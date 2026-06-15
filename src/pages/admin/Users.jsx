@@ -515,7 +515,7 @@ export default function UsersAdmin() {
                         <span className="badge badge-active">已簽署</span>
                         <span>{formatDateTime(user.latestContract.signedAt)}</span>
                         <button className="btn btn-secondary btn-sm" onClick={() => downloadContract(user.latestContract)}>
-                          下載合約
+                          {user.latestContract.billingCycle === 'monthly' ? '下載合約/報價' : '下載合約'}
                         </button>
                       </div>
                     ) : (
