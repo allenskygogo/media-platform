@@ -32,7 +32,7 @@ const NAV_TOOLS = [
 const SAVED_TOPICS_FALLBACK_KEY = 'mp_saved_topics'
 const PRACTICE_FALLBACK_KEY = 'mp_topic_practices'
 const SCRIPT_DRAFTS_FALLBACK_KEY = 'mp_script_drafts'
-const SCRIPT_WORKSPACE_FALLBACK_KEY = 'mp_script_workspace'
+const SCRIPT_WORKSPACE_FALLBACK_KEY = 'mp_script_workspace_v2'
 const AI_PRACTICE_PASS_SCORE = 60
 const PRACTICE_TOTAL_MIN_CHARS = 50
 
@@ -1786,6 +1786,7 @@ function CopyPage() {
   const [copyTopics,      setCopyTopics]      = useState(null)
   const [topicRounds,     setTopicRounds]     = useState({ knowledge: 0, opinion: 0, story: 0, process: 0 })
   const [generatingTopics,setGeneratingTopics]= useState(false)
+  const [topicError,      setTopicError]      = useState('')
   const [selectedTopicIdx,setSelectedTopicIdx]= useState(null)
   // Step 4 — script
   const [script,           setScript]           = useState(null)
@@ -1822,6 +1823,7 @@ function CopyPage() {
     const key = getTopicStateKey()
     copyStateCacheRef.current[key] = {
       copyTopics,
+      topicError,
       selectedTopicIdx,
       script,
       scriptError,
@@ -1958,6 +1960,7 @@ function CopyPage() {
         setIdea(saved.idea || '')
         setScriptType(saved.script_type || null)
         setCopyTopics(restoredTopics)
+        setTopicError(saved.topic_error || '')
         setSelectedTopicIdx(restoredTopicIdx)
         setScript(saved.script || null)
         setScriptError(saved.script_error || '')
@@ -2003,6 +2006,7 @@ function CopyPage() {
       element: selectedTopic?.element || previousWorkspace?.element || '',
       traffic: selectedTopic?.traffic || previousWorkspace?.traffic || '',
       saved_topic_id: selectedTopic?.savedTopicId || previousWorkspace?.saved_topic_id || null,
+      topic_error: topicError,
       script,
       script_error: scriptError,
       practice,
@@ -2023,6 +2027,7 @@ function CopyPage() {
     idea,
     scriptType,
     copyTopics,
+    topicError,
     selectedTopicIdx,
     script,
     scriptError,
@@ -2045,6 +2050,7 @@ function CopyPage() {
     const cachedState = copyStateCacheRef.current[getTopicStateKey(scriptType, topicRound, idea.trim())]
     if (cachedState) {
       setCopyTopics(cachedState.copyTopics)
+      setTopicError(cachedState.topicError || '')
       setSelectedTopicIdx(cachedState.selectedTopicIdx)
       setScript(cachedState.script)
       setScriptError(cachedState.scriptError || '')
@@ -2056,12 +2062,13 @@ function CopyPage() {
       return
     }
     let cancelled = false
-    setGeneratingTopics(true); setCopyTopics(null); setSelectedTopicIdx(null); setScript(null); setScriptError('')
+    setGeneratingTopics(true); setCopyTopics(null); setTopicError(''); setSelectedTopicIdx(null); setScript(null); setScriptError('')
     setPractice(''); setPracticeSubmitted(false); setPracticeEvaluation(null); setPracticeError(''); setShootFormat(null)
 
     async function generateTopics() {
       try {
         const payload = {
+          task: 'generate_topics',
           idea: idea.trim(),
           scriptType,
           instruction: scriptType === 'opinion'
@@ -2072,10 +2079,13 @@ function CopyPage() {
                 ? '請先依照曬過程選題邏輯產生可拍攝選題。曬過程只有四個腳本方向：過程展示、測評產品、任務挑戰、事件體驗。8 個選題必須四種方向各至少 2 題，元素欄位請直接填「過程展示」「測評產品」「任務挑戰」「事件體驗」。過程展示要拍進貨、諮詢、服務、售後、接需求到交付等完整流程；測評產品要做對比測評、極限測評、化驗測評或工具設備比較；任務挑戰要有高/低成本、限時間/地點、一天內、三小時內等限制；事件體驗要有新奇體驗、奇葩規則、角色互換或當一天某身份。以短影音教學為例：紀錄我給學員訂製進階客腳本全過程；對比五款拍攝設備，哪款最適合新手；挑戰一天幫企業打造三套可落地的短影音；當一天短影音新手，體驗學員從零學起的真實感受。'
                 : '請先產生可拍攝的爆款選題，再讓學員進入腳本練習流程。',
         }
-        const result = await callAI('topics', payload, deriveAITier(currentUser), currentUser?.id)
+        const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id, { allowMockFallback: false })
         if (!cancelled) setCopyTopics(normalizeGeneratedTopics(result, idea.trim(), topicRound, scriptType))
-      } catch (_) {
-        if (!cancelled) setCopyTopics(buildCopyTopics(idea.trim(), topicRound, scriptType))
+      } catch (error) {
+        if (!cancelled) {
+          setCopyTopics(null)
+          setTopicError(error.message || 'AI 選題生成暫時失敗，請稍後再試。')
+        }
       } finally {
         if (!cancelled) setGeneratingTopics(false)
       }
@@ -2093,6 +2103,7 @@ function CopyPage() {
     topicRound,
     idea,
     copyTopics,
+    topicError,
     selectedTopicIdx,
     script,
     scriptError,
@@ -2109,6 +2120,7 @@ function CopyPage() {
       activeScriptRequestRef.current = ''
       setTopicRounds(prev => ({ ...prev, [scriptType]: (prev[scriptType] ?? 0) + 1 }))
       setSelectedTopicIdx(null)
+      setTopicError('')
       setScript(null)
       setGeneratingScript(false)
       setScriptError('')
@@ -2178,7 +2190,7 @@ function CopyPage() {
                 ? PROCESS_SCRIPT_GENERATION_INSTRUCTION
             : '請優先依照已上傳的腳本知識庫，生成符合 TOP LEVEL TRAFFIC 腳本句式的爆款文案。這不是批改作業，而是依選題產出可練習的腳本。',
       }
-      const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id)
+      const result = await callAI('script', payload, deriveAITier(currentUser), currentUser?.id, { allowMockFallback: false })
       const normalizedScript = normalizeScriptResult(result, topic.text, nextScriptType)
       scriptCacheRef.current[cacheKey] = { script: normalizedScript, scriptError: '' }
       if (activeScriptRequestRef.current === cacheKey) {
@@ -2581,7 +2593,7 @@ function CopyPage() {
       )}
 
       {/* Step 3: generated topics */}
-      {(generatingTopics || copyTopics) && (
+      {(generatingTopics || copyTopics || topicError) && (
         <div className="ait-card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div className="ait-step-hd" style={{ margin: 0 }}>
@@ -2596,6 +2608,8 @@ function CopyPage() {
           </div>
           {generatingTopics ? (
             <div className="ait-script-loading"><Spinner /> 生成中…</div>
+          ) : topicError ? (
+            <div className="ait-inline-error">{topicError}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {copyTopics.map((t, i) => {

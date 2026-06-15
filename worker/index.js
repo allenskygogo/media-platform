@@ -14,6 +14,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY     — optional server-only key for private AI agent prompts
  *   OPENAI_API_KEY                — OpenAI API key for server-side AI generation
  *   OPENAI_MODEL                  — optional model override for AI generation
+ *   OPENAI_BASE_URL               — optional OpenAI-compatible API base URL
  *   RESEND_API_KEY                — optional, sends learning reminder emails
  *   EMAIL_FROM                    — optional verified sender, e.g. "頂級流量 <hello@toplevel-tw.com>"
  *   NEWEBPAY_MERCHANT_ID          — NewebPay merchant ID
@@ -735,6 +736,8 @@ const DEFAULT_AI_AGENTS = {
 const STORY_EVENT_RULE = '當 scriptType=story 或腳本類型=說故事時，可用困境橋段：盲目自信、家門不幸、天災人禍、惡霸欺壓、過河拆橋、至親背叛、強權干涉。可用轉機橋段：通關密碼、至親所託、天賦異稟、意外之喜、因禍得福、貴人相助、破釜沈舟。這些都是可穿插使用的故事文法，請依故事邏輯選最適合的組合，不要固定只用同一組。每次生成說故事腳本時，困難與轉機橋段必須從清單中隨機或輪替變換。除非題目明確需要，禁止每次固定使用「盲目自信、通關密碼、過河拆橋、貴人相助」這組範例橋段。家門不幸不是單純家裡有事，而是主角目前的家境、現有環境、身邊人事物或資源條件都不好：例如家裡缺錢、環境不支持、設備不足、身邊人唱衰、原本的人脈或條件都不站在主角這邊。至親所託的意思是親人對主角的寄望、託付或希望，例如父母、伴侶、孩子、長輩把某個期待交到主角身上；如果是朋友、同事、客戶、老師或外人幫助主角，那是貴人相助，不是至親所託。整個【困境與轉機】都必須有爽劇感，不是只有結尾。每個困難都要有壓迫、羞辱、被看不起、資源被搶、代價升高或局勢變糟；每個轉機都要有反擊、翻身、打臉、局勢反轉或讓人覺得解氣的畫面。最後一個轉機必須寫得最多、最爽、最解氣，是整段高潮。可以讓前面欺壓、看不起、打壓主角的人，最後回頭來投靠、拜託、求合作、認錯或被現實打臉。說故事要把經典橋段寫成爽劇，不只是平淡解決問題。參考案例一：年輕村長故事的節奏是「意外之喜：年輕人意外站上權力位置」→「家門不幸：村子破敗、負債、資源荒涼」→「至親所託：看見父親驕傲或親人期待，重新接住使命」→「破釜沈舟：從最基礎建設開始硬幹」→「通關密碼：找到牆繪或新的引流方法」→「貴人相助：媒體、領導或外部資源進來，村子翻身」。參考案例二：地攤翻身故事的節奏是「盲目自信：選錯位置、欠債壓貨」→「意外之喜：發現地鐵口人流」→「通關密碼：找到布藝本子這個爆品」→「惡霸欺壓：同行眼紅搶貨、趕人」→「貴人相助：大客戶大量下單」→「爽劇高潮：靠訂單翻身，買房、打臉過去看不起的人」。最後的爽劇高潮可以寫在最後一個轉機內容裡，但不要把「最終崛起」當成橋段標籤。【困境與轉機】的 body 必須只用固定格式：困難：橋段名 換行 內容；空一行；轉機：橋段名 換行 內容；空一行；困難：橋段名 換行 內容；空一行；轉機：橋段名 換行 內容。禁止寫成一整段，禁止使用「困難1（橋段名）：」或「轉機1（橋段名）：」。橋段名稱只是標籤，內容才是正文。不要把「盲目自信、過河拆橋、貴人相助」寫成一句成語解釋，也不要順接成語；要把它翻成一整段事件。例如盲目自信不是寫「我太自信所以失敗」，而是寫：公司虧錢、宣傳片案子變少、新聞看到短視頻崛起、我以為十年導演背景做短視頻很簡單、接了客戶後播放量只有幾百、客戶打電話要退款、帳上沒錢只好借錢補洞。整段事件要讓觀眾自然感覺出「盲目自信」。'
 const PROCESS_SCRIPT_RULE = '當 scriptType=process 或腳本類型=曬過程時，必須嚴格使用曬過程腳本 SOP。曬過程不是流水帳，也不是普通工作紀錄；曬過程要像節目一樣設計，每一個橋段都要有鉤子企劃，讓觀眾想看下一秒。曬過程有四個腳本方向：過程展示、測評產品、任務挑戰、事件體驗。六大鉤子可用：送溫暖、金錢、驗證/解密、賀爾蒙、盲盒、對抗。送溫暖=給養老院、孤兒院、弱勢群體、學員、客戶或陌生人送禮物、資源、服務，或大量買下對方需要的東西。金錢=花大錢、花小錢辦大事、免費、賺錢、省錢、成本挑戰、低預算完成任務。驗證/解密=解秘真假、挑戰權威、揭秘隱私、創根問底、驗證身份、驗證方法是否成功。賀爾蒙=黑絲、長髮、肌肉、明星臉、搭訕、變裝、跳舞、誘惑、大尺度；只在題材自然適合時使用，不要低俗或硬塞。盲盒=抽到什麼穿什麼、吃什麼、做什麼、用什麼、幹什麼，或抽到驚喜禮物。對抗=下賭注、吵架、被阻止、發生意外、故意整人、有人不相信、有人唱反調。每支曬過程腳本至少使用 3 個鉤子。每個主要橋段都要標明「鉤子：XXX」，再寫這個橋段怎麼拍。輸出順序必須只有四段：【節目企劃】、【過程橋段】、【反轉/看點】、【結果收束】。【過程橋段】要用 3 到 5 個小橋段，每個小橋段都包含「橋段名」「鉤子」「畫面怎麼拍」「觀眾想看的點」。禁止只寫「準備階段、執行過程、遇到困難、結果」這種流水帳。每段都要有節目鉤子、有畫面、有懸念。'
 const PROCESS_TOPIC_RULE = '當 input.scriptType = "process" 或腳本類型為曬過程時，選題只能使用四個腳本方向：過程展示、測評產品、任務挑戰、事件體驗。8 個選題必須四種方向各至少 2 題，element 依序使用：過程展示、測評產品、任務挑戰、事件體驗、過程展示、測評產品、任務挑戰、事件體驗。過程展示要拍進貨、諮詢、服務、售後、接需求到交付、從想法到成品等完整流程；測評產品要拍對比測評、極限測評、化驗測評、工具設備比較、不同價格帶比較；任務挑戰要有高/低成本、限時間、限地點、一天內、三小時內、幫某對象完成某結果等任務限制；事件體驗要拍新奇體驗、奇葩規則、角色互換、當一天某身份、從新手視角重新體驗。以短影音教學為例：過程展示=紀錄我給學員訂製進階客腳本全過程；測評產品=對比五款拍攝設備，哪款最適合新手；任務挑戰=挑戰一天幫企業打造三套可落地的短影音；事件體驗=當一天短影音新手，體驗學員從零學起的真實感受。禁止輸出一般日常紀錄、普通工具清單、泛泛流程公開，除非它明確屬於上述四個方向。'
+const SCRIPT_TOPIC_GENERATION_RULE = '當 input.task = "generate_topics" 時，必須把已上傳的腳本知識庫 PDF 當成選題生成的主要依據，不只是後面寫腳本才使用。若有 file_search / vector store，必須優先依據 TOP LEVEL TRAFFIC 知識庫中的案例、句式、腳本 SOP、選題維度與限制條件來產生選題，禁止只用通用短影音建議。輸出必須是 JSON array，剛好 8 筆，每筆格式為 {"element":"...","text":"...","traffic":"high|medium|low"}。如果 input.scriptType="knowledge"，選題要能接出教知識三段式 SOP：場景難題、低行動成本解決方案、具體操作過程；每題都要有具體受眾、場景、痛點或錯誤行為，並符合信息多、效果快、料夠猛。'
+const TOPICS_KNOWLEDGE_RULE = '產生爆款選題時，若有 file_search / vector store 或已上傳知識庫 PDF，必須優先依據 TOP LEVEL TRAFFIC 知識庫的案例、句式、腳本 SOP、選題維度與限制條件，不可只用通用短影音建議。當 input.scriptType="knowledge" 或腳本類型=教知識時，選題必須能接出教知識三段式 SOP：場景難題、低行動成本解決方案、具體操作過程；每題要具體指出受眾、真實場景、痛點或錯誤行為，並符合信息多、效果快、料夠猛。'
 
 function ensureAgentRules(agent) {
   if (!agent) return agent
@@ -747,6 +750,9 @@ function ensureAgentRules(agent) {
       if (!next.includes('曬過程要像節目一樣設計')) {
         next = `${next}\n\n${PROCESS_SCRIPT_RULE}`.trim()
       }
+      if (!next.includes('input.task = "generate_topics"')) {
+        next = `${next}\n\n${SCRIPT_TOPIC_GENERATION_RULE}`.trim()
+      }
       return next
     }
     return {
@@ -756,9 +762,16 @@ function ensureAgentRules(agent) {
     }
   }
   if (agent.feature_key === 'topics') {
-    const withRule = text => String(text || '').includes('過程展示=紀錄我給學員訂製進階客腳本全過程')
-    ? text
-      : `${text || ''}\n\n${PROCESS_TOPIC_RULE}`.trim()
+    const withRule = text => {
+      let next = String(text || '')
+      if (!next.includes('TOP LEVEL TRAFFIC 知識庫的案例')) {
+        next = `${next}\n\n${TOPICS_KNOWLEDGE_RULE}`.trim()
+      }
+      if (!next.includes('過程展示=紀錄我給學員訂製進階客腳本全過程')) {
+        next = `${next}\n\n${PROCESS_TOPIC_RULE}`.trim()
+      }
+      return next
+    }
     return {
       ...agent,
       system_prompt: withRule(agent.system_prompt),
@@ -1430,7 +1443,7 @@ async function handleAI(request, env) {
     ]
   }
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
+  const response = await fetch(`${getOpenAIBaseURL(env)}/responses`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${env.OPENAI_API_KEY}`,
@@ -1728,7 +1741,7 @@ async function handleWritingEvaluation(request, env) {
     ]
   }
 
-  const response = await fetch('https://api.openai.com/v1/responses', {
+  const response = await fetch(`${getOpenAIBaseURL(env)}/responses`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${env.OPENAI_API_KEY}`,
@@ -2794,12 +2807,16 @@ async function downloadSupabaseStorageFile(env, storagePath) {
   return await response.blob()
 }
 
+function getOpenAIBaseURL(env) {
+  return String(env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '')
+}
+
 async function uploadOpenAIFile(env, fileBlob, fileName) {
   const form = new FormData()
   form.append('purpose', 'assistants')
   form.append('file', fileBlob, fileName)
 
-  const response = await fetch('https://api.openai.com/v1/files', {
+  const response = await fetch(`${getOpenAIBaseURL(env)}/files`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${env.OPENAI_API_KEY}`,
@@ -2815,7 +2832,7 @@ async function uploadOpenAIFile(env, fileBlob, fileName) {
 }
 
 async function openAIJson(path, env, options = {}) {
-  const response = await fetch(`https://api.openai.com${path}`, {
+  const response = await fetch(`${getOpenAIBaseURL(env)}${path}`, {
     method: options.method || 'GET',
     headers: {
       Authorization: `Bearer ${env.OPENAI_API_KEY}`,

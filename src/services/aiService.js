@@ -616,12 +616,13 @@ ${kw} 相關內容最適合你目前的定位
 //  if (!res.ok) throw new Error(await res.text())
 //  return await res.json()
 // ══════════════════════════════════════════════════════
-export async function callAI(feature, input, userPlan = 'free', userId = null) {
+export async function callAI(feature, input, userPlan = 'free', userId = null, options = {}) {
   try {
     const result = await callWorkerAI(feature, input, userPlan)
     appendAIUsage({ user_id: userId, feature, industry: input, plan: userPlan, provider: 'openai' })
     return result
   } catch (error) {
+    if (options.allowMockFallback === false) throw error
     if (import.meta.env.DEV) console.warn('AI API unavailable, using mock fallback:', error)
   }
 
