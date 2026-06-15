@@ -69,7 +69,7 @@ export default function ManualPaymentModal({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay manual-payment-overlay" onClick={onClose}>
       <div className="modal sp-checkout-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>

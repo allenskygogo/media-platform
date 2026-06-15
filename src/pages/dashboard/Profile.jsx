@@ -511,6 +511,13 @@ function PlanCheckoutPreview({
     !acceptedContract ? '勾選同意合約' : '',
   ].filter(Boolean)
 
+  useEffect(() => {
+    if (!manualMonthlyOpen) return
+    window.requestAnimationFrame(() => {
+      document.querySelector('.plan-comparison-modal')?.scrollTo({ top: 0, behavior: 'smooth' })
+    })
+  }, [manualMonthlyOpen])
+
   const getAccessToken = async ({ refresh = false } = {}) => {
     if (!supabase) return ''
     if (refresh) {
