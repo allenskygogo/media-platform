@@ -275,6 +275,134 @@ const contractClauses = [
   },
 ]
 
+const masterContractProjectItems = [
+  '一年策略陪跑：提供帳號方向、內容策略、商業定位與成長路徑之持續陪跑建議。',
+  '三天兩夜實體課程：包含短影音獲客、內容定位、腳本表達、拍攝實戰與商業轉換相關訓練。',
+  '頂流私塾專屬群：提供高階學員交流、提問與陪跑社群支援。',
+  '每月線上帳號健檢：每月協助檢視帳號方向、內容表現、主軸一致性與優化重點。',
+  '每月內容方向調整：依帳號數據、產業特性與商業目標，協助規劃下月內容方向。',
+  '選題與腳本優化：協助修正短影音選題、腳本架構、開場、觀點、轉折與 CTA。',
+  '個人 IP 定位優化：協助優化人設、記憶點、內容主軸、成交理由與品牌表達。',
+  '私域成交設計：協助規劃導流誘因、私訊溝通方向、私域成交流程與內容銜接。',
+  '高階 AI 工具使用權：開放高階 AI 工具使用，包含選題、腳本、文案、導流與成交相關工具，實際功能依乙方系統開放狀況為準。',
+  '每月實體一對一代練拍攝預約資格：甲方每月可預約一次實體一對一手把手代練拍攝或策略指導，須依乙方可預約時段提前安排。每月一對一資格僅限當月使用；未預約、臨時取消、未到場、逾時或未於當月完成使用者，該次資格即視為已使用，不得遞延至次月或其他月份，亦不得折抵現金或折抵其他服務，雙方另有書面約定者除外。',
+  '每月成果覆盤：定期檢查執行狀況、內容成效與下階段改善方向。',
+  '實體課優先複訓：於乙方實體課程梯次開放時，甲方得享有優先報名或候補資格，實際名額依乙方公告為準。',
+  '個人案例打造：協助整理甲方學習成果與帳號案例，作為個人品牌、成交素材或未來內容優化參考。',
+]
+
+const masterContractClauses = [
+  {
+    title: '第三條　費用與付款',
+    paragraphs: [
+      '合作總費用：新台幣 壹拾貳萬玖仟捌佰元整（NT$129,800），未稅。',
+      '發票與稅金：如甲方需乙方開立統一發票，應依法另加 5% 營業稅；實際稅務與發票開立方式依雙方付款與請款資訊為準。',
+      '付款方式：甲方應於線上簽署本合約後，依乙方指定方式一次全額支付。乙方確認款項後，依本合約啟動服務。',
+      '匯款資訊：匯款銀行/分行：中國信託 三民分行｜戶名：遐光映畫工作室｜帳號：118540475715',
+    ],
+  },
+  {
+    title: '第四條　雙方義務',
+    groups: [
+      {
+        subtitle: '（一）甲方義務',
+        items: [
+          '甲方應指定主要聯絡人與乙方進行溝通、資料提供、課程與陪跑安排。',
+          '甲方應提供與帳號、品牌、產品、服務、過往內容、商業目標相關之必要資料，以利乙方提出建議。',
+          '甲方應保證其提供之素材、商標、音樂、圖片、影片、文字、產品資訊及相關內容均具合法使用權；如有侵權或違法爭議，由甲方自行負責。',
+          '甲方應依約定時間參與課程、線上會議、實體課程或實體一對一預約；若因甲方因素延期、缺席或資料提供不完整，相關時程得順延或視為當次服務已提供。',
+          '甲方理解自媒體成效受產業、產品、帳號條件、執行頻率、平台演算法、內容品質與市場反應等因素影響，乙方不保證特定粉絲數、播放量、營收或成交結果。',
+        ],
+      },
+      {
+        subtitle: '（二）乙方義務',
+        items: [
+          '乙方應依本合約約定提供課程、陪跑、諮詢、策略建議與相關工具使用權。',
+          '乙方應依甲方提供之資料與實際執行情況，提供合理之帳號方向、內容策略、腳本與拍攝建議。',
+          '乙方得就甲方擬製作或發布之內容提出合法性、平台規範或內容風險之修改建議。',
+          '乙方不負責額外廣告投放費、第三方工具費、場地費、交通費、道具費、演員費、平台費、外部製作費或其他未列於本合約之費用。',
+          '乙方提供之課程、工具、講義、文件、錄影與相關方法論，除雙方另有書面約定外，僅供甲方於本案學習與內部使用。',
+        ],
+      },
+    ],
+  },
+  {
+    title: '第五條　期程與預約規範',
+    paragraphs: [
+      '本服務為一年期陪跑服務，服務起算日以付款完成日或雙方另行書面確認之日期為準。',
+      '每月線上健檢、成果覆盤與內容方向調整，應由甲乙雙方事先協調可執行時段。',
+      '每月實體一對一預約資格需至少提前七個工作天與乙方確認時段；一對一資格以當月使用為原則，不得累積、遞延至次月或折抵其他服務。遇乙方課程、拍攝或不可抗力因素，雙方得協議於當月或雙方書面確認之時段內改期。',
+      '甲方如需更改已預約之實體或線上服務時段，應至少提前三個工作天通知乙方，且改期以乙方可安排之當月時段為限；臨時取消、未到或逾時，乙方得認定該次服務已提供，且不得遞延、折抵或要求退款。',
+      '本合約服務包含策略、陪跑、課程與訓練，不包含乙方代為營運甲方帳號、代剪影片、代發文、代回訊息或代投廣告；若需此類服務，應另行報價與簽署約定。',
+    ],
+  },
+  {
+    title: '第六條　著作權與使用範圍',
+    paragraphs: [
+      '甲方提供之品牌、商標、產品資訊、原始素材與個人肖像等權利，仍歸甲方或原權利人所有。',
+      '乙方提供之課程內容、講義、工具、方法論、模板、AI 提示詞、策略文件與相關教材，其著作財產權及智慧財產權歸乙方所有，甲方不得未經授權複製、轉售、公開散布、移轉、出租或提供第三方使用。',
+      '甲方於服務期間依乙方建議自行製作並發布之帳號內容，其成品權利原則上歸甲方所有；惟涉及乙方教材、模板、工具或未公開方法論者，甲方僅得於自身品牌與帳號經營目的範圍內使用。',
+      '乙方如需使用甲方案例作為成果展示、教學示範或行銷素材，應取得甲方同意；展示範圍、去識別化程度及發布形式得另行確認。',
+    ],
+  },
+  {
+    title: '第七條　保密約定',
+    paragraphs: ['雙方因本合作知悉對方之商業機密、營運資料、會員資料、帳號數據、未公開課程內容、策略文件、成交流程、報價資訊及其他非公開資訊，均應負保密義務。未經對方書面同意，不得洩漏、公開、轉讓或提供第三人使用。但依法令、主管機關、法院命令或本合約履行必要而揭露者，不在此限。'],
+  },
+  {
+    title: '第八條　退款、終止與違約責任',
+    paragraphs: [
+      '本合約簽署後，甲方應依約付款。乙方確認款項後開始安排課程與服務資源。',
+      '甲方完成付款且乙方已啟動服務、開通課程或提供陪跑資源後，除乙方無正當理由且經甲方通知後仍未於合理期間內提供約定服務外，甲方不得任意解除合約或要求退款。',
+      '若因甲方個人因素、時間安排、執行意願、產業市場變化、平台演算法或帳號經營結果不如預期而終止合作，不得作為退款理由。',
+      '若乙方無正當理由，且經甲方以書面或可留存紀錄方式通知後仍未於合理期間內協調或推進服務，致約定內容無法交付，甲方得就未交付之服務項目與乙方協議退款或替代服務安排。',
+      '任何一方違反本合約，致他方受有損害者，應負相應賠償責任；但間接損害、預期利益、營業損失、商譽損失，除法律另有強制規定外，不在賠償範圍內。',
+    ],
+  },
+  {
+    title: '第九條　不可抗力',
+    paragraphs: ['如因天災、戰爭、疫情、政府命令、重大平台政策變更、交通中斷、網路服務中斷或其他不可歸責於任一方之不可抗力事件，致本合約全部或一部無法履行，受影響之一方應即時通知他方，雙方得協議延期、變更執行方式或調整服務時程。'],
+  },
+  {
+    title: '第十條　線上簽署與通知',
+    paragraphs: [
+      '本合約得以電子簽章、線上簽署平台、電子郵件確認或其他可證明簽署意思表示之方式簽署；其效力與紙本簽章相同。',
+      '甲方於線上簽署時填寫之姓名、公司名稱、統一編號、電子郵件、電話、IP 紀錄、簽署時間或平台驗證資訊，得作為識別簽署人與簽署意思表示之依據。',
+      '本合約相關通知得以電子郵件、LINE、簡訊、線上簽署平台通知或其他雙方慣用且可留存紀錄之方式為之。',
+    ],
+  },
+  {
+    title: '第十一條　爭議處理與管轄法院',
+    paragraphs: ['本合約如有未盡事宜，雙方得本誠信原則協議補充。本合約之解釋、履行及爭議處理，適用中華民國法律；如需涉訟，雙方同意以臺灣高雄地方法院為第一審管轄法院。'],
+  },
+  {
+    title: '第十二條　合約份數與生效',
+    paragraphs: ['本合約以線上簽署方式成立者，雙方得各自保存電子檔或線上簽署平台所產生之簽署紀錄。本合約自雙方完成簽署並由甲方完成付款後生效；未完成付款前，乙方得暫停開通課程、工具或陪跑服務。'],
+  },
+]
+
+function getContractDefinition(planId) {
+  if (planId === 'master') {
+    return {
+      title: '頂流私塾一年陪跑合作協議書',
+      versionLabel: '頂流私塾一年陪跑｜NT$129,800 未稅',
+      intro: '立合約書人（以下簡稱「甲方」）與遐光映畫工作室（以下簡稱「乙方」），就「頂流私塾一年陪跑」合作案，經雙方協議訂定本合作協議書，以茲共同遵守。',
+      projectHeading: '合作項目：短影音一年陪跑頂流私塾。服務期間自甲方完成本合約線上簽署並完成付款後起算一年；如雙方另有約定起訖日，依線上簽署頁面或雙方書面確認之日期為準。',
+      projectItems: masterContractProjectItems,
+      clauses: masterContractClauses,
+    }
+  }
+
+  return {
+    title: '短影音一年達人班合作協議書',
+    versionLabel: '短影音一年陪跑達人班｜NT$39,800 未稅',
+    intro: '立合約書人（以下簡稱甲方）與遐光映畫工作室（以下簡稱乙方），就「短影音一年陪跑達人班」課程與陪跑服務合作案，經雙方協議訂定本合約，以茲共同信守。',
+    projectHeading: '',
+    projectItems: contractProjectItems,
+    clauses: contractClauses,
+  }
+}
+
 function SignaturePadModal({ onClose, onSave, existingSignature = '' }) {
   const canvasRef = useRef(null)
   const drawingRef = useRef(false)
@@ -496,11 +624,13 @@ function PlanCheckoutPreview({
   const [pendingSignatureAction, setPendingSignatureAction] = useState('')
   const [monthlyContractReady, setMonthlyContractReady] = useState(false)
   const price = planPriceDetails[plan.id]
+  const contractDefinition = getContractDefinition(plan.id)
   const isQuote = price?.kind === 'quote'
   const isAnnualPlan = price?.kind === 'annual'
   const amount = getCheckoutAmount(plan.id, billingCycle)
   const monthlyAmount = price?.monthly?.replace(/^月付\s*/, '') || ''
   const isMonthlyCheckout = isAnnualPlan && billingCycle === 'monthly'
+  const shouldAttachCreatorQuote = isMonthlyCheckout && plan.id === 'creator'
   const normalizedContractName = String(contractName || '').trim()
   const normalizedContractPhone = normalizeTaiwanMobilePhone(phone)
   const canProceedToPayment = Boolean(acceptedContract && signatureDataUrl && normalizedContractName.length >= 2 && normalizedContractPhone)
@@ -543,8 +673,8 @@ function PlanCheckoutPreview({
       signerEmail: currentUser?.email,
       signerPhone: normalizedPhone,
       signerSignatureDataUrl: signatureDataUrl,
-      includeQuotation: cycle === 'monthly',
-      quotationFileName: cycle === 'monthly' ? 'creator-quote-39800.pdf' : '',
+      includeQuotation: cycle === 'monthly' && plan.id === 'creator',
+      quotationFileName: cycle === 'monthly' && plan.id === 'creator' ? 'creator-quote-39800.pdf' : '',
     }
 
     const postSignature = async accessToken => {
@@ -793,7 +923,9 @@ function PlanCheckoutPreview({
           </div>
           {isMonthlyCheckout && (
             <div className="contract-monthly-notice">
-              月付 / 分期方案會同步建立合作協議書與含客戶聯絡資訊、電子簽名的達人班報價單，送出後會跳出 Line@ 通知客服。
+              {shouldAttachCreatorQuote
+                ? '月付 / 分期方案會同步建立合作協議書與含客戶聯絡資訊、電子簽名的達人班報價單，送出後會跳出 Line@ 通知客服。'
+                : '月付 / 分期方案會先建立合作協議書，送出後會跳出 Line@ 通知客服協助確認。'}
             </div>
           )}
           <div className="contract-placeholder">
@@ -810,12 +942,12 @@ function PlanCheckoutPreview({
               <p><span>Email</span>{currentUser?.email}</p>
               <p><span>方案</span>{plan.name}</p>
               <p><span>付款金額</span>{amount}</p>
-              {isMonthlyCheckout && <p><span>報價單</span>一年陪跑達人班簽署版報價單 NT$39,800</p>}
+              {shouldAttachCreatorQuote && <p><span>報價單</span>一年陪跑達人班簽署版報價單 NT$39,800</p>}
             </div>
             <div className="contract-preview-scroll">
-              <h5>短影音一年達人班合作協議書</h5>
+              <h5>{contractDefinition.title}</h5>
               <p>（線上簽署版）</p>
-              <p>立合約書人（以下簡稱甲方）與遐光映畫工作室（以下簡稱乙方），就「短影音一年陪跑達人班」課程與陪跑服務合作案，經雙方協議訂定本合約，以茲共同信守。</p>
+              <p>{contractDefinition.intro}</p>
               <div className="contract-party-card">
                 <strong>甲方客戶聯絡資訊（線上簽署前填寫）</strong>
                 <dl>
@@ -826,13 +958,15 @@ function PlanCheckoutPreview({
                   <div><dt>電子信箱</dt><dd>{currentUser?.email}</dd></div>
                   <div><dt>聯絡地址</dt><dd>線上簽署未填寫</dd></div>
                   <div><dt>LINE ID / 其他聯絡方式</dt><dd>線上簽署未填寫</dd></div>
+                  <div><dt>合約版本</dt><dd>{contractDefinition.versionLabel}</dd></div>
                 </dl>
               </div>
               <h5>專案內容</h5>
+              {contractDefinition.projectHeading && <p>{contractDefinition.projectHeading}</p>}
               <ol>
-                {contractProjectItems.map(item => <li key={item}>{item}</li>)}
+                {contractDefinition.projectItems.map(item => <li key={item}>{item}</li>)}
               </ol>
-              {contractClauses.map(clause => (
+              {contractDefinition.clauses.map(clause => (
                 <section className="contract-clause" key={clause.title}>
                   <h5>{clause.title}</h5>
                   {clause.paragraphs?.map((paragraph, index) => (
@@ -866,7 +1000,7 @@ function PlanCheckoutPreview({
                   <p>名稱：遐光映畫工作室</p>
                   <p>統一編號：71622113</p>
                   <p>負責人：張峻翔</p>
-                  <p>E-mail：web@xgfx-tw.com</p>
+                  <p>E-mail：xgfxstudio.ks01@gmail.com</p>
                   <p>電話：07-2367660</p>
                   <p>線上簽署：乙方系統紀錄</p>
                   <p>簽署日期：完成付款流程時紀錄</p>
