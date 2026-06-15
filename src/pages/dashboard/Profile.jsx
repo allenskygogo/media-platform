@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
@@ -276,18 +277,18 @@ function SignaturePadModal({ onClose, onSave, existingSignature = '' }) {
     onSave(canvasRef.current.toDataURL('image/png'))
   }
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
+  return createPortal(
+    <div className="modal-overlay signature-modal-overlay" onClick={onClose}>
       <div className="modal signature-modal" onClick={event => event.stopPropagation()}>
         <div className="modal-header">
           <div>
             <p className="sp-checkout-kicker">Online Signature</p>
-            <h2 className="modal-title">線上親筆簽名</h2>
+            <h2 className="modal-title">電子簽名</h2>
           </div>
-          <button className="modal-close" onClick={onClose} aria-label="關閉簽名視窗">✕</button>
+          <button className="modal-close" onClick={onClose} aria-label="關閉電子簽名視窗">✕</button>
         </div>
         <div className="modal-body">
-          <p className="signature-modal-note">請用滑鼠、觸控板或手機手寫簽名。完成後，系統會把簽名、日期與合約一起保存，後台可下載。</p>
+          <p className="signature-modal-note">請用滑鼠、觸控板或手機手寫電子簽名。完成後，簽名會顯示在甲方簽署欄，系統會把簽名、日期與合約一起保存，後台可下載。</p>
           <canvas
             ref={canvasRef}
             className="signature-pad"
@@ -306,7 +307,8 @@ function SignaturePadModal({ onClose, onSave, existingSignature = '' }) {
           <button type="button" className="btn btn-primary" onClick={save}>確認簽名</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -444,7 +446,7 @@ function PlanCheckoutPreview({
       return
     }
     if (!signatureDataUrl) {
-      setError('請先完成線上親筆簽名。')
+      setError('請先完成電子簽名。')
       setPendingSignatureAction('checkout')
       setSignatureModalOpen(true)
       return
@@ -487,7 +489,7 @@ function PlanCheckoutPreview({
   const handleContractNext = () => {
     if (!acceptedContract) return
     if (!signatureDataUrl) {
-      setError('請先完成線上親筆簽名。')
+      setError('請先完成電子簽名。')
       setPendingSignatureAction('checkout')
       setSignatureModalOpen(true)
       return
@@ -659,7 +661,8 @@ function PlanCheckoutPreview({
                   <p>簽署人：{currentUser?.name || '目前登入學員'}</p>
                   <p>電子信箱：{currentUser?.email}</p>
                   <p>電話：{phone || '請於下方填寫'}</p>
-                  <p>線上簽署：勾選下方同意後完成</p>
+                  {signatureDataUrl && <img className="contract-signer-signature" src={signatureDataUrl} alt="甲方電子簽名" />}
+                  <p>電子簽名：{signatureDataUrl ? '已完成' : '尚未完成'}</p>
                   <p>簽署日期：完成付款流程時紀錄</p>
                 </div>
                 <div>
@@ -679,7 +682,7 @@ function PlanCheckoutPreview({
           </div>
           <div className="signature-status-card">
             <div>
-              <span>甲方線上親筆簽名</span>
+              <span>甲方電子簽名（必填）</span>
               <strong>{signatureDataUrl ? '已完成簽名' : '尚未簽名'}</strong>
             </div>
             {signatureDataUrl && <img src={signatureDataUrl} alt="甲方親筆簽名預覽" />}
@@ -691,7 +694,7 @@ function PlanCheckoutPreview({
                 setSignatureModalOpen(true)
               }}
             >
-              {signatureDataUrl ? '重新簽名' : '開啟簽名視窗'}
+              {signatureDataUrl ? '重新電子簽名' : '電子簽名'}
             </button>
           </div>
           <div className="form-group" style={{ marginTop: 14 }}>

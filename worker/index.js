@@ -1976,7 +1976,7 @@ async function handleSignContract(request, env) {
   if (!signerName || signerName.length < 2) return err('請填寫真實姓名。', 400)
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) return err('Email 格式不正確。', 400)
   if (!signerPhone || signerPhone.length < 8) return err('請填寫聯絡電話。', 400)
-  if (!signerSignatureDataUrl) return err('請完成線上親筆簽名。', 400)
+  if (!signerSignatureDataUrl) return err('請完成電子簽名。', 400)
 
   const contract = await insertContractSignature(env, {
     user_id: user.id,

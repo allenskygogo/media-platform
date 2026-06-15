@@ -4254,6 +4254,17 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   padding: 6px;
 }
 
+.contract-signer-signature {
+  display: block;
+  width: 180px;
+  height: 58px;
+  object-fit: contain;
+  margin: 8px 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.96);
+}
+
 .contract-company-line {
   padding-top: 12px;
   border-top: 1px solid rgba(255,255,255,0.08);
@@ -4296,6 +4307,10 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
 
 .signature-modal {
   max-width: 760px;
+}
+
+.signature-modal-overlay {
+  z-index: 1400;
 }
 
 .signature-modal-note {
