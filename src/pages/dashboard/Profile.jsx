@@ -120,6 +120,13 @@ const mobilePlanVisuals = {
 
 const mobilePlanMatrixRows = [
   {
+    id: 'trial',
+    name: '體驗課',
+    icon: Rocket,
+    tone: 'neutral',
+    values: ['無', '無', '掌握內容起步方法'],
+  },
+  {
     id: 'creator',
     name: '頂流達人',
     icon: BarChart3,
@@ -139,13 +146,6 @@ const mobilePlanMatrixRows = [
     icon: Crown,
     tone: 'green',
     values: ['團隊執行', '依方案安排', '團隊協助營運與內容交付'],
-  },
-  {
-    id: 'trial',
-    name: '體驗課',
-    icon: Rocket,
-    tone: 'neutral',
-    values: ['無', '無', '掌握內容起步方法'],
   },
 ]
 
