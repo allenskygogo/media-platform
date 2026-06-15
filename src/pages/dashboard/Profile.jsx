@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { BarChart3, CheckCircle2, ChevronRight, Crown, Headphones, LockKeyhole, Menu, Rocket, ShieldCheck, Star, TrendingUp, UserRoundCheck } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
@@ -78,6 +79,42 @@ const planPriceDetails = {
     primary: '專案報價',
     primaryMeta: '依帳號需求評估',
     note: '由團隊評估帳號需求後報價',
+  },
+}
+
+const mobilePlanVisuals = {
+  trial: {
+    icon: Rocket,
+    tone: 'blue',
+    subtitle: '入門體驗',
+    description: '適合剛接觸自媒體的新手',
+    bullets: ['三個月完整體驗', '建立基礎認知與方向'],
+    cta: '立即體驗',
+  },
+  creator: {
+    icon: BarChart3,
+    tone: 'purple',
+    subtitle: '系統學習',
+    description: '適合想靠自媒體穩定獲客的人',
+    bullets: ['系統化獲客流程', '每月更新課程內容', '專屬社群交流'],
+    badge: '最多人選擇',
+    cta: '立即加入',
+  },
+  master: {
+    icon: UserRoundCheck,
+    tone: 'gold',
+    subtitle: '一對一陪跑',
+    description: '適合想快速放大成果的人',
+    bullets: ['一對一實戰陪跑', '每月策略會議', '專屬顧問指導'],
+    cta: '立即升級',
+  },
+  managed: {
+    icon: Crown,
+    tone: 'blue',
+    subtitle: '團隊執行',
+    description: '適合沒時間自己操作的人',
+    bullets: ['團隊代操執行', '內容拍攝剪輯', '數據分析優化'],
+    cta: '聯繫專屬顧問',
   },
 }
 
@@ -882,6 +919,30 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
     return { label: '立即升級', disabled: false }
   }
 
+  const getMobilePrice = (plan) => {
+    const price = planPriceDetails[plan.id]
+    if (!price) return { primary: '', secondary: '', saving: '' }
+    if (price.kind === 'annual') {
+      return {
+        primary: price.annual.replace('年付 ', ''),
+        secondary: price.monthly,
+        saving: price.save,
+      }
+    }
+    if (price.kind === 'quote') {
+      return {
+        primary: price.primary,
+        secondary: price.primaryMeta,
+        saving: '',
+      }
+    }
+    return {
+      primary: price.primary,
+      secondary: price.primaryMeta,
+      saving: '',
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal plan-comparison-modal" onClick={e => e.stopPropagation()}>
@@ -895,6 +956,94 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
           <button className="modal-close" onClick={onClose} aria-label="關閉">✕</button>
         </div>
         <div className="modal-body">
+          <div className="mobile-plan-showcase">
+            <div className="mobile-plan-showcase-head">
+              <div>
+                <h3>頂流方案比較</h3>
+                <p>找到最適合你的成長路徑</p>
+              </div>
+              <button type="button" onClick={() => setShowFullComparison(value => !value)}>
+                <Menu size={17} />
+                表格比較
+              </button>
+            </div>
+            <div className="mobile-plan-steps" aria-label="方案階段">
+              {plans.map((plan, index) => {
+                const visual = mobilePlanVisuals[plan.id]
+                const Icon = visual.icon
+                return (
+                  <div className={`mobile-plan-step ${index === 0 ? 'active' : ''}`} key={plan.id}>
+                    <div className={`mobile-plan-step-icon ${visual.tone}`}>
+                      <Icon size={20} />
+                    </div>
+                    <span>{plan.name}</span>
+                    {index < plans.length - 1 && <ChevronRight className="mobile-plan-step-arrow" size={16} />}
+                  </div>
+                )
+              })}
+            </div>
+            <div className="mobile-plan-cards">
+              {plans.map(plan => {
+                const visual = mobilePlanVisuals[plan.id]
+                const Icon = visual.icon
+                const price = getMobilePrice(plan)
+                const action = getUpgradeAction(plan)
+                return (
+                  <article className={`mobile-plan-card ${visual.tone} ${plan.id === 'creator' ? 'featured' : ''}`} key={plan.id}>
+                    <span className={`mobile-plan-number ${visual.tone}`}>{plan.level}</span>
+                    <div className={`mobile-plan-icon ${visual.tone}`}>
+                      <Icon size={32} />
+                    </div>
+                    <div className="mobile-plan-main">
+                      <div className="mobile-plan-title-row">
+                        <div>
+                          <h4>{plan.name}</h4>
+                          <p>{visual.subtitle}</p>
+                        </div>
+                        {visual.badge && (
+                          <span className="mobile-plan-badge">
+                            <Star size={13} />
+                            {visual.badge}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mobile-plan-description">{visual.description}</p>
+                      <ul>
+                        {visual.bullets.map(item => (
+                          <li key={item}>
+                            <CheckCircle2 size={15} />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="mobile-plan-price">
+                      <strong>{price.primary}</strong>
+                      <span>{price.secondary}</span>
+                      {price.saving && (
+                        <em>
+                          <ShieldCheck size={15} />
+                          {price.saving}
+                        </em>
+                      )}
+                      <button type="button" disabled={action.disabled} onClick={() => startCheckout(plan)}>
+                        {action.disabled ? action.label : visual.cta}
+                        {!action.disabled && <ChevronRight size={20} />}
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+            <div className="mobile-plan-trust">
+              <div><ShieldCheck size={22} /><span>專業團隊<small>多年實戰經驗</small></span></div>
+              <div><TrendingUp size={22} /><span>數據驅動<small>成效看得見</small></span></div>
+              <div><LockKeyhole size={22} /><span>資源保密<small>保障帳號安全</small></span></div>
+              <div><Headphones size={22} /><span>專屬服務<small>全程陪伴支援</small></span></div>
+            </div>
+            <p className="mobile-plan-safe-note">安全付款、隱私保護、安心學習</p>
+          </div>
+
           <div className="plan-aligned-grid plan-level-cards">
             <aside className="plan-modal-info-card">
               <div className="plan-modal-info-icon" aria-hidden="true" />
@@ -940,7 +1089,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
             />
           )}
 
-          <section className="plan-summary-box">
+          <section className={`plan-summary-box ${showFullComparison ? 'mobile-table-open' : ''}`}>
             <div className="plan-summary-desktop">
               <div className="comparison-row comparison-head">
                 <div className="comparison-label">升級重點</div>
