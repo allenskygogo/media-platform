@@ -118,6 +118,61 @@ const mobilePlanVisuals = {
   },
 }
 
+const mobilePlanMatrixRows = [
+  {
+    id: 'creator',
+    name: '頂流達人',
+    icon: BarChart3,
+    tone: 'purple',
+    values: ['系統學習', '實體課', '建立自媒體獲客系統'],
+  },
+  {
+    id: 'master',
+    name: '頂流私塾',
+    icon: UserRoundCheck,
+    tone: 'blue',
+    values: ['一對一陪跑', '實體課＋實體一對一', '提升內容品質與執行穩定度'],
+  },
+  {
+    id: 'managed',
+    name: '頂流代操',
+    icon: Crown,
+    tone: 'green',
+    values: ['團隊執行', '依方案安排', '團隊協助營運與內容交付'],
+  },
+  {
+    id: 'trial',
+    name: '體驗課',
+    icon: Rocket,
+    tone: 'neutral',
+    values: ['無', '無', '掌握內容起步方法'],
+  },
+]
+
+const mobilePlanFitRows = [
+  {
+    id: 'creator',
+    name: '頂流達人',
+    icon: BarChart3,
+    tone: 'purple',
+    text: '適合想系統化學習，建立自媒體獲客系統的你。',
+  },
+  {
+    id: 'master',
+    name: '頂流私塾',
+    icon: UserRoundCheck,
+    tone: 'blue',
+    text: '適合需要一對一指導，提升內容品質與執行穩定度的你。',
+  },
+  {
+    id: 'managed',
+    name: '頂流代操',
+    icon: Crown,
+    tone: 'green',
+    text: '適合希望團隊協助營運與內容交付，專注核心業務的你。',
+  },
+]
+
 const contractProjectItems = [
   '一年陪跑學習：服務期間自本合約簽署並完成付款之日起算一年。',
   '一年內兩次實體課：依乙方開課梯次與場地安排通知甲方參與。',
@@ -964,7 +1019,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
               </div>
               <button type="button" onClick={() => setShowFullComparison(value => !value)}>
                 <Menu size={17} />
-                表格比較
+                {showFullComparison ? '收合比較' : '表格比較'}
               </button>
             </div>
             <div className="mobile-plan-steps" aria-label="方案階段">
@@ -1035,6 +1090,42 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
                 )
               })}
             </div>
+            {showFullComparison && (
+              <div className="mobile-plan-expanded">
+                <div className="mobile-plan-matrix" aria-label="手機版方案表格比較">
+                  {mobilePlanMatrixRows.map(row => {
+                    const Icon = row.icon
+                    return (
+                      <div className="mobile-plan-matrix-row" key={row.id}>
+                        <div className={`mobile-plan-matrix-label ${row.tone}`}>
+                          <Icon size={26} />
+                          <strong>{row.name}</strong>
+                        </div>
+                        {row.values.map(value => (
+                          <div className={`mobile-plan-matrix-value ${row.tone}`} key={`${row.id}-${value}`}>
+                            {value}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="mobile-plan-fit-list" aria-label="方案適合對象">
+                  {mobilePlanFitRows.map(row => {
+                    const Icon = row.icon
+                    return (
+                      <div className="mobile-plan-fit-item" key={row.id}>
+                        <div className={`mobile-plan-fit-title ${row.tone}`}>
+                          <Icon size={24} />
+                          <strong>{row.name}</strong>
+                        </div>
+                        <p>{row.text}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
             <div className="mobile-plan-trust">
               <div><ShieldCheck size={22} /><span>專業團隊<small>多年實戰經驗</small></span></div>
               <div><TrendingUp size={22} /><span>數據驅動<small>成效看得見</small></span></div>
