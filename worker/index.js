@@ -2912,6 +2912,11 @@ function renderContractHtml(contract, env = {}) {
     .quote-box { margin: 24px 0; padding: 16px; border: 1px solid #cbd3ef; border-radius: 10px; background: #f7f8ff; }
     .quote-box strong { display: block; margin-bottom: 6px; font-size: 16px; }
     .quote-box a { color: #3448d9; font-weight: 700; }
+    .quote-notes { margin: 14px 0; border: 1px solid #d8dbe6; background: #fff; }
+    .quote-notes h3 { margin: 0; padding: 10px 12px; text-align: center; color: #fff; background: #333; font-size: 16px; }
+    .quote-notes p { margin: 8px 12px 0; font-weight: 700; }
+    .quote-notes ol { margin: 8px 12px 14px 34px; padding: 0; font-weight: 700; }
+    .quote-notes li { margin: 2px 0; }
     .quote-meta { display: grid; grid-template-columns: 150px 1fr; border: 1px solid #d8dbe6; border-bottom: 0; margin: 12px 0; background: #fff; }
     .quote-meta div { padding: 8px 10px; border-bottom: 1px solid #d8dbe6; }
     .quote-meta div:nth-child(odd) { background: #eef1ff; font-weight: 700; color: #34394c; }
@@ -2941,6 +2946,24 @@ function renderContractHtml(contract, env = {}) {
   <div class="quote-box">
     <strong>月付 / 分期方案簽署版報價單</strong>
     <p>本合約為月付 / 分期方案，以下為已附客戶聯絡資訊與電子簽名之簽署版報價單，供客服確認與後台留存。</p>
+    <div class="quote-notes">
+      <h3>注意事項</h3>
+      <p>※內容細項：</p>
+      <ol>
+        <li>一年陪跑學習（報價單簽訂日起算）</li>
+        <li>一年內兩次實體課（報價單簽訂日起算）</li>
+        <li>每周線上內訓</li>
+        <li>短影音商業定位</li>
+        <li>個人 IP 內容定位</li>
+        <li>爆款選題系統</li>
+        <li>腳本寫作訓練</li>
+        <li>自然風拍攝技巧</li>
+        <li>鏡頭表達訓練</li>
+        <li>剪輯與上架優化</li>
+        <li>流量數據分析</li>
+        <li>變現路徑規劃</li>
+      </ol>
+    </div>
     <div class="quote-meta">
       <div>客戶姓名</div><div>${htmlEscape(contract.signer_name)}</div>
       <div>客戶 Email</div><div>${htmlEscape(contract.signer_email)}</div>
