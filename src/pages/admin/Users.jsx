@@ -80,40 +80,61 @@ export default function UsersAdmin() {
     })
   }
 
-  const getAdminToken = async () => {
-    const { data: sessionData } = await supabase.auth.getSession()
+  const getAdminToken = async ({ refresh = false } = {}) => {
+    const { data: sessionData } = refresh
+      ? await supabase.auth.refreshSession()
+      : await supabase.auth.getSession()
     const token = sessionData?.session?.access_token
     if (!token) throw new Error('找不到管理員登入 token，請重新登入後台。')
     return token
   }
 
+  const isInvalidTokenError = (data) => String(data?.error || data?.message || '').includes('Invalid authorization token')
+
   const workerJson = async (path, options = {}) => {
-    const token = await getAdminToken()
-    const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}${path}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...(options.headers || {}),
-      },
-    })
-    const data = await response.json().catch(() => ({}))
+    const request = async (token) => {
+      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...(options.headers || {}),
+        },
+      })
+      const data = await response.json().catch(() => ({}))
+      return { response, data }
+    }
+
+    let { response, data } = await request(await getAdminToken())
+    if ((!response.ok || data.success === false) && isInvalidTokenError(data)) {
+      ;({ response, data } = await request(await getAdminToken({ refresh: true })))
+    }
     if (!response.ok || data.success === false) {
-      throw new Error(data.error || '會員資料更新失敗')
+      throw new Error(isInvalidTokenError(data) ? '登入狀態已過期，請重新整理或重新登入後台。' : data.error || '會員資料更新失敗')
     }
     return data
+  }
+
+  const workerDownload = async (path) => {
+    const request = async (token) => fetch(`${WORKER_URL.replace(/\/$/, '')}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    let response = await request(await getAdminToken())
+    if (!response.ok) {
+      const data = await response.clone().json().catch(() => ({}))
+      if (isInvalidTokenError(data)) response = await request(await getAdminToken({ refresh: true }))
+    }
+    return response
   }
 
   const downloadContract = async (contract) => {
     if (!contract?.id) return
     try {
-      const token = await getAdminToken()
-      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/admin/contracts/${encodeURIComponent(contract.id)}/download`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const response = await workerDownload(`/api/admin/contracts/${encodeURIComponent(contract.id)}/download`)
       if (!response.ok) {
         const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || '下載合約失敗')
+        throw new Error(isInvalidTokenError(data) ? '登入狀態已過期，請重新整理或重新登入後台。' : data.error || '下載合約失敗')
       }
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
