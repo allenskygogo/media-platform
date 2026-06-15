@@ -927,6 +927,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
   const [acceptedContract, setAcceptedContract] = useState(false)
   const [checkoutStep, setCheckoutStep] = useState(0)
   const [autoStartedPlanId, setAutoStartedPlanId] = useState('')
+  const checkoutSectionRef = useRef(null)
   const nextPlan = plans.find(plan => plan.level === (currentPlan?.level || 0) + 1) || null
 
   const getPlanBadge = (plan) => {
@@ -955,6 +956,17 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
     setAcceptedContract(false)
     setCheckoutStep(0)
   }
+
+  useEffect(() => {
+    if (!checkoutPlan) return undefined
+    const frame = window.requestAnimationFrame(() => {
+      checkoutSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [checkoutPlan])
 
   useEffect(() => {
     if (!initialPlanId || autoStartedPlanId === initialPlanId) return
@@ -1167,17 +1179,19 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
           </div>
 
           {checkoutPlan && (
-            <PlanCheckoutPreview
-              plan={checkoutPlan}
-              currentUser={currentUser}
-              billingCycle={billingCycle}
-              setBillingCycle={setBillingCycle}
-              acceptedContract={acceptedContract}
-              setAcceptedContract={setAcceptedContract}
-              checkoutStep={checkoutStep}
-              setCheckoutStep={setCheckoutStep}
-              onClose={closeCheckout}
-            />
+            <div ref={checkoutSectionRef} className="plan-checkout-anchor">
+              <PlanCheckoutPreview
+                plan={checkoutPlan}
+                currentUser={currentUser}
+                billingCycle={billingCycle}
+                setBillingCycle={setBillingCycle}
+                acceptedContract={acceptedContract}
+                setAcceptedContract={setAcceptedContract}
+                checkoutStep={checkoutStep}
+                setCheckoutStep={setCheckoutStep}
+                onClose={closeCheckout}
+              />
+            </div>
           )}
 
           <section className={`plan-summary-box ${showFullComparison ? 'mobile-table-open' : ''}`}>
