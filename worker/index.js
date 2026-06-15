@@ -55,8 +55,108 @@ const BILLING_CYCLE_LABELS = {
   monthly: '月付',
   single: '一次付清',
 }
-const CONTRACT_VERSION = 'creator-online-v1'
+const CONTRACT_VERSION = 'creator-online-v2-word-full'
 const CONTRACT_CONSENT_TEXT = '我已閱讀並同意本合作協議書內容，確認以上資料為本人真實資料，並同意以線上點擊確認作為簽署意思表示。'
+const CONTRACT_PROJECT_ITEMS = [
+  '一年陪跑學習：服務期間自本合約簽署並完成付款之日起算一年。',
+  '一年內兩次實體課：依乙方開課梯次與場地安排通知甲方參與。',
+  '每週線上內訓：提供短影音經營、內容系統化與商業轉換相關訓練。',
+  '短影音商業定位：協助理解短影音變現方式，明確自身商業定位。',
+  '個人 IP 內容定位：建立適合甲方產業與個人品牌的內容主軸。',
+  '爆款選題系統：協助建立素材庫分類、搜尋技巧與爆款選題發想流程。',
+  '腳本寫作訓練：協助學習講觀點、曬過程與商業內容腳本落地化。',
+  '自然風拍攝技巧：學習符合短影音平台觀看習慣之拍攝與表達方式。',
+  '鏡頭表達訓練：強化口播、觀點表達與觀眾黏著度。',
+  '剪輯與上架優化：提供影片剪輯、標題、發布與上架優化觀念。',
+  '流量數據分析：學習觀察影片數據與判斷內容調整方向。',
+  '變現路徑規劃：理解導流、成交與商業內容設計方向。',
+]
+const CONTRACT_CLAUSES = [
+  {
+    title: '第一條　費用與付款',
+    paragraphs: [
+      '本次合作總費用：新台幣 參萬玖仟捌佰 元整（NT$39,800），未稅。',
+      '如甲方需乙方開立統一發票，應另加 5% 營業稅，稅額依實際開立金額計算。',
+      '付款方式：本合約簽署後，甲方應以全額一次付清方式支付款項。乙方確認款項入帳後，依約提供課程與陪跑服務。',
+      '匯款資訊：中國信託三民分行；戶名：遐光映畫工作室；帳號：118540475715。',
+    ],
+  },
+  {
+    title: '第二條　雙方義務',
+    groups: [
+      {
+        subtitle: '（一）甲方義務',
+        items: [
+          '甲方應指定主要聯絡窗口，配合乙方課程通知、作業提交、檢討與相關溝通。',
+          '甲方應依照課程安排參與學習、完成必要作業及回饋，以利學習成果累積。',
+          '甲方應確保提供給乙方之文字、圖片、影片、品牌資料、商業資料及其他內容均具合法使用權，如有侵權或違法情事，概由甲方自行負責。',
+          '甲方如需請假、改期或調整參與時間，應提前通知乙方，實體課與線上課程相關安排依乙方公告與實際名額為準。',
+          '甲方不得將課程帳號、教材、錄影、講義、AI 工具、社群內容或陪跑資料提供予第三人使用、轉售、公開散布或作商業轉載。',
+        ],
+      },
+      {
+        subtitle: '（二）乙方義務',
+        items: [
+          '乙方應依本合約約定提供短影音一年達人班之課程、內訓、陪跑與相關學習資源。',
+          '乙方應於合理範圍內提供內容方向、腳本、拍攝表達、數據判斷及變現路徑等學習建議。',
+          '乙方提供之課程與工具內容，屬教學與方法輔助，不保證特定流量、粉絲數、營收或成交結果。',
+          '乙方應妥善維護課程與學員社群秩序，並依實際課程進度調整教學與服務安排。',
+        ],
+      },
+    ],
+  },
+  {
+    title: '第三條　服務期間與交付方式',
+    paragraphs: [
+      '本服務期間自本合約完成線上簽署並完成付款之日起算一年。',
+      '課程與陪跑服務以線上課程、線上內訓、群組通知、實體課程及其他乙方指定方式提供。',
+      '實體課程之日期、地點及參與方式由乙方另行公告；如遇不可抗力或場地、師資、政策等因素，乙方得調整課程形式或時間。',
+    ],
+  },
+  {
+    title: '第四條　智慧財產權與使用限制',
+    paragraphs: [
+      '乙方提供之課程教材、簡報、錄影、作業範例、AI 工具、社群內容與相關方法論，均為乙方或其授權人所有，甲方僅得於個人學習目的範圍內使用。',
+      '甲方不得擅自重製、錄影、截圖散布、公開傳輸、改作、轉售、出租、授權、提供帳號予他人使用或以任何方式侵害乙方權益。',
+      '甲方依課程產出之自身帳號內容、作業及個人品牌素材，除另有約定外，由甲方自行持有；乙方得於取得甲方同意後作為案例展示。',
+    ],
+  },
+  {
+    title: '第五條　保密約定',
+    paragraphs: ['雙方因本合作所知悉之商業資訊、課程內容、學員資料、策略建議、帳號數據及其他未公開資訊，均負保密義務。未經他方書面或線上明確同意，不得洩漏、公開或提供予第三人。'],
+  },
+  {
+    title: '第六條　退費與解除',
+    paragraphs: [
+      '本服務包含數位課程、實體課程服務、社群資源及實體課程名額安排，甲方完成付款並取得課程或社群存取權後，除法律另有規定或乙方重大違約外，甲方不得任意要求解除或退費。',
+      '甲方如有違反本合約、侵害乙方智慧財產權、干擾課程秩序、惡意散布不實資訊或其他重大違約情事，乙方得暫停或終止服務，且甲方不得要求退費。',
+      '乙方如因不可歸責於雙方之因素需調整課程時間或提供方式，應以合理方式通知甲方，並以改期、線上替代、補課或其他可行方式處理。',
+    ],
+  },
+  {
+    title: '第七條　不可抗力',
+    paragraphs: ['因天災、戰爭、疫情、政府命令、網路服務中斷、平台政策變動或其他不可抗力因素，致任一方無法依約履行全部或一部義務時，受影響之一方得於合理範圍內延期或調整履行方式，且不負違約責任。'],
+  },
+  {
+    title: '第八條　爭議處理',
+    paragraphs: ['本合約之解釋、履行及爭議處理，雙方同意以中華民國法律為準據法。如因本合約涉訟，雙方同意以臺灣高雄地方法院為第一審管轄法院。'],
+  },
+  {
+    title: '第九條　線上簽署與合約效力',
+    paragraphs: [
+      '雙方同意本合約得以線上簽署、電子簽章或其他可辨識簽署人身分之電子方式完成簽署。',
+      '本合約以線上簽署方式完成時，與紙本親筆簽名或蓋章具有同等效力。',
+      '本合約自雙方完成線上簽署且甲方完成付款之日起生效。',
+    ],
+  },
+  {
+    title: '第十條　其他',
+    paragraphs: [
+      '本合約未盡事宜，雙方得另以書面、電子郵件或線上簽署補充協議約定之。',
+      '本合約以電子檔形式供雙方保存。雙方得各自下載或列印保存，作為履約憑證。',
+    ],
+  },
+]
 const ECPAY_STAGE_URL = 'https://payment-stage.ecpay.com.tw/Cashier/AioCheckOut/V5'
 const ECPAY_PROD_URL = 'https://payment.ecpay.com.tw/Cashier/AioCheckOut/V5'
 const NEWEBPAY_STAGE_URL = 'https://ccore.newebpay.com/MPG/mpg_gateway'
@@ -2746,6 +2846,25 @@ function dateZh(value) {
   return date.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })
 }
 
+function renderParagraphList(items) {
+  return (items || []).map((item, index) => `<p>${index + 1}. ${htmlEscape(item)}</p>`).join('\n')
+}
+
+function renderContractClausesHtml() {
+  return CONTRACT_CLAUSES.map(clause => {
+    const paragraphs = clause.paragraphs ? renderParagraphList(clause.paragraphs) : ''
+    const groups = (clause.groups || []).map(group => `
+      <h3>${htmlEscape(group.subtitle)}</h3>
+      ${renderParagraphList(group.items)}
+    `).join('\n')
+    return `
+      <h2>${htmlEscape(clause.title)}</h2>
+      ${paragraphs}
+      ${groups}
+    `
+  }).join('\n')
+}
+
 function renderContractHtml(contract) {
   const planName = PLAN_LABELS[contract.plan_id] || contract.plan_id
   const billing = BILLING_CYCLE_LABELS[contract.billing_cycle] || contract.billing_cycle
@@ -2762,11 +2881,15 @@ function renderContractHtml(contract) {
     body { font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "Microsoft JhengHei", Arial, sans-serif; color: #15151a; line-height: 1.75; margin: 40px auto; max-width: 880px; padding: 0 28px; }
     h1 { font-size: 28px; margin: 0 0 4px; letter-spacing: .04em; }
     h2 { font-size: 18px; margin: 28px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #d8dbe6; }
+    h3 { font-size: 15px; margin: 16px 0 6px; }
     p { margin: 8px 0; }
     .subtitle { color: #606575; margin-bottom: 24px; }
     .meta { display: grid; grid-template-columns: 140px 1fr; border: 1px solid #d8dbe6; border-bottom: 0; margin: 16px 0 24px; }
     .meta div { padding: 9px 12px; border-bottom: 1px solid #d8dbe6; }
     .meta div:nth-child(odd) { background: #f6f7fb; font-weight: 700; }
+    .party { display: grid; grid-template-columns: 190px 1fr; border: 1px solid #d8dbe6; border-bottom: 0; margin: 14px 0 24px; }
+    .party div { padding: 8px 12px; border-bottom: 1px solid #d8dbe6; }
+    .party div:nth-child(odd) { background: #fbfbfd; color: #555b6c; }
     .signature { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
     .box { border: 1px solid #d8dbe6; padding: 16px; min-height: 150px; }
     .stamp { margin-top: 10px; padding: 10px 12px; background: #f6f7fb; border-radius: 8px; font-weight: 700; }
@@ -2775,7 +2898,7 @@ function renderContractHtml(contract) {
   </style>
 </head>
 <body>
-  <h1>${htmlEscape(planName)}合作協議書</h1>
+  <h1>短影音一年達人班合作協議書</h1>
   <p class="subtitle">線上簽署版｜合約版本：${htmlEscape(contract.contract_version || CONTRACT_VERSION)}</p>
 
   <div class="meta">
@@ -2787,47 +2910,34 @@ function renderContractHtml(contract) {
     <div>簽署時間</div><div>${htmlEscape(signedAt)}</div>
   </div>
 
-  <p>立合約書人（以下簡稱甲方）與遐光映畫工作室（以下簡稱乙方），就「${htmlEscape(planName)}」課程與陪跑服務合作案，經雙方協議訂定本合約，以茲共同信守。</p>
+  <p>立合約書人（以下簡稱甲方）與遐光映畫工作室（以下簡稱乙方），就「短影音一年陪跑達人班」課程與陪跑服務合作案，經雙方協議訂定本合約，以茲共同信守。</p>
+
+  <h2>甲方客戶聯絡資訊（線上簽署前填寫）</h2>
+  <div class="party">
+    <div>甲方名稱</div><div>${htmlEscape(contract.signer_name)}</div>
+    <div>統一編號 / 身分證字號</div><div>${htmlEscape(contract.signer_identity || '')}</div>
+    <div>負責人 / 簽署人</div><div>${htmlEscape(contract.signer_name)}</div>
+    <div>聯絡電話</div><div>${htmlEscape(contract.signer_phone || '')}</div>
+    <div>電子信箱</div><div>${htmlEscape(contract.signer_email)}</div>
+    <div>聯絡地址</div><div>${htmlEscape(contract.signer_address || '')}</div>
+    <div>LINE ID / 其他聯絡方式</div><div>${htmlEscape(contract.line_id || '')}</div>
+  </div>
 
   <h2>專案內容</h2>
-  <p>1. 一年陪跑學習：服務期間自本合約簽署並完成付款或分期資料確認之日起算一年。</p>
-  <p>2. 一年內兩次實體課：依乙方開課梯次與場地安排通知甲方參與。</p>
-  <p>3. 每週線上內訓：提供短影音經營、內容系統化與商業轉換相關訓練。</p>
-  <p>4. 短影音商業定位、個人 IP 內容定位、爆款選題系統、腳本寫作訓練、自然風拍攝技巧、鏡頭表達訓練、剪輯與上架優化、流量數據分析與變現路徑規劃。</p>
+  ${renderParagraphList(CONTRACT_PROJECT_ITEMS)}
 
-  <h2>第一條 費用與付款</h2>
-  <p>1. 本次合作費用為 ${htmlEscape(amountLabel)}，未稅。如甲方需乙方開立統一發票，應另加 5% 營業稅。</p>
-  <p>2. 年付方案於付款成功後由系統或乙方協助開通課程權限。</p>
-  <p>3. 月付/分期方案須由乙方官方 Line@ 協助確認資料與首期款；乙方確認後依約提供課程與陪跑服務。</p>
+  ${renderContractClausesHtml()}
 
-  <h2>第二條 雙方義務</h2>
-  <p>甲方應指定主要聯絡窗口，配合乙方課程通知、作業提交、檢討與相關溝通，並確保提供之文字、圖片、影片、品牌資料及商業資料均具合法使用權。</p>
-  <p>乙方應依本合約約定提供課程、內訓、陪跑與相關學習資源；乙方提供之課程與工具內容屬教學與方法輔助，不保證特定流量、粉絲數、營收或成交結果。</p>
-
-  <h2>第三條 服務期間與交付方式</h2>
-  <p>本服務期間自本合約完成線上簽署並完成付款或分期資料確認之日起算一年。課程與陪跑服務以線上課程、線上內訓、群組通知、實體課程及其他乙方指定方式提供。</p>
-
-  <h2>第四條 智慧財產權與使用限制</h2>
-  <p>乙方提供之課程教材、簡報、錄影、作業範例、AI 工具、社群內容與相關方法論，均為乙方或其授權人所有，甲方僅得於個人學習目的範圍內使用，不得重製、錄影、截圖散布、公開傳輸、改作、轉售、出租、授權或提供帳號予他人使用。</p>
-
-  <h2>第五條 保密約定</h2>
-  <p>雙方因本合作所知悉之商業資訊、課程內容、學員資料、策略建議、帳號數據及其他未公開資訊，均負保密義務。</p>
-
-  <h2>第六條 退費與解除</h2>
-  <p>本服務包含數位課程、實體課程服務、社群資源及實體課程名額安排，甲方完成付款並取得課程或社群存取權後，除法律另有規定或乙方重大違約外，甲方不得任意要求解除或退費。</p>
-
-  <h2>第七條 不可抗力與爭議處理</h2>
-  <p>因天災、戰爭、疫情、政府命令、網路服務中斷、平台政策變動或其他不可抗力因素，致任一方無法依約履行時，受影響之一方得於合理範圍內延期或調整履行方式。本合約以中華民國法律為準據法，雙方同意以臺灣高雄地方法院為第一審管轄法院。</p>
-
-  <h2>第八條 線上簽署與合約效力</h2>
-  <p>雙方同意本合約得以線上簽署、電子簽章或其他可辨識簽署人身分之電子方式完成簽署。以線上簽署方式完成時，與紙本親筆簽名或蓋章具有同等效力。</p>
   <p class="stamp">${htmlEscape(contract.consent_text || CONTRACT_CONSENT_TEXT)}</p>
 
+  <h2>線上簽署欄</h2>
   <div class="signature">
     <div class="box">
       <strong>甲方（客戶）</strong>
-      <p>姓名：${htmlEscape(contract.signer_name)}</p>
-      <p>Email：${htmlEscape(contract.signer_email)}</p>
+      <p>名稱：${htmlEscape(contract.signer_name)}</p>
+      <p>統一編號 / 身分證字號：${htmlEscape(contract.signer_identity || '')}</p>
+      <p>簽署人：${htmlEscape(contract.signer_name)}</p>
+      <p>電子信箱：${htmlEscape(contract.signer_email)}</p>
       <p>電話：${htmlEscape(contract.signer_phone || '')}</p>
       <p>線上簽署：已確認</p>
       <p>簽署時間：${htmlEscape(signedAt)}</p>
@@ -2837,10 +2947,13 @@ function renderContractHtml(contract) {
       <p>名稱：遐光映畫工作室</p>
       <p>統一編號：71622113</p>
       <p>負責人：張峻翔</p>
-      <p>Email：web@xgfx-tw.com</p>
+      <p>E-mail：web@xgfx-tw.com</p>
       <p>電話：07-2367660</p>
+      <p>線上簽署：乙方系統紀錄</p>
+      <p>簽署時間：${htmlEscape(signedAt)}</p>
     </div>
   </div>
+  <p class="small">遐光映畫工作室｜高雄市苓雅區中山二路 412 號 11 樓之 5｜TEL: 07-2367660｜E-mail: xgfxstudio.ks01@gmail.com｜統一編號：71622113｜負責人：張峻翔</p>
   <p class="small">系統紀錄：contract_id=${htmlEscape(contract.id)}｜user_id=${htmlEscape(contract.user_id)}｜IP=${htmlEscape(contract.ip_address || '')}</p>
 </body>
 </html>`
