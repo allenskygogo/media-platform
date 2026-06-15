@@ -12,6 +12,7 @@ const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-ap
 const TIER_MARK = { basic: '體驗課', standard: '頂流達人', advanced: '頂流私塾', managed: '頂流代操' }
 const REMINDER_KEY = 'mp_learning_reminders'
 const DEFAULT_MESSAGE = '提醒你回來完成課程進度，有問題可以私訊官方客服 @xgfx。'
+const DEFAULT_SUBJECT = '頂級流量課程進度提醒'
 
 function formatDateTime(value) {
   if (!value) return '尚無紀錄'
@@ -115,6 +116,7 @@ export default function LearningProgressAdmin() {
   const [tier, setTier] = useState('all')
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
+  const [subject, setSubject] = useState(DEFAULT_SUBJECT)
   const [message, setMessage] = useState(DEFAULT_MESSAGE)
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
@@ -225,27 +227,39 @@ export default function LearningProgressAdmin() {
       flashError('請先填寫提醒訊息。')
       return
     }
+    if (!subject.trim()) {
+      flashError('請先填寫 Email 主旨。')
+      return
+    }
 
     setSending(true)
     try {
       if (hasSupabase && supabase) {
-        await workerJson('/api/admin/learning-progress/reminders', {
+        const data = await workerJson('/api/admin/learning-progress/reminders', {
           method: 'POST',
-          body: JSON.stringify({ userIds: ids, message: message.trim() }),
+          body: JSON.stringify({
+            userIds: ids,
+            subject: subject.trim(),
+            message: message.trim(),
+            channel: 'email',
+          }),
         })
+        await loadProgress()
+        flash(`已寄出 ${data.sentCount || data.count || ids.length} 封 Email 提醒`)
+        return
       } else {
         const now = new Date().toISOString()
         const rows = ids.map(userId => ({
           id: `${Date.now()}-${userId}`,
           userId,
           message: message.trim(),
-          channel: 'internal',
+          channel: 'email',
           createdAt: now,
         }))
         saveLocalReminders([...getLocalReminders(), ...rows])
       }
       await loadProgress()
-      flash(`已建立 ${ids.length} 位學員的提醒紀錄`)
+      flash(`已建立 ${ids.length} 位學員的 Email 提醒紀錄`)
     } catch (error) {
       flashError(error.message || '發送提醒失敗')
     } finally {
@@ -278,20 +292,32 @@ export default function LearningProgressAdmin() {
       <div className="admin-card" style={{ marginBottom: 20 }}>
         <div className="admin-card-header">提醒設定</div>
         <div className="admin-card-body" style={{ display: 'grid', gap: 14 }}>
-          <textarea
-            className="form-input"
-            rows={3}
-            value={message}
-            onChange={event => setMessage(event.target.value)}
-            placeholder="輸入提醒訊息"
-            style={{ resize: 'vertical' }}
-          />
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">Email 主旨</label>
+            <input
+              className="form-input"
+              value={subject}
+              onChange={event => setSubject(event.target.value)}
+              placeholder="輸入 Email 主旨"
+            />
+          </div>
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">Email 內容</label>
+            <textarea
+              className="form-input"
+              rows={3}
+              value={message}
+              onChange={event => setMessage(event.target.value)}
+              placeholder="輸入提醒訊息"
+              style={{ resize: 'vertical' }}
+            />
+          </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" disabled={!selectedStudents.length || sending} onClick={() => sendReminders(selectedIds)}>
-              {sending ? '建立中...' : `提醒已選 ${selectedStudents.length} 位`}
+              {sending ? '發送中...' : `發送 Email 給已選 ${selectedStudents.length} 位`}
             </button>
             <button className="btn btn-secondary" disabled={!incompleteStudents.length || sending} onClick={() => sendReminders(incompleteStudents.map(student => student.id))}>
-              一鍵提醒未完成
+              一鍵 Email 提醒未完成
             </button>
           </div>
         </div>
@@ -365,7 +391,7 @@ export default function LearningProgressAdmin() {
       </div>
 
       <p style={{ marginTop: 14, color: 'var(--gray-500)', fontSize: 13 }}>
-        目前提醒會先建立後台紀錄；之後若要串 Email、簡訊或 Line 官方帳號推播，可以沿用這個名單與訊息欄位。
+        Email 發送成功後會同步建立後台提醒紀錄；若發送服務尚未設定，系統會提示需要先設定 RESEND_API_KEY。
       </p>
     </div>
   )

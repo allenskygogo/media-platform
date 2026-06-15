@@ -14,6 +14,8 @@
  *   SUPABASE_SERVICE_ROLE_KEY     — optional server-only key for private AI agent prompts
  *   OPENAI_API_KEY                — OpenAI API key for server-side AI generation
  *   OPENAI_MODEL                  — optional model override for AI generation
+ *   RESEND_API_KEY                — optional, sends learning reminder emails
+ *   EMAIL_FROM                    — optional verified sender, e.g. "頂級流量 <hello@toplevel-tw.com>"
  *   NEWEBPAY_MERCHANT_ID          — NewebPay merchant ID
  *   NEWEBPAY_HASH_KEY             — NewebPay HashKey
  *   NEWEBPAY_HASH_IV              — NewebPay HashIV
@@ -2490,22 +2492,51 @@ async function handleSendLearningReminders(request, env) {
   const body = await request.json().catch(() => ({}))
   const userIds = Array.isArray(body.userIds) ? body.userIds.map(id => String(id)).filter(Boolean) : []
   const message = String(body.message || '').trim()
+  const subject = String(body.subject || '頂級流量課程進度提醒').trim()
+  const channel = String(body.channel || 'internal').trim()
   const courseId = body.courseId ? Number(body.courseId) : null
+  let targetUserIds = userIds
 
   if (userIds.length === 0) return err('Missing reminder recipients', 400)
   if (!message) return err('Missing reminder message', 400)
+  if (!['internal', 'email'].includes(channel)) return err('Invalid reminder channel', 400)
 
-  const rows = userIds.map(userId => ({
+  let emailResults = []
+  if (channel === 'email') {
+    if (!env.RESEND_API_KEY) return err('Email 發送服務尚未設定：請先在 Worker 設定 RESEND_API_KEY。', 503)
+    const profiles = await listStudentProfiles(env)
+    const profileById = Object.fromEntries(profiles.map(profile => [profile.id, profile]))
+    const recipients = userIds
+      .map(userId => profileById[userId] ? { ...profileById[userId], userId } : null)
+      .filter(profile => profile?.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email))
+
+    if (!recipients.length) return err('找不到可發送 Email 的學員。', 400)
+    targetUserIds = recipients.map(profile => profile.userId)
+    emailResults = await Promise.all(recipients.map(profile => sendLearningReminderEmail(env, {
+      to: profile.email,
+      name: profile.display_name || profile.email.split('@')[0] || '學員',
+      subject,
+      message,
+    })))
+  }
+
+  const rows = targetUserIds.map(userId => ({
     admin_id: admin.id,
     user_id: userId,
     course_id: Number.isFinite(courseId) ? courseId : null,
-    channel: 'internal',
+    channel,
     message,
     created_at: new Date().toISOString(),
   }))
 
   const inserted = await insertLearningReminders(env, rows)
-  return json({ success: true, count: inserted.length, reminders: inserted })
+  return json({
+    success: true,
+    count: inserted.length,
+    sentCount: emailResults.length,
+    reminders: inserted,
+    emailResults,
+  })
 }
 
 async function handleResetStudentPassword(request, userId, env) {
@@ -3627,6 +3658,58 @@ async function insertLearningReminders(env, rows) {
   const data = await response.json().catch(() => [])
   if (!response.ok) throw new Error(data.message || data.error || 'Failed to insert learning reminders')
   return Array.isArray(data) ? data : []
+}
+
+async function sendLearningReminderEmail(env, { to, name, subject, message }) {
+  const appUrl = String(env.PUBLIC_APP_URL || 'https://toplevel-tw.com').replace(/\/$/, '')
+  const from = env.EMAIL_FROM || '頂級流量 TOP LEVEL TRAFFIC <hello@toplevel-tw.com>'
+  const safeName = String(name || '學員').trim() || '學員'
+  const safeMessage = String(message || '').trim()
+  const dashboardUrl = `${appUrl}/dashboard/courses`
+  const text = [
+    `${safeName} 你好，`,
+    '',
+    safeMessage,
+    '',
+    `回到課程：${dashboardUrl}`,
+    '',
+    '頂級流量 TOP LEVEL TRAFFIC',
+  ].join('\n')
+  const html = `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC','Microsoft JhengHei',Arial,sans-serif;line-height:1.8;color:#111827;max-width:640px;margin:0 auto;padding:24px;">
+      <h1 style="font-size:22px;margin:0 0 14px;color:#111827;">課程進度提醒</h1>
+      <p>${htmlEscape(safeName)} 你好，</p>
+      <p>${htmlEscape(safeMessage).replace(/\n/g, '<br>')}</p>
+      <p style="margin:24px 0;">
+        <a href="${htmlEscape(dashboardUrl)}" style="display:inline-block;background:#6d5dfc;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700;">回到課程繼續學習</a>
+      </p>
+      <p style="font-size:13px;color:#6b7280;">如果按鈕無法開啟，請複製此連結：<br>${htmlEscape(dashboardUrl)}</p>
+      <p style="margin-top:24px;color:#6b7280;">頂級流量 TOP LEVEL TRAFFIC</p>
+    </div>
+  `
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject,
+      text,
+      html,
+    }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data?.message || data?.error || `Email 發送失敗：HTTP ${response.status}`)
+  }
+  return {
+    to,
+    id: data.id || null,
+  }
 }
 
 async function createSupabaseAuthUser(env, payload) {
