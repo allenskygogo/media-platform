@@ -2912,6 +2912,11 @@ function renderContractHtml(contract, env = {}) {
     .quote-box { margin: 24px 0; padding: 16px; border: 1px solid #cbd3ef; border-radius: 10px; background: #f7f8ff; }
     .quote-box strong { display: block; margin-bottom: 6px; font-size: 16px; }
     .quote-box a { color: #3448d9; font-weight: 700; }
+    .quote-meta { display: grid; grid-template-columns: 150px 1fr; border: 1px solid #d8dbe6; border-bottom: 0; margin: 12px 0; background: #fff; }
+    .quote-meta div { padding: 8px 10px; border-bottom: 1px solid #d8dbe6; }
+    .quote-meta div:nth-child(odd) { background: #eef1ff; font-weight: 700; color: #34394c; }
+    .quote-signature { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+    .quote-signature .box { background: #fff; }
     .stamp { margin-top: 10px; padding: 10px 12px; background: #f6f7fb; border-radius: 8px; font-weight: 700; }
     .small { color: #606575; font-size: 13px; }
     @media print { body { margin: 0 auto; } }
@@ -2934,9 +2939,32 @@ function renderContractHtml(contract, env = {}) {
 
   ${isMonthly ? `
   <div class="quote-box">
-    <strong>月付 / 分期方案報價單</strong>
-    <p>本合約為月付 / 分期方案，系統已同步建立「一年陪跑達人班報價單 NT$39,800」作為客服確認與後台留存附件。</p>
-    <p><a href="${htmlEscape(quoteUrl)}" target="_blank" rel="noopener">下載報價單 PDF：${htmlEscape(CREATOR_QUOTE_FILE)}</a></p>
+    <strong>月付 / 分期方案簽署版報價單</strong>
+    <p>本合約為月付 / 分期方案，以下為已附客戶聯絡資訊與電子簽名之簽署版報價單，供客服確認與後台留存。</p>
+    <div class="quote-meta">
+      <div>客戶姓名</div><div>${htmlEscape(contract.signer_name)}</div>
+      <div>客戶 Email</div><div>${htmlEscape(contract.signer_email)}</div>
+      <div>聯絡電話</div><div>${htmlEscape(contract.signer_phone || '')}</div>
+      <div>報價方案</div><div>一年陪跑達人班</div>
+      <div>報價總額</div><div>NT$39,800</div>
+      <div>月付金額</div><div>${htmlEscape(amountLabel)}</div>
+      <div>簽署時間</div><div>${htmlEscape(signedAt)}</div>
+    </div>
+    <div class="quote-signature">
+      <div class="box">
+        <strong>客戶確認簽名</strong>
+        ${contract.signer_signature_data_url ? `<img class="signature-image" src="${htmlEscape(contract.signer_signature_data_url)}" alt="客戶報價單簽名">` : ''}
+        <p>簽署人：${htmlEscape(contract.signer_name)}</p>
+        <p>聯絡電話：${htmlEscape(contract.signer_phone || '')}</p>
+      </div>
+      <div class="box">
+        <strong>乙方資訊</strong>
+        <p>遐光映畫工作室｜統一編號：71622113</p>
+        <p>負責人：張峻翔</p>
+        <img class="company-seal" src="${htmlEscape(companySealUrl)}" alt="遐光映畫工作室印章">
+      </div>
+    </div>
+    <p class="small">原始報價單 PDF：<a href="${htmlEscape(quoteUrl)}" target="_blank" rel="noopener">${htmlEscape(CREATOR_QUOTE_FILE)}</a></p>
   </div>
   ` : ''}
 

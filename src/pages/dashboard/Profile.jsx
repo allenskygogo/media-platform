@@ -786,7 +786,7 @@ function PlanCheckoutPreview({
           </div>
           {isMonthlyCheckout && (
             <div className="contract-monthly-notice">
-              月付 / 分期方案會同步建立合作協議書與達人班報價單，送出後會跳出 Line@ 通知客服。
+              月付 / 分期方案會同步建立合作協議書與含客戶聯絡資訊、電子簽名的達人班報價單，送出後會跳出 Line@ 通知客服。
             </div>
           )}
           <div className="contract-placeholder">
@@ -803,7 +803,7 @@ function PlanCheckoutPreview({
               <p><span>Email</span>{currentUser?.email}</p>
               <p><span>方案</span>{plan.name}</p>
               <p><span>付款金額</span>{amount}</p>
-              {isMonthlyCheckout && <p><span>報價單</span>一年陪跑達人班報價單 NT$39,800</p>}
+              {isMonthlyCheckout && <p><span>報價單</span>一年陪跑達人班簽署版報價單 NT$39,800</p>}
             </div>
             <div className="contract-preview-scroll">
               <h5>短影音一年達人班合作協議書</h5>
