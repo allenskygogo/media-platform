@@ -406,6 +406,13 @@ function PlanCheckoutPreview({
   const isAnnualPlan = price?.kind === 'annual'
   const amount = getCheckoutAmount(plan.id, billingCycle)
   const monthlyAmount = price?.monthly?.replace(/^月付\s*/, '') || ''
+  const normalizedContractPhone = normalizeTaiwanMobilePhone(phone)
+  const canProceedToPayment = Boolean(acceptedContract && signatureDataUrl && normalizedContractPhone)
+  const missingContractItems = [
+    !normalizedContractPhone ? '填寫有效手機' : '',
+    !signatureDataUrl ? '完成電子簽名' : '',
+    !acceptedContract ? '勾選同意合約' : '',
+  ].filter(Boolean)
 
   const signContract = async ({ cycle = billingCycle, signerName = currentUser?.name, signerPhone = phone } = {}) => {
     const normalizedPhone = normalizeTaiwanMobilePhone(signerPhone) || String(signerPhone || '').trim()
@@ -487,7 +494,15 @@ function PlanCheckoutPreview({
   }
 
   const handleContractNext = () => {
-    if (!acceptedContract) return
+    const normalizedPhone = normalizeTaiwanMobilePhone(phone)
+    if (!normalizedPhone) {
+      setError('請輸入有效的台灣手機號碼（例：0912-345-678）。')
+      return
+    }
+    if (!acceptedContract) {
+      setError('請先勾選同意合作協議書。')
+      return
+    }
     if (!signatureDataUrl) {
       setError('請先完成電子簽名。')
       setPendingSignatureAction('checkout')
@@ -512,7 +527,6 @@ function PlanCheckoutPreview({
     setSignatureModalOpen(false)
     setError('')
     if (pendingSignatureAction === 'monthly') setManualMonthlyOpen(true)
-    if (pendingSignatureAction === 'checkout' && acceptedContract) setCheckoutStep(2)
     setPendingSignatureAction('')
   }
 
@@ -719,13 +733,16 @@ function PlanCheckoutPreview({
             />
             <span>我已閱讀並同意本合作協議書內容，確認以上資料為本人真實資料，並同意以線上點擊確認作為簽署意思表示。</span>
           </label>
+          {!canProceedToPayment && (
+            <p className="contract-next-hint">完成以下項目後才能下一步：{missingContractItems.join('、')}</p>
+          )}
           {error && <div className="auth-alert error" style={{ marginTop: 14 }}>{error}</div>}
           <div className="checkout-actions">
             <button type="button" className="checkout-back-btn" onClick={() => setCheckoutStep(0)}>上一步</button>
             <button
               type="button"
               className="checkout-next-btn"
-              disabled={!acceptedContract}
+              disabled={!canProceedToPayment}
               onClick={handleContractNext}
             >
               下一步，確認付款
