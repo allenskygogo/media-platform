@@ -1454,7 +1454,7 @@ async function handleAI(request, env) {
 
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    return err(data.error?.message || 'OpenAI generation failed', response.status)
+    return err(getOpenAIErrorMessage(data) || 'OpenAI generation failed', response.status)
   }
 
   const outputText = extractOpenAIText(data)
@@ -1752,7 +1752,7 @@ async function handleWritingEvaluation(request, env) {
 
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    return err(data.error?.message || 'OpenAI evaluation failed', response.status)
+    return err(getOpenAIErrorMessage(data) || 'OpenAI evaluation failed', response.status)
   }
 
   const outputText = extractOpenAIText(data)
@@ -2809,6 +2809,18 @@ async function downloadSupabaseStorageFile(env, storagePath) {
 
 function getOpenAIBaseURL(env) {
   return String(env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '')
+}
+
+function getOpenAIErrorMessage(data) {
+  if (!data) return ''
+  if (typeof data === 'string') return data
+  if (typeof data.error === 'string') return data.error
+  if (data.error?.message) return data.error.message
+  if (data.message) return data.message
+  if (Array.isArray(data.errors) && data.errors[0]) {
+    return data.errors[0].message || JSON.stringify(data.errors[0])
+  }
+  return ''
 }
 
 async function uploadOpenAIFile(env, fileBlob, fileName) {
