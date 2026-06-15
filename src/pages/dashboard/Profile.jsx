@@ -511,37 +511,103 @@ function PlanCheckoutPreview({
     !acceptedContract ? '勾選同意合約' : '',
   ].filter(Boolean)
 
+  const getAccessToken = async ({ refresh = false } = {}) => {
+    if (!supabase) return ''
+    if (refresh) {
+      const { data } = await supabase.auth.refreshSession()
+      return data?.session?.access_token || ''
+    }
+    const { data } = await supabase.auth.getSession()
+    return data?.session?.access_token || ''
+  }
+
   const signContract = async ({ cycle = billingCycle, signerName = contractName || currentUser?.name, signerPhone = phone } = {}) => {
     const normalizedPhone = normalizeTaiwanMobilePhone(signerPhone) || String(signerPhone || '').trim()
     const amountLabel = getCheckoutAmount(plan.id, cycle)
-    const { data: sessionData } = supabase ? await supabase.auth.getSession() : { data: { session: null } }
-    const token = sessionData?.session?.access_token
+    const token = await getAccessToken()
     if (!token) throw new Error('登入狀態已過期，請重新登入後再升級。')
 
-    const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/contracts/sign`, {
+    const payload = {
+      planId: plan.id,
+      billingCycle: cycle,
+      amount: parsePriceNumber(amountLabel),
+      amountLabel: amountLabel.replace(/^年付\s*/, '').replace(/^月付\s*/, ''),
+      signerName,
+      signerEmail: currentUser?.email,
+      signerPhone: normalizedPhone,
+      signerSignatureDataUrl: signatureDataUrl,
+      includeQuotation: cycle === 'monthly',
+      quotationFileName: cycle === 'monthly' ? 'creator-quote-39800.pdf' : '',
+    }
+
+    const postSignature = async accessToken => {
+      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/contracts/sign`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.json().catch(() => ({}))
+      return { response, data }
+    }
+
+    let { response, data } = await postSignature(token)
+    if ((!response.ok || data.success === false) && String(data.error || '').includes('Invalid authorization token')) {
+      const refreshedToken = await getAccessToken({ refresh: true })
+      if (refreshedToken) {
+        ;({ response, data } = await postSignature(refreshedToken))
+      }
+    }
+
+    if (!response.ok || data.success === false) {
+      const rawError = String(data.error || '')
+      if (rawError.includes('Invalid authorization token')) {
+        throw new Error('登入狀態已過期，請重新整理或重新登入後再送出。')
+      }
+      throw new Error(rawError || '合約簽署紀錄建立失敗，請稍後再試。')
+    }
+    return data.contract
+  }
+
+  const createUpgradeOrder = async ({ normalizedPhone }) => {
+    const token = await getAccessToken()
+    if (!token) throw new Error('登入狀態已過期，請重新登入後再升級。')
+
+    const postOrder = async accessToken => {
+      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/checkout/upgrade`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
         planId: plan.id,
-        billingCycle: cycle,
-        amount: parsePriceNumber(amountLabel),
-        amountLabel: amountLabel.replace(/^年付\s*/, '').replace(/^月付\s*/, ''),
-        signerName,
-        signerEmail: currentUser?.email,
-        signerPhone: normalizedPhone,
-        signerSignatureDataUrl: signatureDataUrl,
-        includeQuotation: cycle === 'monthly',
-        quotationFileName: cycle === 'monthly' ? 'creator-quote-39800.pdf' : '',
+        phone: normalizedPhone,
+        billingCycle,
       }),
     })
     const data = await response.json().catch(() => ({}))
-    if (!response.ok || data.success === false) {
-      throw new Error(data.error || '合約簽署紀錄建立失敗，請稍後再試。')
+      return { response, data }
     }
-    return data.contract
+
+    let { response, data } = await postOrder(token)
+    if ((!response.ok || data.success === false) && String(data.error || '').includes('Invalid authorization token')) {
+      const refreshedToken = await getAccessToken({ refresh: true })
+      if (refreshedToken) {
+        ;({ response, data } = await postOrder(refreshedToken))
+      }
+    }
+
+    if (!response.ok || data.success === false) {
+      const rawError = String(data.error || '')
+      if (rawError.includes('Invalid authorization token')) {
+        throw new Error('登入狀態已過期，請重新整理或重新登入後再升級。')
+      }
+      throw new Error(rawError || '建立升級訂單失敗，請稍後再試。')
+    }
+    return data
   }
 
   const startUpgradePayment = async () => {
@@ -569,26 +635,7 @@ function PlanCheckoutPreview({
 
     try {
       await signContract({ cycle: billingCycle, signerPhone: normalizedPhone })
-      const { data: sessionData } = supabase ? await supabase.auth.getSession() : { data: { session: null } }
-      const token = sessionData?.session?.access_token
-      if (!token) throw new Error('登入狀態已過期，請重新登入後再升級。')
-
-      const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/checkout/upgrade`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          planId: plan.id,
-          phone: normalizedPhone,
-          billingCycle,
-        }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok || data.success === false) {
-        throw new Error(data.error || '建立升級訂單失敗，請稍後再試。')
-      }
+      const data = await createUpgradeOrder({ normalizedPhone })
       setMessage(`升級訂單已建立：${data.order.orderNumber}。正在前往付款頁...`)
       submitPaymentCheckout(data.ecpay || data.payment || data.newebpay)
     } catch (err) {
@@ -599,6 +646,11 @@ function PlanCheckoutPreview({
 
   const handleContractNext = () => {
     const normalizedPhone = normalizeTaiwanMobilePhone(phone)
+    const normalizedName = String(contractName || '').trim()
+    if (normalizedName.length < 2) {
+      setError('請填寫真實姓名，至少 2 個字。')
+      return
+    }
     if (!normalizedPhone) {
       setError('請輸入有效的台灣手機號碼（例：0912-345-678）。')
       return
@@ -616,17 +668,17 @@ function PlanCheckoutPreview({
     setError('')
     if (isMonthlyCheckout) {
       setLoading(true)
-      signContract({ cycle: 'monthly', signerName: normalizedName, signerPhone: normalizedPhone })
-        .then(() => {
+      ;(async () => {
+        try {
+          await signContract({ cycle: 'monthly', signerName: normalizedName, signerPhone: normalizedPhone })
           setMonthlyContractReady(true)
           setManualMonthlyOpen(true)
-        })
-        .catch(err => {
+        } catch (err) {
           setError(err.message || '合約簽署紀錄建立失敗，請稍後再試。')
-        })
-        .finally(() => {
+        } finally {
           setLoading(false)
-        })
+        }
+      })()
       return
     }
     setCheckoutStep(2)
