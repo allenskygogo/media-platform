@@ -1807,6 +1807,8 @@ function CopyPage() {
   const [scriptDrafts, setScriptDrafts] = useState([])
   const [activeDraftId, setActiveDraftId] = useState(null)
   const [showAbandonModal, setShowAbandonModal] = useState(false)
+  const [showPracticeSaveModal, setShowPracticeSaveModal] = useState(false)
+  const [practiceSaveStatus, setPracticeSaveStatus] = useState('')
   const topicRound = scriptType ? (topicRounds[scriptType] ?? 0) : 0
 
   const getTopicStateKey = (type = scriptType, round = topicRound, ideaText = idea.trim()) =>
@@ -2464,20 +2466,77 @@ function CopyPage() {
     }
   }
 
-  const handleDownload = () => {
+  const buildPracticeExportContent = () => {
     const typeLabel   = SCRIPT_TYPES.find(s => s.id === scriptType)?.label  || ''
     const formatLabel = SHOOT_FORMATS.find(f => f.id === shootFormat)?.label || '尚未選擇'
     const topicText = selectedTopicIdx !== null ? getTopicText(copyTopics?.[selectedTopicIdx]) : ''
-    const content = [
+    return [
       `想法：${idea}`, `腳本類型：${typeLabel}`,
       `選題：${topicText}`,
       `拍攝形式：${formatLabel}`, '', '== 我的腳本練習 ==', practice,
     ].join('\n')
+  }
+
+  const copyPracticeContent = async () => {
+    const content = buildPracticeExportContent()
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(content)
+      return
+    }
+
+    const textarea = document.createElement('textarea')
+    textarea.value = content
+    textarea.setAttribute('readonly', '')
+    textarea.style.position = 'fixed'
+    textarea.style.top = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  }
+
+  const handleCopyPracticeContent = async () => {
+    try {
+      await copyPracticeContent()
+      setPracticeSaveStatus('已複製，可以貼到 LINE、備忘錄或任何記事 App。')
+    } catch (_) {
+      setPracticeSaveStatus('複製失敗，請改用手機分享或下載 TXT。')
+    }
+  }
+
+  const handleSharePracticeContent = async () => {
+    const content = buildPracticeExportContent()
+    if (!navigator.share) {
+      await handleCopyPracticeContent()
+      return
+    }
+
+    try {
+      await navigator.share({
+        title: '我的爆款文案練習',
+        text: content,
+      })
+      setPracticeSaveStatus('已開啟手機分享，可以選 LINE、備忘錄或其他 App 保存。')
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        setPracticeSaveStatus('分享沒有完成，可以改用複製文案。')
+      }
+    }
+  }
+
+  const handleDownloadPracticeText = () => {
+    const content = buildPracticeExportContent()
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a'); a.href = url
     a.download = `爆款文案練習_${new Date().toLocaleDateString('zh-TW')}.txt`; a.click()
     URL.revokeObjectURL(url)
+    setPracticeSaveStatus('TXT 已下載；如果手機找不到檔案，建議改用複製或分享。')
+  }
+
+  const handleOpenPracticeSaveModal = () => {
+    setPracticeSaveStatus('')
+    setShowPracticeSaveModal(true)
   }
 
   const practiceValidation = validatePracticeSubmission(scriptType, practice)
@@ -2757,10 +2816,41 @@ function CopyPage() {
               </button>
             ))}
           </div>
-          <button className="ait-btn-primary ait-go-btn" onClick={handleDownload}>
-            <Download size={16} strokeWidth={1.8} />下載我的練習內容
+          <button className="ait-btn-primary ait-go-btn" onClick={handleOpenPracticeSaveModal}>
+            <Download size={16} strokeWidth={1.8} />保存我的練習內容
           </button>
         </div>
+      )}
+
+      {showPracticeSaveModal && createPortal(
+        <div className="ait-modal-backdrop" onClick={() => setShowPracticeSaveModal(false)}>
+          <div className="ait-save-modal" onClick={event => event.stopPropagation()}>
+            <button className="ait-modal-close" onClick={() => setShowPracticeSaveModal(false)} aria-label="關閉">
+              <X size={15} strokeWidth={2} />
+            </button>
+            <h2 className="ait-modal-title">保存我的練習內容</h2>
+            <p className="ait-modal-sub">手機建議優先複製或分享，檔案下載有時會被瀏覽器藏到「檔案」裡。</p>
+            <div className="ait-save-actions">
+              <button className="ait-save-action primary" onClick={handleCopyPracticeContent}>
+                <Copy size={18} strokeWidth={1.8} />
+                <span>複製文案</span>
+                <small>最穩定，可貼到 LINE 或備忘錄</small>
+              </button>
+              <button className="ait-save-action" onClick={handleSharePracticeContent}>
+                <Share2 size={18} strokeWidth={1.8} />
+                <span>手機分享</span>
+                <small>選 LINE、備忘錄、訊息或其他 App</small>
+              </button>
+              <button className="ait-save-action" onClick={handleDownloadPracticeText}>
+                <Download size={18} strokeWidth={1.8} />
+                <span>下載 TXT 檔</span>
+                <small>電腦版或熟悉手機檔案的人使用</small>
+              </button>
+            </div>
+            {practiceSaveStatus && <div className="ait-save-status">{practiceSaveStatus}</div>}
+          </div>
+        </div>,
+        document.body
       )}
 
       {showModal && <UpgradeModal onClose={() => setShowModal(false)} />}

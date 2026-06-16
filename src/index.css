@@ -9538,6 +9538,86 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   border-color: var(--glass-border); cursor: not-allowed; opacity: 0.7;
 }
 
+.ait-save-modal {
+  width: min(92vw, 520px);
+  border-radius: 24px;
+  padding: 28px;
+  position: relative;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(79,159,255,0.16), transparent 34%),
+    linear-gradient(145deg, rgba(18,18,28,0.98), rgba(12,12,18,0.98));
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 22px 70px rgba(0,0,0,0.55);
+}
+.ait-save-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+.ait-save-action {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  border-radius: 16px;
+  padding: 15px 16px;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  column-gap: 12px;
+  row-gap: 3px;
+  align-items: center;
+  text-align: left;
+  color: var(--gray-800);
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.18s;
+}
+.ait-save-action:hover {
+  background: rgba(79,159,255,0.08);
+  border-color: rgba(79,159,255,0.28);
+  transform: translateY(-1px);
+}
+.ait-save-action.primary {
+  background: linear-gradient(135deg, rgba(79,159,255,0.22), rgba(124,58,237,0.22));
+  border-color: rgba(79,159,255,0.42);
+}
+.ait-save-action svg {
+  grid-row: 1 / span 2;
+  color: #7db7ff;
+}
+.ait-save-action span {
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.ait-save-action small {
+  font-size: 12px;
+  color: var(--gray-500);
+  line-height: 1.45;
+}
+.ait-save-status {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(16,185,129,0.1);
+  border: 1px solid rgba(16,185,129,0.22);
+  color: #4ade80;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .ait-save-modal {
+    width: 100%;
+    max-width: none;
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+    align-self: flex-end;
+  }
+  .ait-save-action {
+    min-height: 72px;
+  }
+}
+
 /* Course card */
 .ait-course-card {
   display: flex; align-items: center; gap: 14px;
