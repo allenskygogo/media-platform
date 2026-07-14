@@ -20,6 +20,11 @@ const COURSE_RESUME_KEY = 'mp_course_resume_targets'
 // Only standard/advanced tier students get the forced-watch + homework system
 const NEEDS_HOMEWORK = ['standard', 'advanced']
 const NEEDS_SEQUENTIAL_WATCH = ['basic']
+const FULL_COURSE_UNLOCK_EMAILS = new Set(['allen@xgfx-tw.com'])
+
+function hasFullCourseUnlock(user) {
+  return FULL_COURSE_UNLOCK_EMAILS.has(String(user?.email || '').trim().toLowerCase())
+}
 
 function mapProgress(records) {
   return records.reduce((acc, record) => {
@@ -241,8 +246,9 @@ export default function CourseDetail() {
   )
 
   const ok = canAccessCourse(currentUser.tier, courseAccessLevels(course))
-  const needsHomework = courseNeedsHomework(course, currentUser.tier)
-  const needsSequentialWatch = courseNeedsSequentialWatch(course)
+  const fullCourseUnlock = hasFullCourseUnlock(currentUser)
+  const needsHomework = !fullCourseUnlock && courseNeedsHomework(course, currentUser.tier)
+  const needsSequentialWatch = !fullCourseUnlock && courseNeedsSequentialWatch(course)
   const activeLesson  = course.lessons.find(l => l.id === activeLessonId) || null
 
   const handleLessonClick = (lesson, lessonIdx) => {
