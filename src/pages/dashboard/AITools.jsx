@@ -42,6 +42,9 @@ const STATS = [
   { num: '2.3 萬',  label: '平均選題觀看' },
 ]
 
+const VIRAL_ELEMENTS = ['奇葩', '人群', '懷舊', '最差', '頭牌', '荷爾蒙', '反差', '成本']
+const PROCESS_ELEMENTS = ['過程展示', '測評產品', '任務挑戰', '事件體驗']
+
 // ── Element tag colours ───────────────────────────────
 const ELEM_STYLE = {
   '奇葩':   { bg: 'rgba(147,51,234,0.15)',  color: '#a855f7', border: 'rgba(147,51,234,0.35)' },
@@ -52,6 +55,10 @@ const ELEM_STYLE = {
   '荷爾蒙': { bg: 'rgba(236,72,153,0.15)',  color: '#f472b6', border: 'rgba(236,72,153,0.35)' },
   '反差':   { bg: 'rgba(6,182,212,0.15)',   color: '#22d3ee', border: 'rgba(6,182,212,0.35)'  },
   '成本':   { bg: 'rgba(34,197,94,0.15)',   color: '#4ade80', border: 'rgba(34,197,94,0.35)'  },
+  '過程展示': { bg: 'rgba(59,130,246,0.15)',  color: '#60a5fa', border: 'rgba(59,130,246,0.35)' },
+  '測評產品': { bg: 'rgba(34,197,94,0.15)',   color: '#4ade80', border: 'rgba(34,197,94,0.35)'  },
+  '任務挑戰': { bg: 'rgba(249,115,22,0.15)',  color: '#fb923c', border: 'rgba(249,115,22,0.35)' },
+  '事件體驗': { bg: 'rgba(147,51,234,0.15)',  color: '#a855f7', border: 'rgba(147,51,234,0.35)' },
 }
 
 // ── Traffic level colours ─────────────────────────────
@@ -117,26 +124,49 @@ function buildTopics(industry, round) {
   }))
 }
 
+function elementSequenceFor(scriptType) {
+  if (scriptType === 'process') {
+    return ['過程展示', '測評產品', '任務挑戰', '事件體驗', '過程展示', '測評產品', '任務挑戰', '事件體驗']
+  }
+  return VIRAL_ELEMENTS
+}
+
+function extractTopicElementAndText(source, fallbackElement, scriptType) {
+  const allowed = elementSequenceFor(scriptType)
+  const rawText = typeof source === 'string'
+    ? source
+    : String(source?.text || source?.title || source?.topic || source?.content || '')
+  let text = rawText.trim()
+  const rawElement = typeof source === 'object' && source
+    ? source.element || source.元素 || source.tag || source.label || source.category || source.type || source.dimension
+    : ''
+  let element = String(rawElement || '').trim()
+
+  const prefixMatch = text.match(/^(?:【([^】]+)】|\[([^\]]+)\]|（([^）]+)）|\(([^)]+)\)|([^：:｜|]{1,8})[：:｜|])\s*(.+)$/)
+  if (prefixMatch) {
+    const maybeElement = String(prefixMatch[1] || prefixMatch[2] || prefixMatch[3] || prefixMatch[4] || prefixMatch[5] || '').trim()
+    if (allowed.includes(maybeElement) || VIRAL_ELEMENTS.includes(maybeElement) || PROCESS_ELEMENTS.includes(maybeElement)) {
+      element = maybeElement
+      text = String(prefixMatch[6] || '').trim()
+    }
+  }
+
+  if (!allowed.includes(element)) element = fallbackElement
+  return { element, text: text || rawText.trim() }
+}
+
 function normalizeTopicResults(result, industry, round) {
   const fallback = buildTopics(industry, round)
   if (!Array.isArray(result)) return fallback
 
   return fallback.map((item, index) => {
     const source = result[index]
-    if (typeof source === 'string') {
-      const match = source.match(/^【(.+?)】(.+)$/)
+    if (typeof source === 'string' || (source && typeof source === 'object')) {
+      const normalized = extractTopicElementAndText(source, item.element)
       return {
         ...item,
-        element: match?.[1] || item.element,
-        text: (match?.[2] || source).trim(),
-      }
-    }
-
-    if (source && typeof source === 'object') {
-      return {
-        element: source.element || item.element,
-        text: source.text || source.title || item.text,
-        traffic: source.traffic || item.traffic,
+        ...normalized,
+        traffic: source?.traffic || item.traffic,
       }
     }
 
@@ -1117,20 +1147,12 @@ function normalizeGeneratedTopics(result, input, round, scriptType) {
 
   return fallback.map((item, index) => {
     const source = result[index]
-    if (typeof source === 'string') {
-      const match = source.match(/^【(.+?)】(.+)$/)
+    if (typeof source === 'string' || (source && typeof source === 'object')) {
+      const normalized = extractTopicElementAndText(source, item.element, scriptType)
       return {
         ...item,
-        element: match?.[1] || item.element,
-        text: (match?.[2] || source).trim(),
-      }
-    }
-
-    if (source && typeof source === 'object') {
-      return {
-        element: source.element || item.element,
-        text: source.text || source.title || item.text,
-        traffic: source.traffic || item.traffic,
+        ...normalized,
+        traffic: source?.traffic || item.traffic,
       }
     }
 
