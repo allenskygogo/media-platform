@@ -57,15 +57,6 @@ function DashboardIcon({ name }) {
   )
 }
 
-function readLocalArray(key) {
-  try {
-    const value = JSON.parse(localStorage.getItem(key) || '[]')
-    return Array.isArray(value) ? value : []
-  } catch {
-    return []
-  }
-}
-
 function formatDate(value) {
   if (!value) return '—'
   const date = new Date(value)
@@ -102,14 +93,10 @@ export default function AdminDashboard() {
   const projects = getProjects()
   const homework = getAllHomework()
   const practiceSubmissions = getPracticeSubmissions()
-  const betaApplications = readLocalArray('beta_applications')
 
   const pendingHomework = homework.filter(item => item.status === 'pending')
   const pendingBookings = bookings.filter(item => item.status === 'pending')
   const activeManagedProjects = projects.filter(item => item.status !== 'completed')
-  const betaPending = betaApplications.filter(item => item.status === 'pending')
-  const betaApproved = betaApplications.filter(item => item.status === 'approved')
-  const betaRejected = betaApplications.filter(item => item.status === 'rejected')
   const todayAiLogs = aiLogs.filter(item => new Date(item.created_at).toDateString() === new Date().toDateString())
 
   const recentActivityIds = new Set([
@@ -163,14 +150,13 @@ export default function AdminDashboard() {
     { label: '待審作業', value: pendingHomework.length, sub: `總提交 ${homework.length + practiceSubmissions.length} 份`, icon: 'homework', to: '/admin/homework' },
     { label: '待處理預約', value: pendingBookings.length, sub: '輔導與拍攝安排', icon: 'booking', to: '/admin/bookings' },
     { label: '代操進行中', value: activeManagedProjects.length, sub: `${managedUsers.length} 個代操帳號`, icon: 'managed', to: '/admin/managed' },
-    { label: '封測申請', value: betaApplications.length, sub: `待審 ${betaPending.length} 份`, icon: 'beta', to: '/admin/beta' },
+    { label: '資料包頁', value: '上線中', sub: 'LINE @tt_01 導流', icon: 'beta', to: '/admin/beta' },
     { label: 'AI 使用次數', value: aiLogs.length, sub: `今日 ${todayAiLogs.length} 次`, icon: 'ai', to: '/admin/ai-analytics' },
   ]
 
   const todoItems = [
     { label: '待審作業', value: pendingHomework.length, to: '/admin/homework' },
     { label: '待確認預約', value: pendingBookings.length, to: '/admin/bookings' },
-    { label: '待處理封測申請', value: betaPending.length, to: '/admin/beta' },
     { label: '待更新代操進度', value: activeManagedProjects.length, to: '/admin/managed' },
   ]
 
@@ -180,11 +166,11 @@ export default function AdminDashboard() {
         <div>
           <p className="admin-kicker">OPERATIONS CENTER</p>
           <h1>控制台</h1>
-          <p>平台最新數據總覽，集中查看教學會員、AI 工具、體驗課、預約、代操與封測申請的營運狀態。</p>
+          <p>平台最新數據總覽，集中查看教學會員、AI 工具、體驗課、預約、代操與資料包頁的營運狀態。</p>
         </div>
         <div className="admin-dashboard-actions">
           <Link to="/" className="btn btn-secondary btn-sm">回到首頁</Link>
-          <a href="/beta" target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">查看封測申請頁</a>
+          <a href="/beta" target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">查看資料包頁</a>
         </div>
       </div>
 
@@ -316,18 +302,18 @@ export default function AdminDashboard() {
         <section className="admin-panel-card">
           <div className="admin-panel-header">
             <div>
-              <h2>封測管理摘要</h2>
-              <p>/beta 封閉測試申請名單</p>
+              <h2>資料包管理摘要</h2>
+              <p>/beta 免費資料包領取頁</p>
             </div>
-            <Link to="/admin/beta">封測管理</Link>
+            <Link to="/admin/beta">資料包管理</Link>
           </div>
           <div className="admin-mini-stats">
-            <div><span>總申請</span><strong>{betaApplications.length}</strong></div>
-            <div><span>待審核</span><strong>{betaPending.length}</strong></div>
-            <div><span>已通過</span><strong>{betaApproved.length}</strong></div>
-            <div><span>已拒絕</span><strong>{betaRejected.length}</strong></div>
+            <div><span>頁面狀態</span><strong>上線中</strong></div>
+            <div><span>LINE</span><strong>@tt_01</strong></div>
+            <div><span>資料包項目</span><strong>3</strong></div>
+            <div><span>領取步驟</span><strong>3</strong></div>
           </div>
-          <a href="/beta" target="_blank" rel="noreferrer" className="admin-link-arrow">查看前台封測申請頁</a>
+          <a href="/beta" target="_blank" rel="noreferrer" className="admin-link-arrow">查看前台資料包頁</a>
         </section>
       </div>
     </div>

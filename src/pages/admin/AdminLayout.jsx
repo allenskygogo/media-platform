@@ -16,7 +16,7 @@ const MAIN_NAV = [
   { to: '/admin/managed',      label: '頂流代操', icon: 'bolt' },
   { to: '/admin/ai-analytics', label: 'AI 數據', icon: 'spark' },
   { to: '/admin/ai-agents',    label: 'AI Agent 管理', icon: 'spark' },
-  { to: '/admin/beta',         label: '封測管理', icon: 'flask' },
+  { to: '/admin/beta',         label: '資料包管理', icon: 'external' },
 ]
 
 const SYSTEM_NAV = [
