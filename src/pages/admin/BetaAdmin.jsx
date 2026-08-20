@@ -1,75 +1,119 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { getSystemSettings, saveSystemSettings } from '../../data/mockData'
 
 const PAGE_URL = '/beta'
 const LINE_ID = '@tt_01'
-const LINE_URL = 'https://line.me/R/ti/p/@tt_01'
-const COPY_TEXT = '你好，我想領取「短影音從0到千粉資料包」。'
+const ANALYTICS_KEY = 'resource_pack_analytics'
+const LEADS_KEY = 'resource_pack_leads'
 
-const PACK_ITEMS = [
+const STATUS_OPTIONS = ['新名單', '已點 LINE', '已私訊', '已領取', '待追蹤', '已排除']
+
+const SAMPLE_LEADS = [
   {
-    title: '五大定位公式',
-    desc: '商業內容、製作、變現玩法，把帳號從「亂拍」變成「有系統」。',
+    id: 'sample-1',
+    source: 'Meta Ads',
+    status: '待追蹤',
+    note: '廣告正式投放後，點擊 LINE 的名單會在這裡整理。',
+    createdAt: '2026-08-20T09:00:00.000Z',
   },
   {
-    title: '爆款選題公版',
-    desc: '不用每天從零開始想，直接用受眾興趣交叉做出選題方向。',
-  },
-  {
-    title: '腳本與剪輯實戰',
-    desc: '拆解短影音腳本結構、拍攝剪輯 SOP，新手也看得懂。',
+    id: 'sample-2',
+    source: 'Instagram',
+    status: '已點 LINE',
+    note: '可用備註標記是否已在 LINE 回覆。',
+    createdAt: '2026-08-20T09:15:00.000Z',
   },
 ]
 
-const AUDIENCES = [
-  { tag: '學員', title: '自媒體新手', value: '30 天', desc: '從不知道拍什麼，到穩定產出內容。' },
-  { tag: '業主', title: '實體店家', value: '3 套', desc: '整理可直接拍攝的短影音題材。' },
-  { tag: '顧問', title: '服務業者', value: '12 支', desc: '把專業服務轉成可被理解的內容。' },
-  { tag: '創作者', title: '個人品牌', value: '1 套', desc: '重新建立定位與內容主軸。' },
-]
+function readJson(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback))
+  } catch {
+    return fallback
+  }
+}
 
-const STEPS = [
-  '複製領取文字',
-  '加入官方 LINE',
-  '貼上訊息領資料包',
-]
+function writeJson(key, value) {
+  localStorage.setItem(key, JSON.stringify(value))
+}
 
-function InfoCard({ label, value, sub }) {
+function isToday(iso) {
+  const date = new Date(iso)
+  const now = new Date()
+  return date.getFullYear() === now.getFullYear()
+    && date.getMonth() === now.getMonth()
+    && date.getDate() === now.getDate()
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '-'
+  return new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso))
+}
+
+function sourceLabel(source = 'direct') {
+  const map = {
+    meta: 'Meta Ads',
+    google: 'Google Ads / 搜尋',
+    instagram: 'Instagram',
+    line: 'LINE',
+    direct: '直接進站',
+    referral: '外部推薦',
+  }
+  return map[source] || source
+}
+
+function groupSourcePerformance(events) {
+  const grouped = {}
+  events.forEach(event => {
+    const key = sourceLabel(event.source)
+    if (!grouped[key]) grouped[key] = { source: key, views: 0, lineClicks: 0 }
+    if (event.type === 'page_view') grouped[key].views += 1
+    if (event.type === 'line_click') grouped[key].lineClicks += 1
+  })
+
+  const rows = Object.values(grouped)
+    .map(row => ({
+      ...row,
+      conversionRate: row.views > 0 ? `${Math.round((row.lineClicks / row.views) * 1000) / 10}%` : '0%',
+    }))
+    .sort((a, b) => (b.views + b.lineClicks) - (a.views + a.lineClicks))
+
+  return rows.length > 0 ? rows : [
+    { source: 'Meta Ads', views: 0, lineClicks: 0, conversionRate: '0%' },
+    { source: 'Google Ads / 搜尋', views: 0, lineClicks: 0, conversionRate: '0%' },
+    { source: 'Instagram', views: 0, lineClicks: 0, conversionRate: '0%' },
+    { source: '直接進站', views: 0, lineClicks: 0, conversionRate: '0%' },
+  ]
+}
+
+function StatCard({ label, value, sub }) {
   return (
     <div className="stat-card">
-      <div className="stat-value" style={{ fontSize: 28 }}>{value}</div>
+      <div className="stat-value" style={{ fontSize: 30 }}>{value}</div>
       <div className="stat-label">{label}</div>
       {sub && <div style={{ color: 'var(--gray-400)', fontSize: 12, marginTop: 8 }}>{sub}</div>}
     </div>
   )
 }
 
-function SectionCard({ title, children, action }) {
+function SectionCard({ title, subtitle, children, action }) {
   return (
     <section className="card" style={{ padding: 24 }}>
-      <div className="page-actions" style={{ marginBottom: 18, alignItems: 'center' }}>
+      <div className="page-actions" style={{ marginBottom: 18, alignItems: 'flex-start' }}>
         <div className="page-heading" style={{ margin: 0 }}>
           <h2 style={{ fontSize: 20, margin: 0 }}>{title}</h2>
+          {subtitle && <p style={{ margin: '6px 0 0', fontSize: 13 }}>{subtitle}</p>}
         </div>
         {action}
       </div>
       {children}
     </section>
-  )
-}
-
-function DetailRow({ label, value }) {
-  return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: '140px minmax(0, 1fr)',
-      gap: 14,
-      padding: '14px 0',
-      borderBottom: '0.5px solid rgba(255,255,255,0.07)',
-      alignItems: 'start',
-    }}>
-      <div style={{ color: 'var(--gray-400)', fontSize: 13, fontWeight: 700 }}>{label}</div>
-      <div style={{ color: 'var(--gray-800)', fontSize: 14, lineHeight: 1.8, wordBreak: 'break-word' }}>{value}</div>
-    </div>
   )
 }
 
@@ -94,11 +138,69 @@ function copyText(text, onDone) {
   finish()
 }
 
+function makeCsv(leads) {
+  const header = ['來源', '狀態', '備註', '建立時間']
+  const rows = leads.map(lead => [
+    lead.source,
+    lead.status,
+    lead.note,
+    formatDateTime(lead.createdAt),
+  ])
+  return [header, ...rows]
+    .map(row => row.map(cell => `"${String(cell || '').replaceAll('"', '""')}"`).join(','))
+    .join('\n')
+}
+
 export default function BetaAdmin() {
   const [flash, setFlash] = useState('')
+  const [events] = useState(() => readJson(ANALYTICS_KEY, []))
+  const [leads, setLeads] = useState(() => {
+    const stored = readJson(LEADS_KEY, [])
+    return stored.length > 0 ? stored : SAMPLE_LEADS
+  })
+  const [settings, setSettings] = useState(() => {
+    const current = getSystemSettings()
+    return {
+      fbPixelId: current.fbPixelId || '',
+      ga4MeasurementId: current.ga4MeasurementId || '',
+      gtmContainerId: current.gtmContainerId || '',
+      metaCapiDatasetId: current.metaCapiDatasetId || '',
+    }
+  })
+
+  const todayEvents = useMemo(() => events.filter(event => isToday(event.createdAt)), [events])
+  const todayViews = todayEvents.filter(event => event.type === 'page_view').length
+  const lineClicks = todayEvents.filter(event => event.type === 'line_click').length
+  const conversionRate = todayViews > 0 ? `${Math.round((lineClicks / todayViews) * 1000) / 10}%` : '0%'
+  const sourcePerformance = useMemo(() => groupSourcePerformance(events), [events])
+  const bestSource = sourcePerformance.find(row => row.views || row.lineClicks)?.source || '尚未累積'
 
   const handleCopy = (text, message) => {
     copyText(text, (value) => setFlash(value === '' ? '' : message))
+  }
+
+  const updateLead = (id, patch) => {
+    const updated = leads.map(lead => lead.id === id ? { ...lead, ...patch } : lead)
+    setLeads(updated)
+    writeJson(LEADS_KEY, updated)
+  }
+
+  const exportCsv = () => {
+    const blob = new Blob([`\uFEFF${makeCsv(leads)}`], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `resource-pack-leads-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const saveTrackingSettings = () => {
+    saveSystemSettings({ ...getSystemSettings(), ...settings })
+    setFlash('追蹤串接欄位已儲存')
+    setTimeout(() => setFlash(''), 1800)
   }
 
   return (
@@ -106,151 +208,183 @@ export default function BetaAdmin() {
       <div className="page-actions" style={{ marginBottom: 24, alignItems: 'flex-start' }}>
         <div className="page-heading" style={{ margin: 0 }}>
           <h1>資料包管理</h1>
-          <p>管理資料包領取頁、LINE 導流設定與前台顯示內容</p>
+          <p>追蹤資料包頁瀏覽、LINE 點擊、轉換率、來源成效與名單狀態。</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <a href={PAGE_URL} target="_blank" rel="noreferrer" className="btn btn-secondary">
             查看資料包頁
           </a>
-          <button className="btn btn-primary" onClick={() => handleCopy(`${window.location.origin}${PAGE_URL}`, '已複製資料包頁連結')}>
+          <button className="btn btn-secondary" onClick={() => handleCopy(`${window.location.origin}${PAGE_URL}`, '已複製資料包頁連結')}>
             複製頁面連結
+          </button>
+          <button className="btn btn-primary" onClick={exportCsv}>
+            匯出名單 CSV
           </button>
         </div>
       </div>
 
       {flash && <div className="auth-alert success" style={{ marginBottom: 16 }}>{flash}</div>}
 
-      <div className="stats-grid" style={{ marginBottom: 24 }}>
-        <InfoCard label="前台頁面" value="已上線" sub="/beta" />
-        <InfoCard label="導流目標" value={LINE_ID} sub="官方 LINE 帳號" />
-        <InfoCard label="資料包內容" value={PACK_ITEMS.length} sub="目前顯示項目" />
-        <InfoCard label="領取流程" value={STEPS.length} sub="複製文字 → 加 LINE → 貼上" />
-      </div>
+      <SectionCard title="數據總覽" subtitle="目前先顯示前台本機測試紀錄；正式投放後可接 Meta Pixel、GA4、GTM 與 Conversion API。">
+        <div className="stats-grid">
+          <StatCard label="今日瀏覽" value={todayViews} sub="資料包頁 page_view" />
+          <StatCard label="LINE 點擊" value={lineClicks} sub={`加入官方 LINE ${LINE_ID}`} />
+          <StatCard label="轉換率" value={conversionRate} sub="LINE 點擊 / 今日瀏覽" />
+          <StatCard label="來源成效" value={bestSource} sub="目前最高互動來源" />
+        </div>
+      </SectionCard>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(320px, 0.85fr)', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.15fr) minmax(340px, 0.85fr)', gap: 20, marginTop: 20 }}>
         <div style={{ display: 'grid', gap: 20 }}>
-          <SectionCard title="前台主視覺內容">
-            <DetailRow label="頁面定位" value="免費資料包" />
-            <DetailRow label="主標題" value="短影音從0到千粉，只靠這一份資料包" />
-            <DetailRow label="說明文字" value="五大定位公式、爆款選題公版、腳本與拍攝整理，一次把新手最常卡住的內容方向整理好。" />
-            <DetailRow label="主要按鈕" value="加 LINE 好友，免費領資料包" />
-            <DetailRow label="補充提醒" value="加好友後自動收到資料包，不用等，隨時可封鎖取消。" />
-          </SectionCard>
-
-          <SectionCard title="資料包內容區">
-            <div style={{ display: 'grid', gap: 12 }}>
-              {PACK_ITEMS.map((item, index) => (
-                <div key={item.title} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '44px minmax(0, 1fr)',
-                  gap: 14,
-                  padding: 16,
-                  borderRadius: 12,
-                  border: '0.5px solid rgba(255,255,255,0.08)',
-                  background: 'rgba(255,255,255,0.025)',
-                }}>
-                  <div style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    display: 'grid',
-                    placeItems: 'center',
-                    background: 'linear-gradient(135deg,#38bdf8,#5060ff)',
-                    color: '#fff',
-                    fontWeight: 900,
-                  }}>
-                    {index + 1}
-                  </div>
-                  <div>
-                    <h3 style={{ margin: '0 0 4px', fontSize: 16, color: 'var(--gray-900)' }}>{item.title}</h3>
-                    <p style={{ margin: 0, color: 'var(--gray-500)', lineHeight: 1.75, fontSize: 13 }}>{item.desc}</p>
-                  </div>
-                </div>
-              ))}
+          <SectionCard title="來源成效" subtitle="用來判斷 Meta、Google、Instagram 或自然流量哪一邊最有效。">
+            <div className="admin-table-wrapper">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>來源</th>
+                    <th>瀏覽</th>
+                    <th>LINE 點擊</th>
+                    <th>轉換率</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sourcePerformance.map(row => (
+                    <tr key={row.source}>
+                      <td><strong>{row.source}</strong></td>
+                      <td>{row.views}</td>
+                      <td>{row.lineClicks}</td>
+                      <td>{row.conversionRate}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </SectionCard>
 
-          <SectionCard title="適合對象">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
-              {AUDIENCES.map(item => (
-                <div key={item.title} style={{
-                  padding: 16,
-                  borderRadius: 12,
-                  border: '0.5px solid rgba(255,255,255,0.08)',
-                  background: 'rgba(255,255,255,0.025)',
-                }}>
-                  <span style={{
-                    display: 'inline-flex',
-                    marginBottom: 12,
-                    padding: '4px 10px',
-                    borderRadius: 999,
-                    color: '#8ecaff',
-                    background: 'rgba(56,189,248,0.12)',
-                    fontSize: 12,
-                    fontWeight: 800,
-                  }}>{item.tag}</span>
-                  <h3 style={{ margin: 0, fontSize: 16, color: 'var(--gray-900)' }}>{item.title}</h3>
-                  <div style={{ color: '#fbbf24', fontSize: 24, fontWeight: 900, margin: '10px 0 6px' }}>{item.value}</div>
-                  <p style={{ margin: 0, color: 'var(--gray-500)', lineHeight: 1.75, fontSize: 13 }}>{item.desc}</p>
-                </div>
-              ))}
+          <SectionCard title="名單管理" subtitle="廣告導流後用這裡整理來源、狀態、備註與建立時間。">
+            <div className="admin-table-wrapper">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>來源</th>
+                    <th>狀態</th>
+                    <th>備註</th>
+                    <th>建立時間</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leads.map(lead => (
+                    <tr key={lead.id}>
+                      <td><strong>{lead.source}</strong></td>
+                      <td>
+                        <select
+                          className="form-input"
+                          value={lead.status}
+                          onChange={(event) => updateLead(lead.id, { status: event.target.value })}
+                          style={{ minWidth: 118, padding: '8px 10px' }}
+                        >
+                          {STATUS_OPTIONS.map(status => <option value={status} key={status}>{status}</option>)}
+                        </select>
+                      </td>
+                      <td style={{ minWidth: 260 }}>
+                        <input
+                          className="form-input"
+                          value={lead.note}
+                          onChange={(event) => updateLead(lead.id, { note: event.target.value })}
+                          placeholder="輸入追蹤備註"
+                          style={{ padding: '8px 10px' }}
+                        />
+                      </td>
+                      <td>{formatDateTime(lead.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </SectionCard>
         </div>
 
         <div style={{ display: 'grid', gap: 20, alignContent: 'start' }}>
-          <SectionCard
-            title="LINE 領取設定"
-            action={(
-              <button className="btn btn-secondary btn-sm" onClick={() => handleCopy(COPY_TEXT, '已複製領取文字')}>
-                複製領取文字
-              </button>
-            )}
-          >
-            <DetailRow label="LINE ID" value={LINE_ID} />
-            <DetailRow label="LINE 連結" value={LINE_URL} />
-            <DetailRow label="使用者要貼上" value={COPY_TEXT} />
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 16 }}>
-              <a href={LINE_URL} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">
-                測試加入 LINE
-              </a>
-              <button className="btn btn-secondary btn-sm" onClick={() => handleCopy(LINE_URL, '已複製 LINE 連結')}>
-                複製 LINE 連結
+          <SectionCard title="追蹤串接設定" subtitle="之後投廣告時，這些欄位用來接外部廣告與分析工具。">
+            <div style={{ display: 'grid', gap: 14 }}>
+              <label className="form-group" style={{ margin: 0 }}>
+                <span>Meta Pixel</span>
+                <input
+                  className="form-input"
+                  value={settings.fbPixelId}
+                  onChange={(event) => setSettings(prev => ({ ...prev, fbPixelId: event.target.value }))}
+                  placeholder="例如：1234567890"
+                />
+              </label>
+              <label className="form-group" style={{ margin: 0 }}>
+                <span>Google Analytics 4</span>
+                <input
+                  className="form-input"
+                  value={settings.ga4MeasurementId}
+                  onChange={(event) => setSettings(prev => ({ ...prev, ga4MeasurementId: event.target.value }))}
+                  placeholder="例如：G-XXXXXXXXXX"
+                />
+              </label>
+              <label className="form-group" style={{ margin: 0 }}>
+                <span>Google Tag Manager</span>
+                <input
+                  className="form-input"
+                  value={settings.gtmContainerId}
+                  onChange={(event) => setSettings(prev => ({ ...prev, gtmContainerId: event.target.value }))}
+                  placeholder="例如：GTM-XXXXXXX"
+                />
+              </label>
+              <label className="form-group" style={{ margin: 0 }}>
+                <span>Meta Conversion API</span>
+                <input
+                  className="form-input"
+                  value={settings.metaCapiDatasetId}
+                  onChange={(event) => setSettings(prev => ({ ...prev, metaCapiDatasetId: event.target.value }))}
+                  placeholder="Dataset / Pixel ID，Access Token 放後端環境變數"
+                />
+              </label>
+              <div style={{
+                padding: 14,
+                borderRadius: 12,
+                border: '0.5px solid rgba(251,191,36,0.28)',
+                background: 'rgba(251,191,36,0.08)',
+                color: '#facc15',
+                lineHeight: 1.7,
+                fontSize: 13,
+                fontWeight: 700,
+              }}>
+                CAPI Token 不會存在前端頁面，正式串接時要放在 Vercel / Worker 後端環境變數。
+              </div>
+              <button className="btn btn-primary" onClick={saveTrackingSettings}>
+                儲存追蹤設定
               </button>
             </div>
           </SectionCard>
 
-          <SectionCard title="領取流程">
+          <SectionCard title="目前接入狀態">
             <div style={{ display: 'grid', gap: 10 }}>
-              {STEPS.map((step, index) => (
-                <div key={step} style={{
+              {[
+                ['Meta Pixel', settings.fbPixelId ? '已填寫' : '待填寫'],
+                ['Google Analytics 4', settings.ga4MeasurementId ? '已填寫' : '待填寫'],
+                ['Google Tag Manager', settings.gtmContainerId ? '已填寫' : '待填寫'],
+                ['Meta Conversion API', settings.metaCapiDatasetId ? '待後端串接' : '待填寫'],
+              ].map(([label, status]) => (
+                <div key={label} style={{
                   display: 'flex',
+                  justifyContent: 'space-between',
                   gap: 12,
-                  alignItems: 'center',
                   padding: 14,
                   borderRadius: 12,
                   border: '0.5px solid rgba(255,255,255,0.08)',
                   background: 'rgba(255,255,255,0.025)',
+                  color: 'var(--gray-700)',
+                  fontSize: 13,
+                  fontWeight: 800,
                 }}>
-                  <span style={{ color: '#7fbfff', fontSize: 13, fontWeight: 900 }}>{String(index + 1).padStart(2, '0')}</span>
-                  <strong style={{ color: 'var(--gray-900)', fontSize: 14 }}>{step}</strong>
+                  <span>{label}</span>
+                  <span style={{ color: status.includes('已') ? '#4ade80' : '#fbbf24' }}>{status}</span>
                 </div>
               ))}
-            </div>
-          </SectionCard>
-
-          <SectionCard title="目前狀態">
-            <div style={{
-              padding: 16,
-              borderRadius: 12,
-              border: '0.5px solid rgba(34,197,94,0.28)',
-              background: 'rgba(34,197,94,0.08)',
-              color: '#86efac',
-              lineHeight: 1.8,
-              fontSize: 13,
-              fontWeight: 700,
-            }}>
-              資料包頁已上線。後台目前顯示資料包內容與 LINE 導流設定，供上廣告前快速檢查。
             </div>
           </SectionCard>
         </div>

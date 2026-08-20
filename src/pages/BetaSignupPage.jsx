@@ -1,8 +1,64 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import BrandLogo from '../components/BrandLogo'
 
 const LINE_URL = 'https://line.me/R/ti/p/@tt_01'
 const COPY_TEXT = '你好，我想領取「短影音從0到千粉資料包」。'
+const ANALYTICS_KEY = 'resource_pack_analytics'
+const LEADS_KEY = 'resource_pack_leads'
+
+function readJson(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback))
+  } catch {
+    return fallback
+  }
+}
+
+function detectTrafficSource() {
+  const params = new URLSearchParams(window.location.search)
+  const utmSource = params.get('utm_source')?.toLowerCase()
+  if (utmSource) {
+    if (utmSource.includes('facebook') || utmSource.includes('meta') || utmSource.includes('fb')) return 'meta'
+    if (utmSource.includes('google')) return 'google'
+    if (utmSource.includes('instagram') || utmSource.includes('ig')) return 'instagram'
+    if (utmSource.includes('line')) return 'line'
+    return utmSource
+  }
+  if (params.get('fbclid')) return 'meta'
+  if (params.get('gclid')) return 'google'
+  const referrer = document.referrer.toLowerCase()
+  if (referrer.includes('instagram.com')) return 'instagram'
+  if (referrer.includes('facebook.com')) return 'meta'
+  if (referrer.includes('google.')) return 'google'
+  if (referrer.includes('line.me') || referrer.includes('lin.ee')) return 'line'
+  return referrer ? 'referral' : 'direct'
+}
+
+function trackResourcePackEvent(type) {
+  const createdAt = new Date().toISOString()
+  const source = detectTrafficSource()
+  const event = {
+    id: `${type}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    type,
+    source,
+    path: window.location.pathname,
+    createdAt,
+  }
+  const events = readJson(ANALYTICS_KEY, [])
+  localStorage.setItem(ANALYTICS_KEY, JSON.stringify([event, ...events].slice(0, 800)))
+
+  if (type === 'line_click') {
+    const leads = readJson(LEADS_KEY, [])
+    const lead = {
+      id: `lead-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      source,
+      status: '已點 LINE',
+      note: '已點擊加入 LINE，待 LINE 後續追蹤。',
+      createdAt,
+    }
+    localStorage.setItem(LEADS_KEY, JSON.stringify([lead, ...leads].slice(0, 300)))
+  }
+}
 
 function copyToClipboard(text) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text)
@@ -40,7 +96,7 @@ function PackPreview() {
   )
 }
 
-function LineModal({ onClose }) {
+function LineModal({ onClose, onLineClick }) {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
@@ -59,7 +115,7 @@ function LineModal({ onClose }) {
           <button className="beta-secondary-btn" type="button" onClick={handleCopy}>
             {copied ? '已複製' : '複製文字'}
           </button>
-          <a className="beta-primary-btn" href={LINE_URL} target="_blank" rel="noreferrer">
+          <a className="beta-primary-btn" href={LINE_URL} target="_blank" rel="noreferrer" onClick={onLineClick}>
             加入 LINE 領取
           </a>
         </div>
@@ -70,6 +126,10 @@ function LineModal({ onClose }) {
 
 export default function BetaSignupPage() {
   const [modalOpen, setModalOpen] = useState(false)
+
+  useEffect(() => {
+    trackResourcePackEvent('page_view')
+  }, [])
 
   const features = useMemo(() => ([
     {
@@ -493,7 +553,7 @@ export default function BetaSignupPage() {
         </button>
       </section>
 
-      {modalOpen && <LineModal onClose={() => setModalOpen(false)} />}
+      {modalOpen && <LineModal onClose={() => setModalOpen(false)} onLineClick={() => trackResourcePackEvent('line_click')} />}
     </main>
   )
 }
