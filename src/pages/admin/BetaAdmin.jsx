@@ -250,7 +250,7 @@ export default function BetaAdmin() {
               fontSize: 13,
               fontWeight: 700,
             }}>
-              資料包頁已取代原本封測頁。後台目前顯示資料包內容與 LINE 導流設定，供上廣告前快速檢查。
+              資料包頁已上線。後台目前顯示資料包內容與 LINE 導流設定，供上廣告前快速檢查。
             </div>
           </SectionCard>
         </div>
