@@ -413,7 +413,7 @@ export default function BetaAdmin() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <a href="/beta" target="_blank" rel="noreferrer" className="btn btn-secondary">
-            查看前台封測頁
+            查看資料包頁
           </a>
           <button className="btn btn-primary" onClick={() => downloadCsv(apps)} disabled={apps.length === 0}>
             匯出 CSV

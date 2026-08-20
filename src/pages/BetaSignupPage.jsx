@@ -1,606 +1,499 @@
-import { useState } from 'react'
-import { supabase, hasSupabase, allowLocalBetaFallback } from '../lib/supabase'
+import { useMemo, useState } from 'react'
+import BrandLogo from '../components/BrandLogo'
 
-const LS_KEY = 'beta_applications'
+const LINE_URL = 'https://lin.ee/VALNYlg'
+const COPY_TEXT = '你好，我想領取「短影音從0到千粉資料包」。'
 
-function localLoad() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]') }
-  catch { return [] }
-}
-function localSave(arr) {
-  localStorage.setItem(LS_KEY, JSON.stringify(arr))
-}
-
-function validateEmail(e) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
-}
-function validatePhone(p) {
-  return /^09\d{8}$/.test(p.replace(/[-\s]/g, ''))
-}
-
-const REFERRAL_OPTIONS = [
-  { value: 'ig',      label: 'IG 帳號' },
-  { value: 'tiktok',  label: 'TikTok 帳號' },
-  { value: 'friend',  label: '朋友介紹' },
-  { value: 'google',  label: 'Google 搜尋' },
-  { value: 'other',   label: '其他' },
-]
-const SOCIAL_OPTIONS = [
-  { value: 'yes',      label: '有，目前在經營 IG / TikTok / YouTube' },
-  { value: 'starting', label: '剛開始，還在起步階段' },
-  { value: 'no',       label: '還沒有，但很想開始' },
-]
-const HOURS_OPTIONS = [
-  { value: '1-2', label: '1-2 小時' },
-  { value: '3-5', label: '3-5 小時' },
-  { value: '5+',  label: '5 小時以上，我非常認真' },
-]
-
-const BETA_STYLES = `
-@keyframes betaDotPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.35; transform: scale(0.55); }
-}
-@keyframes betaFadeIn {
-  from { opacity: 0; transform: translateY(22px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.beta-input {
-  padding: 10px 14px;
-  border: 0.5px solid rgba(255,255,255,0.10);
-  border-radius: 8px; font-size: 14px;
-  color: #fff; width: 100%;
-  background: rgba(255,255,255,0.04);
-  outline: none; transition: 0.2s;
-  box-sizing: border-box;
-  font-family: inherit;
-}
-.beta-input:focus {
-  border-color: rgba(80,96,255,0.55);
-  box-shadow: 0 0 0 3px rgba(80,96,255,0.12);
-  background: rgba(255,255,255,0.06);
-}
-.beta-input.err { border-color: #ef4444; }
-.beta-input::placeholder { color: rgba(255,255,255,0.25); }
-`
-
-// ── Nav ───────────────────────────────────────────────────────────────────────
-function BetaNav() {
-  return (
-    <nav style={{
-      position: 'sticky', top: 0, zIndex: 100,
-      background: 'rgba(9,9,15,0.88)', backdropFilter: 'blur(16px)',
-      WebkitBackdropFilter: 'blur(16px)',
-      borderBottom: '0.5px solid rgba(255,255,255,0.06)',
-      padding: '0 24px', height: 56,
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{
-          width: 32, height: 32, borderRadius: 8,
-          background: 'linear-gradient(135deg,#5060ff,#a040e0)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: "'Rajdhani',sans-serif",
-          fontWeight: 900, fontSize: 14, color: '#fff',
-        }}>TT</div>
-        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-          <span style={{ fontFamily: "'Rajdhani',sans-serif", fontSize: 10, fontWeight: 700, letterSpacing: '0.18em', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase' }}>TOP LEVEL TRAFFIC</span>
-          <span style={{ fontFamily: "'Rajdhani',sans-serif", fontSize: 11, fontWeight: 600, letterSpacing: '0.10em', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase' }}>只有頂級，沒有套路</span>
-        </div>
-      </div>
-    </nav>
-  )
+function copyToClipboard(text) {
+  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text)
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  document.body.removeChild(textarea)
+  return Promise.resolve()
 }
 
-// ── Hero ──────────────────────────────────────────────────────────────────────
-function HeroSection() {
-  return (
-    <section style={{ position: 'relative', padding: '80px 24px 60px', textAlign: 'center', overflow: 'hidden' }}>
-      {/* top glow */}
-      <div style={{
-        position: 'absolute', top: -140, left: '50%', transform: 'translateX(-50%)',
-        width: 700, height: 420,
-        background: 'radial-gradient(ellipse at center top, rgba(80,96,255,0.16) 0%, rgba(160,64,224,0.09) 45%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
-
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 680, margin: '0 auto', animation: 'betaFadeIn 0.65s ease both' }}>
-        {/* Recruiting badge */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '6px 18px', borderRadius: 999,
-          background: 'rgba(80,96,255,0.10)',
-          border: '0.5px solid rgba(80,96,255,0.35)',
-          marginBottom: 28, color: 'rgba(130,148,255,1)',
-          fontSize: 13, fontWeight: 600,
-        }}>
-          <span style={{
-            width: 7, height: 7, borderRadius: '50%', background: '#6878ff', flexShrink: 0,
-            animation: 'betaDotPulse 1.5s ease-in-out infinite',
-            display: 'inline-block',
-          }} />
-          封閉測試招募中
-        </div>
-
-        <h1 style={{
-          fontSize: 'clamp(26px,5vw,48px)', fontWeight: 800, lineHeight: 1.2,
-          color: '#fff', marginBottom: 14, letterSpacing: '-0.02em',
-        }}>加入頂級流量封測計劃</h1>
-
-        <p style={{
-          fontSize: 'clamp(18px,3vw,26px)', fontWeight: 700, marginBottom: 20,
-          background: 'linear-gradient(135deg,#5060ff,#a040e0)',
-          WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-        }}>搶先體驗 AI 自媒體工具</p>
-
-        <p style={{ fontSize: 15, lineHeight: 1.95, color: 'rgba(255,255,255,0.52)', marginBottom: 28 }}>
-          我們正在招募 50 位認真的自媒體創作者<br />
-          免費使用完整 AI 工具，共同打磨這個產品
-        </p>
-
-        {/* Quota badge */}
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 8,
-          padding: '8px 20px', borderRadius: 999, marginBottom: 56,
-          background: 'rgba(251,191,36,0.07)', border: '0.5px solid rgba(251,191,36,0.28)',
-          color: '#fbbf24', fontSize: 13, fontWeight: 600,
-        }}>
-          🏆 限額 50 人，目前已收到 23 份申請
-        </div>
-
-        {/* Benefits */}
-        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-          {[
-            { icon: '🎁', title: '免費', desc: '封測期間全功能免費使用，包含 AI 選題、腳本、策劃' },
-            { icon: '⚡', title: '搶先', desc: '比正式上架早 3 週體驗，封測結束享有專屬早鳥優惠' },
-            { icon: '🤝', title: '共創', desc: '你的反饋會直接影響產品方向，成為產品的共同創造者' },
-          ].map(({ icon, title, desc }) => (
-            <div key={title} style={{
-              flex: '1 1 175px', maxWidth: 210,
-              background: 'rgba(255,255,255,0.03)',
-              border: '0.5px solid rgba(255,255,255,0.08)',
-              borderRadius: 16, padding: '20px 18px', textAlign: 'left',
-            }}>
-              <div style={{ fontSize: 26, marginBottom: 8 }}>{icon}</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginBottom: 6 }}>{title}</div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.48)', lineHeight: 1.75 }}>{desc}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ── Shared Field wrapper ───────────────────────────────────────────────────────
-function Field({ label, required, hint, error, children }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <label style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.52)', letterSpacing: '0.03em' }}>
-          {label}
-        </label>
-        {required && <span style={{ fontSize: 11, color: '#ef4444', fontWeight: 600 }}>必填</span>}
-      </div>
-      {children}
-      {hint && <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.32)' }}>{hint}</p>}
-      {error && <p style={{ fontSize: 12, color: '#ef4444' }}>{error}</p>}
-    </div>
-  )
-}
-
-// ── Custom radio group ────────────────────────────────────────────────────────
-function RadioGroup({ name, options, value, onChange, error }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {options.map(opt => (
-        <label key={opt.value} style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
-          border: value === opt.value ? '0.5px solid rgba(80,96,255,0.5)' : '0.5px solid rgba(255,255,255,0.08)',
-          background: value === opt.value ? 'rgba(80,96,255,0.08)' : 'rgba(255,255,255,0.02)',
-          transition: '0.15s', userSelect: 'none',
-        }}>
-          <div style={{
-            width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-            border: value === opt.value ? '5px solid #6070ff' : '1.5px solid rgba(255,255,255,0.24)',
-            background: 'transparent', transition: '0.15s',
-          }} />
-          <input type="radio" name={name} value={opt.value} checked={value === opt.value}
-            onChange={() => onChange(opt.value)} style={{ display: 'none' }} />
-          <span style={{
-            fontSize: 14,
-            fontWeight: value === opt.value ? 600 : 400,
-            color: value === opt.value ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.58)',
-          }}>{opt.label}</span>
-        </label>
-      ))}
-      {error && <p style={{ fontSize: 12, color: '#ef4444', marginTop: 2 }}>{error}</p>}
-    </div>
-  )
-}
-
-// ── Form Card ─────────────────────────────────────────────────────────────────
-function FormCard({ form, set, errors, submitError, submitting, onSubmit }) {
-  const motLen = form.motivation.trim().length
-
-  return (
-    <div style={{
-      background: 'rgba(255,255,255,0.025)',
-      border: '0.5px solid rgba(255,255,255,0.08)',
-      borderRadius: 20, padding: '32px',
-      maxWidth: 580, margin: '0 auto',
-    }}>
-      <h2 style={{ fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 28 }}>填寫封測申請</h2>
-
-      <form onSubmit={onSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-
-        {/* 1. Name */}
-        <Field label="姓名" required error={errors.name}>
-          <input
-            name="name"
-            className={`beta-input${errors.name ? ' err' : ''}`}
-            value={form.name} onChange={e => set('name', e.target.value)}
-            placeholder="你的真實姓名"
-          />
-        </Field>
-
-        {/* 2. Email */}
-        <Field label="聯絡 Email" required error={errors.email}>
-          <input
-            name="email"
-            type="email"
-            className={`beta-input${errors.email ? ' err' : ''}`}
-            value={form.email} onChange={e => set('email', e.target.value)}
-            placeholder="example@email.com"
-          />
-        </Field>
-
-        {/* 3. Phone */}
-        <Field label="手機號碼" required error={errors.phone}>
-          <input
-            name="phone"
-            type="tel"
-            className={`beta-input${errors.phone ? ' err' : ''}`}
-            value={form.phone} onChange={e => set('phone', e.target.value)}
-            placeholder="例：0912-345-678"
-          />
-        </Field>
-
-        {/* 4. Line ID */}
-        <Field label="Line ID" hint="方便審核通過後聯繫你">
-          <input
-            name="line_id"
-            className="beta-input"
-            value={form.line_id} onChange={e => set('line_id', e.target.value)}
-            placeholder="方便審核通過後聯繫你"
-          />
-        </Field>
-
-        {/* 5. Referral */}
-        <Field label="你從哪裡認識我們？" required>
-          <RadioGroup
-            name="referral_source"
-            options={REFERRAL_OPTIONS}
-            value={form.referral_source}
-            onChange={v => set('referral_source', v)}
-            error={errors.referral_source}
-          />
-        </Field>
-
-        {/* 6. Knows about us */}
-        <Field
-          label="你知道我們主要在教什麼嗎？" required
-          hint="這題沒有標準答案，我們想了解你對我們的印象"
-          error={errors.knows_about_us}
-        >
-          <input
-            name="knows_about_us"
-            className={`beta-input${errors.knows_about_us ? ' err' : ''}`}
-            value={form.knows_about_us} onChange={e => set('knows_about_us', e.target.value)}
-            placeholder="用你自己的話說說看..."
-          />
-        </Field>
-
-        {/* 7. Industry */}
-        <Field label="你目前從事的行業" required error={errors.industry}>
-          <input
-            name="industry"
-            className={`beta-input${errors.industry ? ' err' : ''}`}
-            value={form.industry} onChange={e => set('industry', e.target.value)}
-            placeholder="例：美食、健身、教育、餐飲..."
-          />
-        </Field>
-
-        {/* 8. Has social media */}
-        <Field label="你目前有在經營自媒體嗎？" required>
-          <RadioGroup
-            name="has_social_media"
-            options={SOCIAL_OPTIONS}
-            value={form.has_social_media}
-            onChange={v => set('has_social_media', v)}
-            error={errors.has_social_media}
-          />
-        </Field>
-
-        {/* 9. Weekly hours */}
-        <Field label="每週能花多少時間使用和提供反饋？" required>
-          <RadioGroup
-            name="weekly_hours"
-            options={HOURS_OPTIONS}
-            value={form.weekly_hours}
-            onChange={v => set('weekly_hours', v)}
-            error={errors.weekly_hours}
-          />
-        </Field>
-
-        {/* 10. Motivation */}
-        <Field label="為什麼你想參加這次封測？" required error={errors.motivation}>
-          <div style={{ position: 'relative' }}>
-            <textarea
-              name="motivation"
-              className={`beta-input${errors.motivation ? ' err' : ''}`}
-              value={form.motivation} onChange={e => set('motivation', e.target.value)}
-              placeholder="請分享你的動機和期待..."
-              style={{ resize: 'vertical', minHeight: 100, paddingBottom: 28 }}
-            />
-            <span style={{
-              position: 'absolute', bottom: 10, right: 12,
-              fontSize: 11, pointerEvents: 'none',
-              color: motLen >= 50 ? 'rgba(34,197,94,0.85)' : 'rgba(255,255,255,0.28)',
-              transition: '0.2s',
-            }}>{motLen} / 50 字</span>
-          </div>
-        </Field>
-
-        {/* 11. Pain points */}
-        <Field label="你最希望 AI 工具幫你解決什麼問題？">
-          <textarea
-            name="pain_points"
-            className="beta-input"
-            value={form.pain_points} onChange={e => set('pain_points', e.target.value)}
-            placeholder="例：每天不知道要拍什麼、腳本寫不好..."
-            style={{ resize: 'vertical', minHeight: 80 }}
-          />
-        </Field>
-
-        {/* Divider */}
-        <hr style={{ border: 'none', borderTop: '0.5px solid rgba(255,255,255,0.07)', margin: '2px 0' }} />
-
-        {/* Commitment checkbox */}
-        <div data-field="committed">
-          <label style={{ display: 'flex', gap: 12, cursor: 'pointer', alignItems: 'flex-start' }}
-            onClick={() => set('committed', !form.committed)}>
-            <div style={{
-              width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
-              border: errors.committed ? '1.5px solid #ef4444' : form.committed ? '2px solid #6070ff' : '1.5px solid rgba(255,255,255,0.22)',
-              background: form.committed ? 'linear-gradient(135deg,#5060ff,#a040e0)' : 'transparent',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: '0.15s',
-            }}>
-              {form.committed && (
-                <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
-                  <path d="M1 4L4.5 7.5L10 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </div>
-            <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.58)', lineHeight: 1.75 }}>
-              我承諾在封測期間（3 週）至少提供 3 次真實反饋，包含使用心得、建議和遇到的問題。
-              我理解若無法履行承諾，可能會被移出封測計劃。
-            </span>
-          </label>
-          {errors.committed && <p style={{ fontSize: 12, color: '#ef4444', marginTop: 6, paddingLeft: 30 }}>{errors.committed}</p>}
-        </div>
-
-        {/* Submit */}
-        {submitError && (
-          <div style={{
-            padding: '10px 12px',
-            borderRadius: 8,
-            background: 'rgba(239,68,68,0.10)',
-            border: '0.5px solid rgba(239,68,68,0.30)',
-            color: '#ef4444',
-            fontSize: 13,
-            lineHeight: 1.6,
-          }}>
-            {submitError}
-          </div>
-        )}
-
-        <button
-          type="submit" disabled={submitting}
-          style={{
-            width: '100%', padding: '14px 24px',
-            background: 'linear-gradient(135deg,#5060ff,#a040e0)',
-            border: 'none', borderRadius: 12,
-            color: '#fff', fontSize: 15, fontWeight: 700,
-            cursor: submitting ? 'not-allowed' : 'pointer',
-            opacity: submitting ? 0.6 : 1, transition: '0.2s',
-            boxShadow: '0 4px 20px rgba(80,96,255,0.3)', marginTop: 4,
-          }}
-        >
-          {submitting ? '提交中...' : '提交封測申請'}
-        </button>
-
-        <p style={{ textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.28)', marginTop: -8 }}>
-          我們會在 3 個工作天內審核並以 Email 通知結果
-        </p>
-      </form>
-    </div>
-  )
-}
-
-// ── Process steps ─────────────────────────────────────────────────────────────
-function ProcessSection() {
-  const steps = [
-    { n: '01', label: '填寫申請' },
-    { n: '02', label: '3天內審核' },
-    { n: '03', label: 'Email通知' },
-    { n: '04', label: '開通帳號' },
-    { n: '05', label: '3週免費體驗' },
-    { n: '06', label: '早鳥專屬優惠' },
+function PackPreview() {
+  const cards = [
+    '五大定位公式',
+    '爆款選題公版',
+    '腳本與剪輯實戰',
+    '拍攝呈現清單',
   ]
+
   return (
-    <section style={{ padding: '40px 24px 80px' }}>
-      <div style={{ maxWidth: 820, margin: '0 auto' }}>
-        <h3 style={{ textAlign: 'center', fontSize: 17, fontWeight: 700, color: 'rgba(255,255,255,0.75)', marginBottom: 36 }}>申請流程</h3>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 0 }}>
-          {steps.map((s, i) => (
-            <div key={s.n} style={{ display: 'flex', alignItems: 'center' }}>
-              <div style={{ textAlign: 'center', padding: '0 6px' }}>
-                <div style={{
-                  width: 42, height: 42, borderRadius: '50%', margin: '0 auto 8px',
-                  background: i === 0 ? 'linear-gradient(135deg,#5060ff,#a040e0)' : 'rgba(255,255,255,0.04)',
-                  border: i === 0 ? 'none' : '0.5px solid rgba(255,255,255,0.10)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: "'Rajdhani',sans-serif", fontWeight: 700, fontSize: 13,
-                  color: i === 0 ? '#fff' : 'rgba(255,255,255,0.38)',
-                }}>{s.n}</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap' }}>{s.label}</div>
-              </div>
-              {i < steps.length - 1 && (
-                <div style={{ width: 28, height: 1, background: 'rgba(255,255,255,0.10)', flexShrink: 0, margin: '0 0 20px' }} />
-              )}
-            </div>
-          ))}
+    <div className="beta-pack-stack" aria-label="資料包預覽">
+      {cards.map((title, index) => (
+        <div className={`beta-pack-card beta-pack-card-${index + 1}`} key={title}>
+          <span>TOP LEVEL TRAFFIC</span>
+          <strong>{title}</strong>
+          <small>短影音自媒體獲客資料包</small>
+        </div>
+      ))}
+      <div className="beta-pack-tag">資料包實際內頁，不只一頁</div>
+    </div>
+  )
+}
+
+function LineModal({ onClose }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    await copyToClipboard(COPY_TEXT)
+    setCopied(true)
+  }
+
+  return (
+    <div className="beta-modal-backdrop" role="dialog" aria-modal="true" aria-label="領取資料包">
+      <div className="beta-modal">
+        <button className="beta-modal-close" type="button" onClick={onClose} aria-label="關閉">×</button>
+        <p className="beta-kicker">領取資料包</p>
+        <h2>先複製這段訊息，再加入官方 LINE</h2>
+        <div className="beta-copy-box">{COPY_TEXT}</div>
+        <div className="beta-modal-actions">
+          <button className="beta-secondary-btn" type="button" onClick={handleCopy}>
+            {copied ? '已複製' : '複製文字'}
+          </button>
+          <a className="beta-primary-btn" href={LINE_URL} target="_blank" rel="noreferrer">
+            加入 LINE 領取
+          </a>
         </div>
       </div>
-    </section>
-  )
-}
-
-// ── Success view ──────────────────────────────────────────────────────────────
-function SuccessView() {
-  return (
-    <div style={{ minHeight: '100vh', background: '#09090f', color: '#fff' }}>
-      <BetaNav />
-      <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        minHeight: 'calc(100vh - 56px)', padding: '40px 24px', textAlign: 'center',
-      }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: '50%', marginBottom: 28,
-          background: 'linear-gradient(135deg,#5060ff,#a040e0)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 30, boxShadow: '0 0 40px rgba(80,96,255,0.35)',
-        }}>✓</div>
-        <h2 style={{ fontSize: 28, fontWeight: 800, color: '#fff', marginBottom: 16, letterSpacing: '-0.02em' }}>感謝你的申請！</h2>
-        <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.52)', lineHeight: 1.9, maxWidth: 440 }}>
-          我們會在 3 個工作天內審核<br />
-          並以 Email 通知你結果，請留意收件匣。
-        </p>
-      </div>
     </div>
   )
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
 export default function BetaSignupPage() {
-  const [form, setForm] = useState({
-    name: '', email: '', phone: '', line_id: '',
-    referral_source: '', knows_about_us: '', industry: '',
-    has_social_media: '', weekly_hours: '', motivation: '',
-    pain_points: '', committed: false,
-  })
-  const [errors, setErrors]       = useState({})
-  const [submitError, setSubmitError] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [submitted, setSubmitted]  = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
 
-  const set = (k, v) => {
-    setForm(f => ({ ...f, [k]: v }))
-    if (errors[k]) setErrors(e => ({ ...e, [k]: '' }))
-    if (submitError) setSubmitError('')
-  }
+  const features = useMemo(() => ([
+    {
+      title: '五大定位公式',
+      desc: '商業內容、製作、變現玩法，把帳號從「亂拍」變成「有系統」。',
+    },
+    {
+      title: '爆款選題公版',
+      desc: '不用每天從零開始想，直接用受眾興趣交叉做出選題方向。',
+    },
+    {
+      title: '腳本與剪輯實戰',
+      desc: '拆解短影音腳本結構、拍攝剪輯 SOP，新手也看得懂。',
+    },
+  ]), [])
 
-  const validate = () => {
-    const e = {}
-    if (!form.name.trim())          e.name = '請填寫姓名'
-    if (!form.email.trim())         e.email = '請填寫 Email'
-    else if (!validateEmail(form.email)) e.email = 'Email 格式不正確'
-    if (!form.phone.trim())         e.phone = '請填寫手機號碼'
-    else if (!validatePhone(form.phone)) e.phone = '請輸入有效的台灣手機號碼（例：0912-345-678）'
-    if (!form.referral_source)      e.referral_source = '請選擇一個選項'
-    if (!form.knows_about_us.trim()) e.knows_about_us = '請填寫此欄位'
-    if (!form.industry.trim())      e.industry = '請填寫行業'
-    if (!form.has_social_media)     e.has_social_media = '請選擇一個選項'
-    if (!form.weekly_hours)         e.weekly_hours = '請選擇一個選項'
-    if (!form.motivation.trim())    e.motivation = '請填寫此欄位'
-    else if (form.motivation.trim().length < 50) e.motivation = `還需要 ${50 - form.motivation.trim().length} 個字才能提交`
-    if (!form.committed)            e.committed = '請勾選承諾以繼續'
-    return e
-  }
-
-  const handleSubmit = async (ev) => {
-    ev.preventDefault()
-    setSubmitError('')
-    const errs = validate()
-    if (Object.keys(errs).length > 0) {
-      setErrors(errs)
-      const firstKey = Object.keys(errs)[0]
-      document.querySelector(`[name="${firstKey}"], [data-field="${firstKey}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      return
-    }
-
-    setSubmitting(true)
-    const now = new Date().toISOString()
-    const record = {
-      id: Date.now(),
-      name:            form.name.trim(),
-      email:           form.email.trim(),
-      phone:           form.phone.trim(),
-      line_id:         form.line_id.trim(),
-      referral_source: form.referral_source,
-      knows_about_us:  form.knows_about_us.trim(),
-      industry:        form.industry.trim(),
-      has_social_media: form.has_social_media,
-      weekly_hours:    form.weekly_hours,
-      motivation:      form.motivation.trim(),
-      pain_points:     form.pain_points.trim(),
-      committed:       form.committed,
-      status:          'pending',
-      created_at:      now,
-      updated_at:      now,
-      notes:           '',
-    }
-
-    try {
-      if (hasSupabase && supabase) {
-        const { error } = await supabase.from('beta_applications').insert([record])
-        if (error) {
-          setSubmitError(`提交失敗：${error.message}`)
-          return
-        }
-      } else if (allowLocalBetaFallback) {
-        // Development-only fallback. Production must fail loudly instead of pretending data reached Supabase.
-        const all = localLoad()
-        all.push(record)
-        localSave(all)
-      } else {
-        setSubmitError('系統尚未完成資料庫設定，請稍後再試。')
-        return
-      }
-
-      setSubmitted(true)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    } catch (err) {
-      setSubmitError(`提交失敗：${err.message || '請稍後再試'}`)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  if (submitted) return <SuccessView />
+  const cases = useMemo(() => ([
+    { tag: '學員', title: '自媒體新手', value: '30 天', desc: '從不知道拍什麼，到穩定產出內容。' },
+    { tag: '業主', title: '實體店家', value: '3 套', desc: '整理可直接拍攝的短影音題材。' },
+    { tag: '顧問', title: '服務業者', value: '12 支', desc: '把專業服務轉成可被理解的內容。' },
+    { tag: '創作者', title: '個人品牌', value: '1 套', desc: '重新建立定位與內容主軸。' },
+  ]), [])
 
   return (
-    <div style={{ minHeight: '100vh', background: '#09090f', color: '#fff' }}>
-      <style>{BETA_STYLES}</style>
-      <BetaNav />
-      <HeroSection />
-      <section style={{ padding: '0 24px 40px' }}>
-        <FormCard form={form} set={set} errors={errors} submitError={submitError} submitting={submitting} onSubmit={handleSubmit} />
+    <main className="beta-pack-page">
+      <style>{`
+        .beta-pack-page {
+          min-height: 100vh;
+          background: #09090f;
+          color: #fff;
+          font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+          overflow-x: hidden;
+        }
+        .beta-pack-nav {
+          position: sticky;
+          top: 0;
+          z-index: 20;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px clamp(18px, 5vw, 64px);
+          border-bottom: 1px solid rgba(255,255,255,.08);
+          background: rgba(9,9,15,.86);
+          backdrop-filter: blur(16px);
+        }
+        .beta-pack-nav .brand-logo-mark { width: 36px; height: 36px; }
+        .beta-pack-nav .brand-logo-text { height: 28px; }
+        .beta-nav-link {
+          color: rgba(255,255,255,.58);
+          font-size: 14px;
+          font-weight: 700;
+          text-decoration: none;
+        }
+        .beta-pack-hero {
+          max-width: 1120px;
+          margin: 0 auto;
+          padding: clamp(44px, 8vw, 84px) clamp(18px, 5vw, 40px) 48px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+          gap: clamp(28px, 6vw, 72px);
+          align-items: center;
+        }
+        .beta-kicker {
+          margin: 0 0 14px;
+          color: #77b8ff;
+          font-size: 13px;
+          font-weight: 900;
+          letter-spacing: .12em;
+        }
+        .beta-pack-hero h1 {
+          margin: 0;
+          color: #fff;
+          font-size: clamp(38px, 7vw, 76px);
+          line-height: 1.04;
+          letter-spacing: 0;
+          font-weight: 900;
+        }
+        .beta-pack-hero h1 span {
+          color: transparent;
+          background: linear-gradient(135deg, #4f8cff, #8b4dff);
+          -webkit-background-clip: text;
+          background-clip: text;
+        }
+        .beta-hero-copy {
+          margin: 20px 0 28px;
+          max-width: 560px;
+          color: rgba(255,255,255,.68);
+          font-size: 17px;
+          line-height: 1.9;
+        }
+        .beta-primary-btn,
+        .beta-secondary-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 52px;
+          border-radius: 14px;
+          padding: 0 22px;
+          border: 1px solid rgba(255,255,255,.14);
+          color: #fff;
+          font-size: 16px;
+          font-weight: 900;
+          text-decoration: none;
+          cursor: pointer;
+        }
+        .beta-primary-btn {
+          background: linear-gradient(135deg, #5060ff, #8040e0);
+          box-shadow: 0 18px 36px rgba(80,96,255,.28);
+        }
+        .beta-secondary-btn {
+          background: rgba(255,255,255,.06);
+        }
+        .beta-cta-row {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+          align-items: center;
+        }
+        .beta-subnote {
+          margin-top: 12px;
+          color: rgba(255,255,255,.42);
+          font-size: 13px;
+        }
+        .beta-pack-stack {
+          position: relative;
+          min-height: 330px;
+        }
+        .beta-pack-card {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: min(330px, 78vw);
+          min-height: 190px;
+          padding: 26px;
+          border: 1px solid rgba(255,255,255,.16);
+          border-radius: 22px;
+          background: linear-gradient(145deg, rgba(20,25,46,.98), rgba(8,10,18,.98));
+          box-shadow: 0 22px 42px rgba(0,0,0,.35);
+        }
+        .beta-pack-card span {
+          display: block;
+          margin-bottom: 38px;
+          color: rgba(255,255,255,.42);
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: .16em;
+        }
+        .beta-pack-card strong {
+          display: block;
+          color: #fff;
+          font-size: 30px;
+          line-height: 1.15;
+        }
+        .beta-pack-card small {
+          display: block;
+          margin-top: 14px;
+          color: #65d8ff;
+          font-size: 13px;
+        }
+        .beta-pack-card-1 { transform: translate(-58%, -50%) rotate(-13deg); opacity: .74; }
+        .beta-pack-card-2 { transform: translate(-48%, -50%) rotate(-5deg); opacity: .86; }
+        .beta-pack-card-3 { transform: translate(-39%, -50%) rotate(8deg); opacity: .72; }
+        .beta-pack-card-4 { transform: translate(-50%, -48%) rotate(0); border-color: rgba(80,96,255,.46); }
+        .beta-pack-tag {
+          position: absolute;
+          left: 50%;
+          bottom: 8px;
+          transform: translateX(-50%);
+          white-space: nowrap;
+          padding: 8px 16px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,.14);
+          background: rgba(5,5,8,.78);
+          color: rgba(255,255,255,.86);
+          font-size: 12px;
+          font-weight: 800;
+        }
+        .beta-pack-section {
+          max-width: 1040px;
+          margin: 0 auto;
+          padding: 46px clamp(18px, 5vw, 40px);
+        }
+        .beta-section-title {
+          margin: 0 0 8px;
+          color: #fff;
+          text-align: center;
+          font-size: clamp(25px, 4vw, 36px);
+          font-weight: 900;
+        }
+        .beta-section-subtitle {
+          margin: 0 0 26px;
+          color: rgba(255,255,255,.5);
+          text-align: center;
+          font-size: 15px;
+        }
+        .beta-feature-list {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 14px;
+        }
+        .beta-feature-card,
+        .beta-case-card,
+        .beta-step {
+          border: 1px solid rgba(255,255,255,.1);
+          border-radius: 18px;
+          background: rgba(255,255,255,.045);
+        }
+        .beta-feature-card {
+          padding: 22px;
+          min-width: 0;
+        }
+        .beta-feature-index {
+          width: 34px;
+          height: 34px;
+          border-radius: 12px;
+          display: grid;
+          place-items: center;
+          margin-bottom: 18px;
+          background: linear-gradient(135deg, #38bdf8, #5060ff);
+          font-weight: 900;
+        }
+        .beta-feature-card h3,
+        .beta-case-card h3 {
+          margin: 0 0 8px;
+          color: #fff;
+          font-size: 18px;
+        }
+        .beta-feature-card p,
+        .beta-case-card p {
+          margin: 0;
+          color: rgba(255,255,255,.58);
+          font-size: 14px;
+          line-height: 1.75;
+        }
+        .beta-case-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .beta-case-card {
+          padding: 18px;
+          border-top-color: rgba(80,96,255,.58);
+        }
+        .beta-case-card small {
+          display: inline-flex;
+          margin-bottom: 18px;
+          padding: 4px 10px;
+          border-radius: 999px;
+          color: #8ecaff;
+          background: rgba(56,189,248,.12);
+          font-weight: 800;
+        }
+        .beta-case-value {
+          margin-bottom: 8px;
+          color: #ffd86a;
+          font-size: 28px;
+          font-weight: 900;
+        }
+        .beta-steps {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .beta-step {
+          padding: 20px;
+        }
+        .beta-step span {
+          display: block;
+          margin-bottom: 10px;
+          color: #7fbfff;
+          font-size: 13px;
+          font-weight: 900;
+        }
+        .beta-step strong {
+          display: block;
+          color: #fff;
+          font-size: 18px;
+        }
+        .beta-final {
+          padding-bottom: 92px;
+          text-align: center;
+        }
+        .beta-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 100;
+          display: grid;
+          place-items: center;
+          padding: 18px;
+          background: rgba(0,0,0,.72);
+        }
+        .beta-modal {
+          position: relative;
+          width: min(520px, 100%);
+          padding: 28px;
+          border: 1px solid rgba(255,255,255,.12);
+          border-radius: 22px;
+          background: #14141d;
+          box-shadow: 0 24px 80px rgba(0,0,0,.55);
+        }
+        .beta-modal h2 {
+          margin: 0 0 18px;
+          color: #fff;
+          font-size: 24px;
+          line-height: 1.35;
+        }
+        .beta-modal-close {
+          position: absolute;
+          top: 14px;
+          right: 14px;
+          width: 38px;
+          height: 38px;
+          border: 1px solid rgba(255,255,255,.12);
+          border-radius: 12px;
+          color: #fff;
+          background: rgba(255,255,255,.06);
+          font-size: 24px;
+          cursor: pointer;
+        }
+        .beta-copy-box {
+          margin-bottom: 18px;
+          padding: 16px;
+          border: 1px solid rgba(255,255,255,.1);
+          border-radius: 14px;
+          color: rgba(255,255,255,.82);
+          background: rgba(255,255,255,.05);
+          line-height: 1.8;
+        }
+        .beta-modal-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+        @media (max-width: 820px) {
+          .beta-pack-hero {
+            grid-template-columns: 1fr;
+          }
+          .beta-feature-list,
+          .beta-case-grid,
+          .beta-steps {
+            grid-template-columns: 1fr;
+          }
+          .beta-pack-stack {
+            min-height: 280px;
+          }
+          .beta-pack-nav {
+            padding-inline: 16px;
+          }
+          .beta-nav-link {
+            display: none;
+          }
+        }
+      `}</style>
+
+      <nav className="beta-pack-nav">
+        <BrandLogo />
+        <a className="beta-nav-link" href="/">回到首頁</a>
+      </nav>
+
+      <section className="beta-pack-hero">
+        <div>
+          <p className="beta-kicker">免費資料包</p>
+          <h1>短影音從0到千粉<br />只靠這<span>一份資料包</span></h1>
+          <p className="beta-hero-copy">
+            五大定位公式、爆款選題公版、腳本與拍攝整理，一次把新手最常卡住的內容方向整理好。
+          </p>
+          <div className="beta-cta-row">
+            <button className="beta-primary-btn" type="button" onClick={() => setModalOpen(true)}>
+              加 LINE 好友，免費領資料包
+            </button>
+          </div>
+          <p className="beta-subnote">加好友後自動收到資料包，不用等，隨時可封鎖取消。</p>
+        </div>
+        <PackPreview />
       </section>
-      <ProcessSection />
-    </div>
+
+      <section className="beta-pack-section">
+        <h2 className="beta-section-title">資料包裡有什麼</h2>
+        <p className="beta-section-subtitle">不是空泛理論，是能直接照做的方法。</p>
+        <div className="beta-feature-list">
+          {features.map((item, index) => (
+            <article className="beta-feature-card" key={item.title}>
+              <div className="beta-feature-index">{index + 1}</div>
+              <h3>{item.title}</h3>
+              <p>{item.desc}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="beta-pack-section">
+        <h2 className="beta-section-title">適合誰領取</h2>
+        <p className="beta-section-subtitle">想開始做內容、正在卡選題、想把服務變成流量的人。</p>
+        <div className="beta-case-grid">
+          {cases.map(item => (
+            <article className="beta-case-card" key={item.title}>
+              <small>{item.tag}</small>
+              <h3>{item.title}</h3>
+              <div className="beta-case-value">{item.value}</div>
+              <p>{item.desc}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="beta-pack-section">
+        <h2 className="beta-section-title">怎麼領取</h2>
+        <p className="beta-section-subtitle">3 步驟，不用留信箱、不用付費。</p>
+        <div className="beta-steps">
+          <div className="beta-step"><span>01</span><strong>複製領取文字</strong></div>
+          <div className="beta-step"><span>02</span><strong>加入官方 LINE</strong></div>
+          <div className="beta-step"><span>03</span><strong>貼上訊息領資料包</strong></div>
+        </div>
+      </section>
+
+      <section className="beta-pack-section beta-final">
+        <h2 className="beta-section-title">現在就領取資料包</h2>
+        <p className="beta-section-subtitle">先把短影音方向整理好，再開始拍就不會一直重來。</p>
+        <button className="beta-primary-btn" type="button" onClick={() => setModalOpen(true)}>
+          免費領資料包
+        </button>
+      </section>
+
+      {modalOpen && <LineModal onClose={() => setModalOpen(false)} />}
+    </main>
   )
 }

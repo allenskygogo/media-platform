@@ -115,7 +115,7 @@ export default function AdminLayout() {
             <span className="sidebar-icon"><LineIcon name="home" /></span>回到首頁
           </button>
           <a className="sidebar-link" href="/beta" target="_blank" rel="noreferrer" onClick={close}>
-            <span className="sidebar-icon"><LineIcon name="external" /></span>查看封測申請頁
+            <span className="sidebar-icon"><LineIcon name="external" /></span>查看資料包頁
           </a>
           {SYSTEM_NAV.map(({ to, label, icon, end }) => (
             <NavLink key={to} to={to} end={end} onClick={close}>
