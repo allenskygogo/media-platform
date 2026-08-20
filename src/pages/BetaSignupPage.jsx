@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import BrandLogo from '../components/BrandLogo'
 
-const LINE_URL = 'https://lin.ee/VALNYlg'
+const LINE_URL = 'https://line.me/R/ti/p/@tt_01'
 const COPY_TEXT = '你好，我想領取「短影音從0到千粉資料包」。'
 
 function copyToClipboard(text) {
