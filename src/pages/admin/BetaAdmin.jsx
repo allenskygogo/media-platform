@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { getSystemSettings, saveSystemSettings } from '../../data/mockData'
 
 const PAGE_URL = '/beta'
@@ -6,6 +6,7 @@ const LINE_ID = '@tt_01'
 const ANALYTICS_KEY = 'resource_pack_analytics'
 const LEADS_KEY = 'resource_pack_leads'
 const PERFORMANCE_KEY = 'resource_pack_performance_tracker'
+const PAGE_CONFIG_KEY = 'resource_pack_page_config'
 
 const STATUS_OPTIONS = ['新名單', '已點 LINE', '已私訊', '已領取', '待追蹤', '已排除']
 const DEFAULT_PERFORMANCE = {
@@ -36,6 +37,12 @@ const SAMPLE_LEADS = [
   },
 ]
 
+const DEFAULT_PAGE_CONFIG = {
+  onePageImageUrl: '',
+  onePageImageName: '',
+  updatedAt: '',
+}
+
 function readJson(key, fallback) {
   try {
     return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback))
@@ -46,6 +53,31 @@ function readJson(key, fallback) {
 
 function writeJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value))
+  window.dispatchEvent(new Event('resourcePackPageChanged'))
+}
+
+function compressImage(file, maxW = 1200, quality = 0.84) {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width)
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      const ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#09090f'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL('image/jpeg', quality))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('圖片讀取失敗，請換 JPG / PNG / WebP 再試一次。'))
+    }
+    img.src = url
+  })
 }
 
 function isToday(iso) {
@@ -258,6 +290,7 @@ function buildPerformanceRows(performance) {
 
 export default function BetaAdmin() {
   const [flash, setFlash] = useState('')
+  const landingImageInputRef = useRef(null)
   const [events] = useState(() => readJson(ANALYTICS_KEY, []))
   const [leads, setLeads] = useState(() => {
     const stored = readJson(LEADS_KEY, [])
@@ -273,6 +306,7 @@ export default function BetaAdmin() {
     }
   })
   const [performance, setPerformance] = useState(() => normalizePerformance(readJson(PERFORMANCE_KEY, DEFAULT_PERFORMANCE)))
+  const [pageConfig, setPageConfig] = useState(() => ({ ...DEFAULT_PAGE_CONFIG, ...readJson(PAGE_CONFIG_KEY, DEFAULT_PAGE_CONFIG) }))
 
   const todayEvents = useMemo(() => events.filter(event => isToday(event.createdAt)), [events])
   const todayViews = todayEvents.filter(event => event.type === 'page_view').length
@@ -342,6 +376,37 @@ export default function BetaAdmin() {
     savePerformance({ ...performance, weekly })
   }
 
+  const savePageConfig = (next) => {
+    const merged = { ...DEFAULT_PAGE_CONFIG, ...next, updatedAt: new Date().toISOString() }
+    setPageConfig(merged)
+    writeJson(PAGE_CONFIG_KEY, merged)
+  }
+
+  const uploadOnePageImage = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      if (!file.type.startsWith('image/')) throw new Error('請上傳圖片檔。')
+      const dataUrl = await compressImage(file)
+      savePageConfig({
+        onePageImageUrl: dataUrl,
+        onePageImageName: file.name,
+      })
+      setFlash('一頁式圖片已上傳，前台會優先顯示圖片版')
+      setTimeout(() => setFlash(''), 2200)
+    } catch (error) {
+      setFlash(error.message || '圖片上傳失敗')
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  const removeOnePageImage = () => {
+    savePageConfig({ onePageImageUrl: '', onePageImageName: '' })
+    setFlash('已移除一頁式圖片，前台會恢復原本版面')
+    setTimeout(() => setFlash(''), 2200)
+  }
+
   return (
     <div>
       <div className="page-actions" style={{ marginBottom: 24, alignItems: 'flex-start' }}>
@@ -371,6 +436,94 @@ export default function BetaAdmin() {
           <StatCard label="轉換率" value={conversionRate} sub="LINE 點擊 / 今日瀏覽" />
           <StatCard label="來源成效" value={bestSource} sub="目前最高互動來源" />
         </div>
+      </SectionCard>
+
+      <SectionCard
+        title="前台一頁式圖片"
+        subtitle="把設計好的一頁式長圖上傳到這裡，前台資料包頁會優先顯示圖片版。"
+        action={(
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <button className="btn btn-primary btn-sm" onClick={() => landingImageInputRef.current?.click()}>
+              {pageConfig.onePageImageUrl ? '更換圖片' : '上傳圖片'}
+            </button>
+            {pageConfig.onePageImageUrl && (
+              <button className="btn btn-secondary btn-sm" onClick={removeOnePageImage}>
+                移除圖片
+              </button>
+            )}
+          </div>
+        )}
+      >
+        <input
+          ref={landingImageInputRef}
+          type="file"
+          accept="image/*"
+          onChange={uploadOnePageImage}
+          style={{ display: 'none' }}
+        />
+        {pageConfig.onePageImageUrl ? (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(220px, 360px) minmax(0, 1fr)',
+            gap: 18,
+            alignItems: 'start',
+          }}>
+            <div style={{
+              borderRadius: 16,
+              border: '0.5px solid rgba(255,255,255,0.1)',
+              background: 'rgba(255,255,255,0.025)',
+              overflow: 'hidden',
+              maxHeight: 460,
+            }}>
+              <img
+                src={pageConfig.onePageImageUrl}
+                alt="目前一頁式前台圖片預覽"
+                style={{ display: 'block', width: '100%', height: 'auto' }}
+              />
+            </div>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{
+                padding: 16,
+                borderRadius: 12,
+                border: '0.5px solid rgba(34,197,94,0.28)',
+                background: 'rgba(34,197,94,0.08)',
+                color: '#86efac',
+                lineHeight: 1.8,
+                fontSize: 13,
+                fontWeight: 700,
+              }}>
+                已啟用圖片版前台。訪客進入 /beta 時會先看到這張一頁式圖片，下面保留 LINE 領取按鈕與彈窗流程。
+              </div>
+              <div style={{ color: 'var(--gray-500)', fontSize: 13, lineHeight: 1.8 }}>
+                檔名：{pageConfig.onePageImageName || '未命名'}<br />
+                更新時間：{pageConfig.updatedAt ? formatDateTime(pageConfig.updatedAt) : '-'}<br />
+                建議尺寸：寬 1080-1440px 的長圖，文字不要太小，手機看會比較清楚。
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div
+            onClick={() => landingImageInputRef.current?.click()}
+            style={{
+              display: 'grid',
+              placeItems: 'center',
+              minHeight: 180,
+              borderRadius: 16,
+              border: '1px dashed rgba(127,191,255,0.45)',
+              background: 'rgba(80,96,255,0.06)',
+              color: 'var(--gray-500)',
+              cursor: 'pointer',
+              textAlign: 'center',
+              padding: 24,
+            }}
+          >
+            <div>
+              <div style={{ color: '#8ecaff', fontSize: 30, fontWeight: 900, marginBottom: 8 }}>＋</div>
+              <strong style={{ color: 'var(--gray-900)', fontSize: 16 }}>點擊上傳設計好的一頁式圖片</strong>
+              <p style={{ margin: '8px 0 0', fontSize: 13 }}>支援 JPG / PNG / WebP，上傳後前台會自動改用圖片版。</p>
+            </div>
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard

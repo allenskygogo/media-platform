@@ -5,6 +5,7 @@ const LINE_URL = 'https://line.me/R/ti/p/@tt_01'
 const COPY_TEXT = '你好，我想領取「短影音從0到千粉資料包」。'
 const ANALYTICS_KEY = 'resource_pack_analytics'
 const LEADS_KEY = 'resource_pack_leads'
+const PAGE_CONFIG_KEY = 'resource_pack_page_config'
 
 function readJson(key, fallback) {
   try {
@@ -126,9 +127,20 @@ function LineModal({ onClose, onLineClick }) {
 
 export default function BetaSignupPage() {
   const [modalOpen, setModalOpen] = useState(false)
+  const [pageConfig, setPageConfig] = useState(() => readJson(PAGE_CONFIG_KEY, {}))
 
   useEffect(() => {
     trackResourcePackEvent('page_view')
+  }, [])
+
+  useEffect(() => {
+    const sync = () => setPageConfig(readJson(PAGE_CONFIG_KEY, {}))
+    window.addEventListener('storage', sync)
+    window.addEventListener('resourcePackPageChanged', sync)
+    return () => {
+      window.removeEventListener('storage', sync)
+      window.removeEventListener('resourcePackPageChanged', sync)
+    }
   }, [])
 
   const features = useMemo(() => ([
@@ -463,6 +475,46 @@ export default function BetaSignupPage() {
           gap: 10px;
           flex-wrap: wrap;
         }
+        .beta-one-page-shell {
+          max-width: 1040px;
+          margin: 0 auto;
+          padding: clamp(18px, 4vw, 40px) clamp(12px, 4vw, 28px) 112px;
+        }
+        .beta-one-page-image-wrap {
+          overflow: hidden;
+          border: 1px solid rgba(255,255,255,.1);
+          border-radius: 22px;
+          background: rgba(255,255,255,.04);
+          box-shadow: 0 24px 80px rgba(0,0,0,.36);
+        }
+        .beta-one-page-image {
+          display: block;
+          width: 100%;
+          height: auto;
+        }
+        .beta-floating-cta {
+          position: fixed;
+          left: 50%;
+          bottom: 18px;
+          z-index: 40;
+          width: min(520px, calc(100vw - 32px));
+          transform: translateX(-50%);
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 8px;
+          padding: 12px;
+          border: 1px solid rgba(255,255,255,.12);
+          border-radius: 18px;
+          background: rgba(12,12,18,.82);
+          box-shadow: 0 18px 44px rgba(0,0,0,.42);
+          backdrop-filter: blur(18px);
+        }
+        .beta-floating-note {
+          color: rgba(255,255,255,.52);
+          font-size: 12px;
+          font-weight: 700;
+          text-align: center;
+        }
         @media (max-width: 820px) {
           .beta-pack-hero {
             grid-template-columns: 1fr;
@@ -481,6 +533,15 @@ export default function BetaSignupPage() {
           .beta-nav-link {
             display: none;
           }
+          .beta-one-page-shell {
+            padding-inline: 0;
+            padding-top: 0;
+          }
+          .beta-one-page-image-wrap {
+            border-left: 0;
+            border-right: 0;
+            border-radius: 0;
+          }
         }
       `}</style>
 
@@ -489,69 +550,91 @@ export default function BetaSignupPage() {
         <a className="beta-nav-link" href="/">回到首頁</a>
       </nav>
 
-      <section className="beta-pack-hero">
-        <div>
-          <p className="beta-kicker">免費資料包</p>
-          <h1>短影音從0到千粉<br />只靠這<span>一份資料包</span></h1>
-          <p className="beta-hero-copy">
-            五大定位公式、爆款選題公版、腳本與拍攝整理，一次把新手最常卡住的內容方向整理好。
-          </p>
-          <div className="beta-cta-row">
+      {pageConfig.onePageImageUrl ? (
+        <>
+          <section className="beta-one-page-shell">
+            <div className="beta-one-page-image-wrap">
+              <img
+                className="beta-one-page-image"
+                src={pageConfig.onePageImageUrl}
+                alt="短影音從0到千粉資料包"
+              />
+            </div>
+          </section>
+          <div className="beta-floating-cta">
             <button className="beta-primary-btn" type="button" onClick={() => setModalOpen(true)}>
               加 LINE 好友，免費領資料包
             </button>
+            <div className="beta-floating-note">加入官方 LINE {LINE_URL.includes('@tt_01') ? '@tt_01' : ''} 後貼上領取文字</div>
           </div>
-          <p className="beta-subnote">加好友後自動收到資料包，不用等，隨時可封鎖取消。</p>
-        </div>
-        <PackPreview />
-      </section>
+        </>
+      ) : (
+        <>
+          <section className="beta-pack-hero">
+            <div>
+              <p className="beta-kicker">免費資料包</p>
+              <h1>短影音從0到千粉<br />只靠這<span>一份資料包</span></h1>
+              <p className="beta-hero-copy">
+                五大定位公式、爆款選題公版、腳本與拍攝整理，一次把新手最常卡住的內容方向整理好。
+              </p>
+              <div className="beta-cta-row">
+                <button className="beta-primary-btn" type="button" onClick={() => setModalOpen(true)}>
+                  加 LINE 好友，免費領資料包
+                </button>
+              </div>
+              <p className="beta-subnote">加好友後自動收到資料包，不用等，隨時可封鎖取消。</p>
+            </div>
+            <PackPreview />
+          </section>
 
-      <section className="beta-pack-section">
-        <h2 className="beta-section-title">資料包裡有什麼</h2>
-        <p className="beta-section-subtitle">不是空泛理論，是能直接照做的方法。</p>
-        <div className="beta-feature-list">
-          {features.map((item, index) => (
-            <article className="beta-feature-card" key={item.title}>
-              <div className="beta-feature-index">{index + 1}</div>
-              <h3>{item.title}</h3>
-              <p>{item.desc}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+          <section className="beta-pack-section">
+            <h2 className="beta-section-title">資料包裡有什麼</h2>
+            <p className="beta-section-subtitle">不是空泛理論，是能直接照做的方法。</p>
+            <div className="beta-feature-list">
+              {features.map((item, index) => (
+                <article className="beta-feature-card" key={item.title}>
+                  <div className="beta-feature-index">{index + 1}</div>
+                  <h3>{item.title}</h3>
+                  <p>{item.desc}</p>
+                </article>
+              ))}
+            </div>
+          </section>
 
-      <section className="beta-pack-section">
-        <h2 className="beta-section-title">適合誰領取</h2>
-        <p className="beta-section-subtitle">想開始做內容、正在卡選題、想把服務變成流量的人。</p>
-        <div className="beta-case-grid">
-          {cases.map(item => (
-            <article className="beta-case-card" key={item.title}>
-              <small>{item.tag}</small>
-              <h3>{item.title}</h3>
-              <div className="beta-case-value">{item.value}</div>
-              <p>{item.desc}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+          <section className="beta-pack-section">
+            <h2 className="beta-section-title">適合誰領取</h2>
+            <p className="beta-section-subtitle">想開始做內容、正在卡選題、想把服務變成流量的人。</p>
+            <div className="beta-case-grid">
+              {cases.map(item => (
+                <article className="beta-case-card" key={item.title}>
+                  <small>{item.tag}</small>
+                  <h3>{item.title}</h3>
+                  <div className="beta-case-value">{item.value}</div>
+                  <p>{item.desc}</p>
+                </article>
+              ))}
+            </div>
+          </section>
 
-      <section className="beta-pack-section">
-        <h2 className="beta-section-title">怎麼領取</h2>
-        <p className="beta-section-subtitle">3 步驟，不用留信箱、不用付費。</p>
-        <div className="beta-steps">
-          <div className="beta-step"><span>01</span><strong>複製領取文字</strong></div>
-          <div className="beta-step"><span>02</span><strong>加入官方 LINE</strong></div>
-          <div className="beta-step"><span>03</span><strong>貼上訊息領資料包</strong></div>
-        </div>
-      </section>
+          <section className="beta-pack-section">
+            <h2 className="beta-section-title">怎麼領取</h2>
+            <p className="beta-section-subtitle">3 步驟，不用留信箱、不用付費。</p>
+            <div className="beta-steps">
+              <div className="beta-step"><span>01</span><strong>複製領取文字</strong></div>
+              <div className="beta-step"><span>02</span><strong>加入官方 LINE</strong></div>
+              <div className="beta-step"><span>03</span><strong>貼上訊息領資料包</strong></div>
+            </div>
+          </section>
 
-      <section className="beta-pack-section beta-final">
-        <h2 className="beta-section-title">現在就領取資料包</h2>
-        <p className="beta-section-subtitle">先把短影音方向整理好，再開始拍就不會一直重來。</p>
-        <button className="beta-primary-btn" type="button" onClick={() => setModalOpen(true)}>
-          免費領資料包
-        </button>
-      </section>
+          <section className="beta-pack-section beta-final">
+            <h2 className="beta-section-title">現在就領取資料包</h2>
+            <p className="beta-section-subtitle">先把短影音方向整理好，再開始拍就不會一直重來。</p>
+            <button className="beta-primary-btn" type="button" onClick={() => setModalOpen(true)}>
+              免費領資料包
+            </button>
+          </section>
+        </>
+      )}
 
       {modalOpen && <LineModal onClose={() => setModalOpen(false)} onLineClick={() => trackResourcePackEvent('line_click')} />}
     </main>
