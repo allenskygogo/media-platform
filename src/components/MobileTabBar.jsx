@@ -1,12 +1,13 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { IconHome, IconBook, IconZap, IconCalendar, IconUser } from './Icons'
+import { IconHome, IconBook, IconZap, IconCalendar, IconShare2, IconUser } from './Icons'
 
 const STUDENT_TABS = [
   { to: '/dashboard',          label: '首頁',  Icon: IconHome,     end: true  },
   { to: '/dashboard/courses',  label: '課程',  Icon: IconBook,     end: false },
   { to: '/dashboard/ai-tools', label: 'AI工具',Icon: IconZap,      end: false },
   { to: '/dashboard/booking',  label: '預約',  Icon: IconCalendar, end: false },
+  { to: '/dashboard/publisher',label: '發布',  Icon: IconShare2,   end: false },
   { to: '/dashboard/profile',  label: '我的',  Icon: IconUser,     end: false },
 ]
 

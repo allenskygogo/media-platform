@@ -6,6 +6,8 @@ export const PRICING_KEY        = 'mp_pricing'
 export const HOMEWORK_SPEC_KEY  = 'mp_homework_specs'
 export const CF_VIDEOS_KEY      = 'mp_cf_videos'
 export const VIDEO_ASSIGN_KEY   = 'mp_video_assignments' // { lessonId|'trial': cfVideoUid }
+export const SOCIAL_PUBLISH_ACCOUNTS_KEY = 'mp_social_publish_accounts'
+export const SOCIAL_PUBLISH_JOBS_KEY     = 'mp_social_publish_jobs'
 const COURSE_DEMO_PURGE_KEY     = 'mp_demo_courses_purged_v1'
 
 export const DEFAULT_PRICING = {
@@ -261,10 +263,14 @@ export function getCourses() {
 }
 export function getProjects() { return JSON.parse(localStorage.getItem(PROJECTS_KEY) || '[]') }
 export function getBookings() { return JSON.parse(localStorage.getItem(BOOKINGS_KEY) || '[]') }
+export function getSocialPublishAccounts() { return JSON.parse(localStorage.getItem(SOCIAL_PUBLISH_ACCOUNTS_KEY) || '[]') }
+export function getSocialPublishJobs() { return JSON.parse(localStorage.getItem(SOCIAL_PUBLISH_JOBS_KEY) || '[]') }
 export function saveUsers(u) { localStorage.setItem(USERS_KEY, JSON.stringify(u)) }
 export function saveCourses(c) { localStorage.setItem(COURSES_KEY, JSON.stringify(c)) }
 export function saveProjects(p) { localStorage.setItem(PROJECTS_KEY, JSON.stringify(p)) }
 export function saveBookings(b) { localStorage.setItem(BOOKINGS_KEY, JSON.stringify(b)) }
+export function saveSocialPublishAccounts(accounts) { localStorage.setItem(SOCIAL_PUBLISH_ACCOUNTS_KEY, JSON.stringify(accounts)) }
+export function saveSocialPublishJobs(jobs) { localStorage.setItem(SOCIAL_PUBLISH_JOBS_KEY, JSON.stringify(jobs)) }
 
 // Access control helpers
 const TIER_ORDER = { basic: 1, standard: 2, advanced: 3, managed: 0 }

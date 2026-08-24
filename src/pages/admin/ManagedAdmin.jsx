@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getUsers, saveUsers, getProjects, saveProjects, addDays } from '../../data/mockData'
+import { getUsers, saveUsers, getProjects, saveProjects, getSocialPublishJobs, addDays } from '../../data/mockData'
 
 const EMPTY_USER = { name: '', email: '', password: '', contractExpiry: '', igUsername: '', igFollowers: '', igPosts: '', igLikes: '', ttUsername: '', ttFollowers: '', ttVideos: '', ttViews: '' }
 const STATUS_META = { planning: { label: '企劃中', mark: '企' }, filming: { label: '拍攝中', mark: '拍' }, editing: { label: '剪輯中', mark: '剪' }, completed: { label: '已完成', mark: '完' } }
@@ -7,6 +7,7 @@ const STATUS_META = { planning: { label: '企劃中', mark: '企' }, filming: { 
 export default function ManagedAdmin() {
   const [managedUsers, setManagedUsers] = useState(() => getUsers().filter(u => u.tier === 'managed'))
   const [projects, setProjects]         = useState(getProjects)
+  const [publishJobs]                   = useState(getSocialPublishJobs)
   const [selectedUser, setSelectedUser] = useState(null)
   const [showNewUser, setShowNewUser]   = useState(false)
   const [newUserForm, setNewUserForm]   = useState(EMPTY_USER)
@@ -79,6 +80,7 @@ export default function ManagedAdmin() {
   const sf  = (k) => (e) => setSocialForm(f => ({ ...f, [k]: e.target.value }))
 
   const userProjects = selectedUser ? projects.filter(p => p.clientId === selectedUser.id) : []
+  const userPublishJobs = selectedUser ? publishJobs.filter(job => String(job.userId) === String(selectedUser.id)) : []
 
   return (
     <div>
@@ -167,6 +169,26 @@ export default function ManagedAdmin() {
                       </div>
                     )
                   })}
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-header"><h2 className="card-title">一鍵發布任務</h2></div>
+              <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {userPublishJobs.length === 0 ? <p style={{ color: 'var(--gray-400)', fontSize: 13, textAlign: 'center', padding: 12 }}>尚無發布任務</p> :
+                  userPublishJobs.map(job => (
+                    <div key={job.id} style={{ padding: '12px 14px', background: 'var(--gray-50)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--gray-200)' }}>
+                      <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--gray-800)' }}>{job.title}</p>
+                      <p style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 3 }}>{job.videoName} · {job.createdAt}</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                        {(job.targets || []).map(target => (
+                          <span key={target.platform} className={`badge ${target.status === 'ready' ? 'badge-advanced' : 'badge-warning'}`}>
+                            {target.platform} · {target.status === 'ready' ? '待發布' : '待串接'}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
