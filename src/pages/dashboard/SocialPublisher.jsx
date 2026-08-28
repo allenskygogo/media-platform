@@ -1,12 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, Clock3, Link2, Send, UploadCloud } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import {
-  getSocialPublishAccounts,
-  getSocialPublishJobs,
-  saveSocialPublishAccounts,
-  saveSocialPublishJobs,
-} from '../../data/mockData'
+  createSocialPublishJob,
+  getSocialPublisherState,
+  toggleSocialAccount,
+} from '../../services/socialPublisher'
 
 const PLATFORMS = [
   { id: 'youtube', name: 'YouTube', hint: 'Shorts / 長影片', color: '#ef4444' },
@@ -22,16 +21,6 @@ const STATUS_META = {
   published: { label: '已發布', tone: 'success' },
 }
 
-function todayText() {
-  return new Date().toLocaleString('zh-TW', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 function fileSize(bytes = 0) {
   if (!bytes) return ''
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -41,16 +30,41 @@ function fileSize(bytes = 0) {
 export default function SocialPublisher() {
   const { currentUser } = useAuth()
   const userId = currentUser?.id
-  const [accounts, setAccounts] = useState(() => getSocialPublishAccounts())
-  const [jobs, setJobs] = useState(() => getSocialPublishJobs())
+  const [accounts, setAccounts] = useState([])
+  const [jobs, setJobs] = useState([])
   const [form, setForm] = useState({
     title: '',
     caption: '',
     platforms: ['instagram', 'facebook'],
     videoName: '',
     videoSize: 0,
+    videoType: '',
   })
   const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [storageMode, setStorageMode] = useState('')
+
+  const loadState = async () => {
+    if (!userId) return
+    setLoading(true)
+    try {
+      const state = await getSocialPublisherState(userId)
+      setAccounts(state.accounts)
+      setJobs(state.jobs)
+      setStorageMode(state.mode)
+      setMessage(state.mode === 'local' ? '目前先使用本機任務紀錄，正式同步需先執行一鍵發布資料表 SQL' : '')
+    } catch (error) {
+      console.error(error)
+      setMessage(error.message || '一鍵發布資料讀取失敗')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadState()
+  }, [userId])
 
   const myAccounts = useMemo(
     () => accounts.filter(account => String(account.userId) === String(userId)),
@@ -64,16 +78,22 @@ export default function SocialPublisher() {
   const isConnected = platform => myAccounts.some(account => account.platform === platform && account.status === 'connected')
   const connectedCount = PLATFORMS.filter(platform => isConnected(platform.id)).length
 
-  const toggleAccount = platform => {
-    const existing = accounts.find(account => String(account.userId) === String(userId) && account.platform === platform)
-    const next = existing
-      ? accounts.map(account => account.id === existing.id
-        ? { ...account, status: account.status === 'connected' ? 'pending_oauth' : 'connected', updatedAt: todayText() }
-        : account)
-      : [...accounts, { id: Date.now(), userId, platform, status: 'connected', accountName: currentUser?.name || '', updatedAt: todayText() }]
-    saveSocialPublishAccounts(next)
-    setAccounts(next)
-    setMessage(existing?.status === 'connected' ? '已改為待串接狀態' : '已標記為可發布帳號')
+  const toggleAccount = async platform => {
+    setSaving(true)
+    try {
+      const localAccounts = await toggleSocialAccount(currentUser, platform)
+      if (localAccounts) {
+        setAccounts(localAccounts)
+      } else {
+        await loadState()
+      }
+      setMessage(isConnected(platform) ? '已改為待串接狀態' : '已標記為可發布帳號')
+    } catch (error) {
+      console.error(error)
+      setMessage(error.message || '平台狀態更新失敗')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const togglePlatform = platform => {
@@ -87,36 +107,26 @@ export default function SocialPublisher() {
   const handleVideo = event => {
     const file = event.target.files?.[0]
     if (!file) return
-    setForm(prev => ({ ...prev, videoName: file.name, videoSize: file.size }))
+    setForm(prev => ({ ...prev, videoName: file.name, videoSize: file.size, videoType: file.type }))
   }
 
-  const createJob = () => {
-    if (!form.title.trim() || !form.caption.trim() || !form.videoName || form.platforms.length === 0) {
-      setMessage('請填寫標題、貼文內容、影片，並至少選擇一個平台')
-      return
+  const createJob = async () => {
+    setSaving(true)
+    try {
+      const localJob = await createSocialPublishJob(currentUser, form, isConnected)
+      if (storageMode === 'local' && localJob) {
+        setJobs(prev => [...prev, localJob])
+      } else {
+        await loadState()
+      }
+      setForm({ title: '', caption: '', platforms: ['instagram', 'facebook'], videoName: '', videoSize: 0, videoType: '' })
+      setMessage('發布任務已建立，正式 API 串好後就能直接送出')
+    } catch (error) {
+      console.error(error)
+      setMessage(error.message || '發布任務建立失敗')
+    } finally {
+      setSaving(false)
     }
-
-    const targetStatuses = form.platforms.map(platform => ({
-      platform,
-      status: isConnected(platform) ? 'ready' : 'waiting_connection',
-      note: isConnected(platform) ? '等待正式發布 API 串接' : '尚未完成平台帳號串接',
-    }))
-    const job = {
-      id: Date.now(),
-      userId,
-      userName: currentUser?.name || '',
-      title: form.title.trim(),
-      caption: form.caption.trim(),
-      videoName: form.videoName,
-      videoSize: form.videoSize,
-      targets: targetStatuses,
-      createdAt: todayText(),
-    }
-    const next = [...jobs, job]
-    saveSocialPublishJobs(next)
-    setJobs(next)
-    setForm({ title: '', caption: '', platforms: ['instagram', 'facebook'], videoName: '', videoSize: 0 })
-    setMessage('發布任務已建立，正式 API 串好後就能直接送出')
   }
 
   return (
@@ -145,6 +155,7 @@ export default function SocialPublisher() {
                   type="button"
                   key={platform.id}
                   className={`spub-platform-card${connected ? ' connected' : ''}`}
+                  disabled={saving}
                   onClick={() => toggleAccount(platform.id)}
                 >
                   <span className="spub-platform-dot" style={{ background: platform.color }} />
@@ -214,8 +225,8 @@ export default function SocialPublisher() {
               ))}
             </div>
 
-            <button className="btn btn-primary btn-lg" onClick={createJob}>
-              <Send size={18} /> 建立發布任務
+            <button className="btn btn-primary btn-lg" disabled={saving || loading} onClick={createJob}>
+              <Send size={18} /> {saving ? '處理中...' : '建立發布任務'}
             </button>
           </div>
         </section>
@@ -230,7 +241,12 @@ export default function SocialPublisher() {
           <Clock3 size={22} />
         </div>
 
-        {myJobs.length === 0 ? (
+        {loading ? (
+          <div className="empty-state">
+            <h3>讀取發布任務中</h3>
+            <p>正在同步你的平台帳號與發布紀錄。</p>
+          </div>
+        ) : myJobs.length === 0 ? (
           <div className="empty-state">
             <h3>尚未建立發布任務</h3>
             <p>上傳影片並選擇平台後，任務會出現在這裡。</p>
