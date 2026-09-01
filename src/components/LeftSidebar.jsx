@@ -1,13 +1,12 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { IconHome, IconBook, IconPlay, IconChart, IconCalendar, IconUser, IconShare2 } from './Icons'
+import { IconHome, IconBook, IconPlay, IconChart, IconCalendar, IconUser } from './Icons'
 
 const STUDENT_NAV = [
   { Icon: IconHome,     to: '/dashboard',         label: '首頁', end: true },
   { Icon: IconBook,     to: '/dashboard/courses',  label: '課程' },
   { Icon: IconPlay,     to: '/dashboard/trial',    label: '體驗' },
   { Icon: IconChart,    to: '/dashboard/ai-tools', label: 'AI'  },
-  { Icon: IconShare2,   to: '/dashboard/publisher', label: '發布' },
   { Icon: IconCalendar, to: '/dashboard/booking',  label: '預約' },
   { Icon: IconUser,     to: '/dashboard/profile',  label: '個人' },
 ]
@@ -15,7 +14,6 @@ const STUDENT_NAV = [
 const MANAGED_NAV = [
   { Icon: IconHome,     to: '/managed',           label: '總覽', end: true },
   { Icon: IconPlay,     to: '/managed/videos',    label: '影片' },
-  { Icon: IconShare2,   to: '/managed/publisher', label: '發布' },
   { Icon: IconCalendar, to: '/managed/booking',   label: '預約' },
   { Icon: IconUser,     to: '/dashboard/profile', label: '個人' },
 ]

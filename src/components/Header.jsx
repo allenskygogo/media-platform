@@ -62,7 +62,6 @@ export default function Header() {
           {nl('/dashboard', '首頁', true)}
           {nl('/dashboard/courses', '課程')}
           {nl('/dashboard/ai-tools', '✨ AI 工具')}
-          {nl('/dashboard/publisher', '一鍵發布')}
           {nl('/dashboard/booking', '預約一對一')}
           {nl('/dashboard/profile', '個人資料')}
         </nav>
@@ -73,7 +72,6 @@ export default function Header() {
           {nl('/', '回到首頁', true)}
           {nl('/managed', '帳號總覽', true)}
           {nl('/managed/videos', '影片進度')}
-          {nl('/managed/publisher', '一鍵發布')}
           {nl('/managed/booking', '預約拍攝')}
         </nav>
       )}

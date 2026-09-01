@@ -1,13 +1,12 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { IconGrid, IconPlay, IconCalendar, IconShare2 } from '../../components/Icons'
+import { IconGrid, IconPlay, IconCalendar } from '../../components/Icons'
 import { TIER_META, getSystemSettings } from '../../data/mockData'
 
 const NAV = [
   { to: '/managed',          label: '帳號總覽', Icon: IconGrid,     end: true },
   { to: '/managed/videos',   label: '影片進度', Icon: IconPlay },
-  { to: '/managed/publisher', label: '一鍵發布', Icon: IconShare2 },
   { to: '/managed/booking',  label: '預約拍攝', Icon: IconCalendar },
 ]
 
