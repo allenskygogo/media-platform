@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { IconHome, IconBook, IconZap, IconCalendar, IconUser } from './Icons'
+import { canUseSocialPublisher } from '../utils/socialPublisherAccess'
+import { IconHome, IconBook, IconZap, IconCalendar, IconShare2, IconUser } from './Icons'
 
 const STUDENT_TABS = [
   { to: '/dashboard',          label: '首頁',  Icon: IconHome,     end: true  },
@@ -16,10 +17,17 @@ export default function MobileTabBar() {
   const { currentUser } = useAuth()
 
   if (!currentUser || currentUser.role === 'admin' || currentUser.tier === 'managed') return null
+  const tabs = canUseSocialPublisher(currentUser)
+    ? [
+      ...STUDENT_TABS.slice(0, 3),
+      { to: '/dashboard/publisher', label: '發布', Icon: IconShare2, end: false },
+      ...STUDENT_TABS.slice(3),
+    ]
+    : STUDENT_TABS
 
   return (
     <nav className="mobile-tab-bar" aria-label="底部導覽">
-      {STUDENT_TABS.map(({ to, label, Icon, end }) => (
+      {tabs.map(({ to, label, Icon, end }) => (
         <NavLink
           key={to}
           to={to}

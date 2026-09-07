@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { IconHome, IconBook, IconPlay, IconChart, IconCalendar, IconUser } from './Icons'
+import { canUseSocialPublisher } from '../utils/socialPublisherAccess'
+import { IconHome, IconBook, IconPlay, IconChart, IconCalendar, IconShare2, IconUser } from './Icons'
 
 const STUDENT_NAV = [
   { Icon: IconHome,     to: '/dashboard',         label: '首頁', end: true },
@@ -21,7 +22,18 @@ const MANAGED_NAV = [
 export default function LeftSidebar() {
   const { currentUser } = useAuth()
   if (currentUser?.role === 'admin') return null
-  const nav = currentUser?.tier === 'managed' ? MANAGED_NAV : STUDENT_NAV
+  const baseNav = currentUser?.tier === 'managed' ? MANAGED_NAV : STUDENT_NAV
+  const nav = canUseSocialPublisher(currentUser)
+    ? [
+      ...baseNav.slice(0, currentUser?.tier === 'managed' ? 2 : 4),
+      {
+        Icon: IconShare2,
+        to: currentUser?.tier === 'managed' ? '/managed/publisher' : '/dashboard/publisher',
+        label: '發布',
+      },
+      ...baseNav.slice(currentUser?.tier === 'managed' ? 2 : 4),
+    ]
+    : baseNav
   return (
     <aside className="left-sidebar">
       {nav.map(({ Icon, to, label, end }) => (

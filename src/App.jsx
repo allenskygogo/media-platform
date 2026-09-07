@@ -18,6 +18,7 @@ import CoursesPage        from './pages/dashboard/Courses'
 import CourseDetail       from './pages/dashboard/CourseDetail'
 import Profile            from './pages/dashboard/Profile'
 import AITools            from './pages/dashboard/AITools'
+import SocialPublisher    from './pages/dashboard/SocialPublisher'
 import OneOnOneBooking    from './pages/dashboard/OneOnOneBooking'
 import Trial              from './pages/dashboard/Trial'
 import TrialPlayer        from './pages/dashboard/TrialPlayer'
@@ -46,6 +47,7 @@ import PracticeAdmin      from './pages/admin/PracticeAdmin'
 import BannerAdmin        from './pages/admin/BannerAdmin'
 import BetaAdmin          from './pages/admin/BetaAdmin'
 import BetaSignupPage     from './pages/BetaSignupPage'
+import { canUseSocialPublisher } from './utils/socialPublisherAccess'
 
 function StudentShell({ children }) {
   const { currentUser } = useAuth()
@@ -84,6 +86,14 @@ function ManagedShell({ children }) {
   )
 }
 
+function SocialPublisherGate({ managed = false }) {
+  const { currentUser } = useAuth()
+  if (!canUseSocialPublisher(currentUser)) {
+    return <Navigate to={managed ? '/managed' : '/dashboard'} replace />
+  }
+  return <SocialPublisher />
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -106,14 +116,14 @@ export default function App() {
           <Route path="/dashboard/trial"        element={<ProtectedRoute><StudentShell><Trial /></StudentShell></ProtectedRoute>} />
           <Route path="/dashboard/trial-player" element={<ProtectedRoute><StudentShell><TrialPlayer /></StudentShell></ProtectedRoute>} />
           <Route path="/dashboard/ai-tools" element={<ProtectedRoute requireTier="basic"><StudentShell><AITools /></StudentShell></ProtectedRoute>} />
-          <Route path="/dashboard/publisher" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard/publisher" element={<ProtectedRoute><StudentShell><SocialPublisherGate /></StudentShell></ProtectedRoute>} />
           <Route path="/dashboard/booking"  element={<ProtectedRoute requireTier="advanced"><StudentShell><OneOnOneBooking /></StudentShell></ProtectedRoute>} />
 
           {/* ── Managed member routes ── */}
           <Route path="/managed" element={<ProtectedRoute requireManaged><ManagedShell><ManagedLayout /></ManagedShell></ProtectedRoute>}>
             <Route index          element={<AccountOverview />} />
             <Route path="videos"  element={<VideoProgress />} />
-            <Route path="publisher" element={<Navigate to="/managed" replace />} />
+            <Route path="publisher" element={<SocialPublisherGate managed />} />
             <Route path="booking" element={<ShootingBooking />} />
           </Route>
 

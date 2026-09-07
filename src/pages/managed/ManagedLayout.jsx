@@ -1,8 +1,9 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
-import { IconGrid, IconPlay, IconCalendar } from '../../components/Icons'
+import { IconGrid, IconPlay, IconCalendar, IconShare2 } from '../../components/Icons'
 import { TIER_META, getSystemSettings } from '../../data/mockData'
+import { canUseSocialPublisher } from '../../utils/socialPublisherAccess'
 
 const NAV = [
   { to: '/managed',          label: '帳號總覽', Icon: IconGrid,     end: true },
@@ -13,6 +14,13 @@ const NAV = [
 export default function ManagedLayout() {
   const { currentUser } = useAuth()
   const meta = TIER_META[currentUser?.tier]
+  const nav = canUseSocialPublisher(currentUser)
+    ? [
+      ...NAV.slice(0, 2),
+      { to: '/managed/publisher', label: '一鍵發布', Icon: IconShare2 },
+      ...NAV.slice(2),
+    ]
+    : NAV
 
   useEffect(() => {
     const { bgImages } = getSystemSettings()
@@ -35,7 +43,7 @@ export default function ManagedLayout() {
         <p className="mg2-panel-label">代操專區</p>
         <span className="mg2-panel-badge">{meta?.label || '頂流代操'}</span>
         <div className="mg2-panel-nav">
-          {NAV.map(({ to, label, Icon, end }) => (
+          {nav.map(({ to, label, Icon, end }) => (
             <NavLink key={to} to={to} end={end} style={{ textDecoration:'none' }}>
               {({ isActive }) => (
                 <div className={`mg2-panel-item${isActive ? ' active' : ''}`}>
@@ -53,7 +61,7 @@ export default function ManagedLayout() {
       <div className="mg2-main">
         {/* Top tab bar */}
         <div className="mg2-tabs">
-          {NAV.map(({ to, label, end }) => (
+          {nav.map(({ to, label, end }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => `mg2-tab${isActive ? ' active' : ''}`}>
               {label}
             </NavLink>
@@ -66,7 +74,7 @@ export default function ManagedLayout() {
 
       {/* Mobile bottom tabs */}
       <nav className="managed-mobile-tabs" aria-label="代操導覽">
-        {NAV.map(({ to, label, Icon, end }) => (
+        {nav.map(({ to, label, Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => `mobile-tab${isActive ? ' active' : ''}`}>
             <span className="mobile-tab-icon"><Icon size={20} strokeWidth={1.5}/></span>
             <span className="mobile-tab-label">{label}</span>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { TIER_META, getSystemSettings } from '../data/mockData'
+import { canUseSocialPublisher } from '../utils/socialPublisherAccess'
 import BrandLogo from './BrandLogo'
 
 export default function Header() {
@@ -34,6 +35,7 @@ export default function Header() {
 
   const isAdmin   = currentUser?.role === 'admin'
   const isManaged = currentUser?.tier === 'managed'
+  const showSocialPublisher = canUseSocialPublisher(currentUser)
   const tier      = currentUser?.tier
   const meta      = tier ? TIER_META[tier] : null
 
@@ -62,6 +64,7 @@ export default function Header() {
           {nl('/dashboard', '首頁', true)}
           {nl('/dashboard/courses', '課程')}
           {nl('/dashboard/ai-tools', '✨ AI 工具')}
+          {showSocialPublisher && nl('/dashboard/publisher', '一鍵發布')}
           {nl('/dashboard/booking', '預約一對一')}
           {nl('/dashboard/profile', '個人資料')}
         </nav>
@@ -72,6 +75,7 @@ export default function Header() {
           {nl('/', '回到首頁', true)}
           {nl('/managed', '帳號總覽', true)}
           {nl('/managed/videos', '影片進度')}
+          {showSocialPublisher && nl('/managed/publisher', '一鍵發布')}
           {nl('/managed/booking', '預約拍攝')}
         </nav>
       )}
