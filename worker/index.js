@@ -1367,8 +1367,31 @@ async function handleMetaOAuthCallback(request, url, env) {
     const redirectUri = getMetaRedirectUri(request, env)
     const shortToken = await exchangeMetaCode(env, code, redirectUri)
     const longToken = await exchangeMetaLongLivedToken(env, shortToken.access_token)
+    const profile = await fetchMetaProfile(env, longToken.access_token)
     const pages = await fetchMetaPages(env, longToken.access_token)
-    if (!pages.length) throw new Error('這個 Meta 帳號沒有可用的 Facebook 粉專')
+
+    if (!pages.length) {
+      await upsertSocialAccount(env, {
+        user_id: payload.userId,
+        platform: payload.platform,
+        status: 'connected',
+        external_account_id: profile.id || `meta-${payload.userId}`,
+        external_account_name: profile.name || 'Meta 帳號',
+        access_token_enc: await encryptSocialSecret(env, longToken.access_token),
+        expires_at: longToken.expires_in ? addTime(new Date(), Math.floor(Number(longToken.expires_in) / 86400), 'days').toISOString() : null,
+        extra: {
+          authLevel: 'basic',
+          pages: [],
+          note: '尚未偵測到 Facebook 粉專；正式發布前需補粉專或 IG 商業帳號權限。',
+        },
+        updated_at: new Date().toISOString(),
+      })
+
+      return metaOAuthPopupHtml({
+        success: true,
+        message: 'Meta 基本連結成功；目前尚未偵測到 Facebook 粉專，正式發布前需要再補粉專或 IG 商業帳號。',
+      })
+    }
 
     const firstPage = pages[0]
     await upsertSocialAccount(env, {
@@ -4098,6 +4121,13 @@ async function fetchMetaPages(env, token) {
     limit: '100',
   })
   return Array.isArray(data.data) ? data.data : []
+}
+
+async function fetchMetaProfile(env, token) {
+  return await metaGraphJson(env, '/me', {
+    access_token: token,
+    fields: 'id,name',
+  })
 }
 
 function metaOAuthPopupHtml(result) {
