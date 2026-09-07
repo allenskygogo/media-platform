@@ -6,6 +6,8 @@ import {
   saveSocialPublishJobs,
 } from '../data/mockData'
 
+const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
+
 function nowText() {
   return new Date().toLocaleString('zh-TW', {
     year: 'numeric',
@@ -14,6 +16,32 @@ function nowText() {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+async function getAccessToken() {
+  if (!supabase) return ''
+  const { data } = await supabase.auth.getSession()
+  return data?.session?.access_token || ''
+}
+
+async function workerJson(path, options = {}) {
+  if (!WORKER_URL) throw new Error('Worker URL is not configured')
+  const token = await getAccessToken()
+  if (!token) throw new Error('請先登入')
+
+  const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || data.success === false) {
+    throw new Error(data.error || data.message || `Worker request failed: ${response.status}`)
+  }
+  return data
 }
 
 function formatDate(value) {
@@ -83,6 +111,19 @@ function localState() {
 }
 
 export async function getSocialPublisherState(userId) {
+  if (hasSupabase && supabase) {
+    try {
+      const data = await workerJson('/api/social-publisher/state')
+      return {
+        accounts: data.accounts || [],
+        jobs: data.jobs || [],
+        mode: 'worker',
+      }
+    } catch (error) {
+      console.error('Worker social publisher state failed:', error)
+    }
+  }
+
   if (!assertConfigured()) {
     return localState()
   }
@@ -186,6 +227,25 @@ export async function createSocialPublishJob(user, form, isConnected) {
     status: isConnected(platform) ? 'ready' : 'waiting_connection',
     note: isConnected(platform) ? '等待正式發布 API 串接' : '尚未完成平台帳號串接',
   }))
+
+  if (hasSupabase && supabase) {
+    try {
+      await workerJson('/api/social-publisher/jobs', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: cleanTitle,
+          caption: cleanCaption,
+          videoName: form.videoName,
+          videoType: form.videoType || '',
+          videoSize: form.videoSize || 0,
+          platforms: form.platforms,
+        }),
+      })
+      return null
+    } catch (error) {
+      console.error('Worker social publisher job create failed:', error)
+    }
+  }
 
   if (!assertConfigured()) {
     const jobs = getSocialPublishJobs()

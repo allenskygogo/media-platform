@@ -939,6 +939,27 @@ export default {
         return await handleSaveCourseProgress(request, env)
       }
 
+      // GET /api/social-publisher/state → current user's social publish state
+      if (path === '/api/social-publisher/state' && request.method === 'GET') {
+        return await handleGetSocialPublisherState(request, env)
+      }
+
+      // POST /api/social-publisher/jobs → create a pending social publish job
+      if (path === '/api/social-publisher/jobs' && request.method === 'POST') {
+        return await handleCreateSocialPublishJob(request, env)
+      }
+
+      // PATCH /api/social-publisher/targets/:id → update one target status
+      if (path.startsWith('/api/social-publisher/targets/') && request.method === 'PATCH') {
+        const targetId = decodeURIComponent(path.slice('/api/social-publisher/targets/'.length))
+        return await handleUpdateSocialPublishTarget(request, targetId, env)
+      }
+
+      // GET /api/admin/social-publisher/jobs → admin list of all social publish jobs
+      if (path === '/api/admin/social-publisher/jobs' && request.method === 'GET') {
+        return await handleAdminListSocialPublishJobs(request, env)
+      }
+
       // POST /api/auth/last-login → record current user's successful login time
       if (path === '/api/auth/last-login' && request.method === 'POST') {
         return await handleRecordLastLogin(request, env)
@@ -1057,6 +1078,153 @@ export default {
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────
+
+const SOCIAL_PLATFORMS = ['youtube', 'facebook', 'instagram', 'tiktok']
+
+function normalizeSocialAccount(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    platform: row.platform,
+    status: row.status,
+    accountName: row.external_account_name || '',
+    externalAccountId: row.external_account_id || '',
+    expiresAt: row.expires_at || null,
+    updatedAt: row.updated_at,
+  }
+}
+
+function normalizeSocialJob(row) {
+  const video = row.social_videos || null
+  return {
+    id: row.id,
+    userId: row.user_id,
+    userName: row.profiles?.display_name || row.profiles?.email || '',
+    title: row.title,
+    caption: row.caption,
+    status: row.status,
+    videoName: video?.filename || '',
+    videoSize: video?.size_bytes || 0,
+    targets: (row.social_publish_targets || []).map(target => ({
+      id: target.id,
+      platform: target.platform,
+      status: target.status,
+      note: target.error_message || '',
+      externalPostUrl: target.external_post_url || '',
+    })),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function ensureSocialPublisherConfigured(env) {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Social publisher storage is not configured')
+  }
+}
+
+async function handleGetSocialPublisherState(request, env) {
+  ensureSocialPublisherConfigured(env)
+  const user = await requireUser(request, env)
+
+  const [accounts, jobs] = await Promise.all([
+    listSocialAccounts(env, user.id),
+    listSocialJobs(env, user.id),
+  ])
+
+  return json({
+    success: true,
+    accounts: accounts.map(normalizeSocialAccount),
+    jobs: jobs.map(normalizeSocialJob),
+  })
+}
+
+async function handleCreateSocialPublishJob(request, env) {
+  ensureSocialPublisherConfigured(env)
+  const user = await requireUser(request, env)
+  const body = await request.json().catch(() => ({}))
+
+  const title = String(body.title || '').trim()
+  const caption = String(body.caption || '').trim()
+  const videoName = String(body.videoName || body.filename || '').trim()
+  const videoType = String(body.videoType || body.mimeType || '').trim()
+  const videoSize = Number(body.videoSize || body.sizeBytes || 0)
+  const platforms = Array.isArray(body.platforms)
+    ? [...new Set(body.platforms.map(item => String(item || '').trim().toLowerCase()).filter(item => SOCIAL_PLATFORMS.includes(item)))]
+    : []
+
+  if (!title) return err('請填寫發布標題', 400)
+  if (!caption) return err('請填寫貼文文案', 400)
+  if (!videoName) return err('請先選擇影片', 400)
+  if (!platforms.length) return err('請至少選擇一個發布平台', 400)
+
+  const video = await insertSocialVideo(env, {
+    user_id: user.id,
+    filename: videoName,
+    mime_type: videoType || null,
+    size_bytes: Number.isFinite(videoSize) ? Math.max(0, Math.round(videoSize)) : 0,
+    title,
+    caption,
+  })
+
+  const job = await insertSocialJob(env, {
+    user_id: user.id,
+    video_id: video.id,
+    title,
+    caption,
+    status: 'pending',
+  })
+
+  const accounts = await listSocialAccounts(env, user.id, platforms)
+  const accountMap = new Map(accounts.map(account => [account.platform, account]))
+  await insertSocialTargets(env, platforms.map(platform => {
+    const account = accountMap.get(platform)
+    const connected = account?.status === 'connected'
+    return {
+      job_id: job.id,
+      user_id: user.id,
+      platform,
+      social_account_id: connected ? account.id : null,
+      status: connected ? 'ready' : 'waiting_connection',
+      error_message: connected ? '等待平台發布 API' : '尚未完成平台帳號串接',
+    }
+  }))
+
+  const jobs = await listSocialJobs(env, user.id)
+  return json({
+    success: true,
+    job: normalizeSocialJob(jobs.find(item => item.id === job.id) || { ...job, social_videos: video, social_publish_targets: [] }),
+  })
+}
+
+async function handleUpdateSocialPublishTarget(request, targetId, env) {
+  ensureSocialPublisherConfigured(env)
+  const user = await requireUser(request, env)
+  const body = await request.json().catch(() => ({}))
+  const status = String(body.status || '').trim()
+  const allowed = ['waiting_connection', 'pending', 'ready', 'uploading', 'processing', 'success', 'failed']
+  if (!targetId) return err('Missing target id', 400)
+  if (!allowed.includes(status)) return err('Invalid target status', 400)
+
+  const payload = {
+    status,
+    error_message: body.errorMessage ? String(body.errorMessage).trim() : null,
+    external_post_id: body.externalPostId ? String(body.externalPostId).trim() : null,
+    external_post_url: body.externalPostUrl ? String(body.externalPostUrl).trim() : null,
+    result: body.result && typeof body.result === 'object' ? body.result : {},
+    updated_at: new Date().toISOString(),
+  }
+
+  const target = await updateSocialTarget(env, user.id, targetId, payload)
+  return json({ success: true, target })
+}
+
+async function handleAdminListSocialPublishJobs(request, env) {
+  ensureSocialPublisherConfigured(env)
+  await requireAdmin(request, env)
+  const jobs = await listSocialJobs(env)
+  return json({ success: true, jobs: jobs.map(normalizeSocialJob) })
+}
 
 async function handleUploadStart(request, env) {
   const body = await request.json().catch(() => ({}))
@@ -4357,6 +4525,106 @@ function serviceRoleHeaders(env) {
     'Content-Type': 'application/json',
     Accept: 'application/json',
   }
+}
+
+async function supabaseJson(env, path, options = {}) {
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}${path}`, {
+    ...options,
+    headers: {
+      ...serviceRoleHeaders(env),
+      ...(options.headers || {}),
+    },
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw new Error(data?.message || data?.msg || `Supabase request failed: ${response.status}`)
+  }
+  return data
+}
+
+async function listSocialAccounts(env, userId, platforms = []) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/social_accounts`)
+  url.searchParams.set('user_id', `eq.${userId}`)
+  url.searchParams.set('select', 'id,user_id,platform,status,external_account_id,external_account_name,expires_at,updated_at')
+  url.searchParams.set('order', 'updated_at.desc')
+  if (platforms.length) url.searchParams.set('platform', `in.(${platforms.join(',')})`)
+
+  const response = await fetch(url.toString(), {
+    headers: serviceRoleHeaders(env),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to list social accounts')
+  return Array.isArray(data) ? data : []
+}
+
+async function listSocialJobs(env, userId = '') {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/social_publish_jobs`)
+  url.searchParams.set('select', `
+    id,
+    user_id,
+    title,
+    caption,
+    status,
+    created_at,
+    updated_at,
+    profiles(display_name,email),
+    social_videos(filename,size_bytes),
+    social_publish_targets(id,platform,status,error_message,external_post_url)
+  `.replace(/\s+/g, ''))
+  url.searchParams.set('order', 'created_at.desc')
+  if (userId) url.searchParams.set('user_id', `eq.${userId}`)
+
+  const response = await fetch(url.toString(), {
+    headers: serviceRoleHeaders(env),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to list social publish jobs')
+  return Array.isArray(data) ? data : []
+}
+
+async function insertSocialVideo(env, payload) {
+  const data = await supabaseJson(env, '/rest/v1/social_videos', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(payload),
+  })
+  return Array.isArray(data) ? data[0] : data
+}
+
+async function insertSocialJob(env, payload) {
+  const data = await supabaseJson(env, '/rest/v1/social_publish_jobs', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(payload),
+  })
+  return Array.isArray(data) ? data[0] : data
+}
+
+async function insertSocialTargets(env, targets) {
+  if (!targets.length) return []
+  const data = await supabaseJson(env, '/rest/v1/social_publish_targets', {
+    method: 'POST',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(targets),
+  })
+  return Array.isArray(data) ? data : []
+}
+
+async function updateSocialTarget(env, userId, targetId, payload) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/social_publish_targets`)
+  url.searchParams.set('id', `eq.${targetId}`)
+  url.searchParams.set('user_id', `eq.${userId}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'PATCH',
+    headers: serviceRoleHeaders(env, { Prefer: 'return=representation' }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to update social publish target')
+  const target = Array.isArray(data) ? data[0] : data
+  if (!target) throw new Error('Publish target not found')
+  return target
 }
 
 async function requireAdmin(request, env) {
