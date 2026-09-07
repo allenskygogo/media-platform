@@ -1117,6 +1117,10 @@ const SOCIAL_UPLOAD_URL_EXPIRES_SECONDS = 15 * 60
 const META_OAUTH_SCOPES = [
   'public_profile',
   'pages_show_list',
+  'pages_read_engagement',
+  'pages_manage_posts',
+  'instagram_business_basic',
+  'instagram_business_content_publish',
 ]
 
 function addTime(value, amount, unit) {
