@@ -23,6 +23,11 @@
  *   NEWEBPAY_ENV                  — stage or production
  *   PUBLIC_APP_URL                — public frontend base URL
  *   WORKER_PUBLIC_URL             — public Worker base URL for payment callback URLs
+ *   SOCIAL_PUBLISH_R2_ACCOUNT_ID  — Cloudflare account ID for R2 social publisher uploads
+ *   SOCIAL_PUBLISH_R2_ACCESS_KEY_ID — R2 S3 access key ID
+ *   SOCIAL_PUBLISH_R2_SECRET_ACCESS_KEY — R2 S3 secret access key
+ *   SOCIAL_PUBLISH_R2_BUCKET      — R2 bucket for temporary social publisher videos
+ *   SOCIAL_PUBLISH_R2_PUBLIC_BASE_URL — optional public/custom domain for uploaded objects
  */
 
 const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
@@ -944,6 +949,17 @@ export default {
         return await handleGetSocialPublisherState(request, env)
       }
 
+      // POST /api/social-publisher/uploads → create a short-lived R2 upload URL
+      if (path === '/api/social-publisher/uploads' && request.method === 'POST') {
+        return await handleCreateSocialUpload(request, env)
+      }
+
+      // POST /api/social-publisher/uploads/:id/complete → mark an uploaded R2 video ready
+      if (path.startsWith('/api/social-publisher/uploads/') && path.endsWith('/complete') && request.method === 'POST') {
+        const videoId = decodeURIComponent(path.slice('/api/social-publisher/uploads/'.length, -'/complete'.length))
+        return await handleCompleteSocialUpload(request, videoId, env)
+      }
+
       // POST /api/social-publisher/jobs → create a pending social publish job
       if (path === '/api/social-publisher/jobs' && request.method === 'POST') {
         return await handleCreateSocialPublishJob(request, env)
@@ -1082,9 +1098,11 @@ export default {
 const SOCIAL_PLATFORMS = ['youtube', 'facebook', 'instagram', 'tiktok']
 const SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS = 7
 const SOCIAL_VIDEO_DELETE_AFTER_SUCCESS_HOURS = 24
+const SOCIAL_UPLOAD_URL_EXPIRES_SECONDS = 15 * 60
 
 function addTime(value, amount, unit) {
   const date = value instanceof Date ? new Date(value) : new Date()
+  if (unit === 'seconds') date.setSeconds(date.getSeconds() + amount)
   if (unit === 'hours') date.setHours(date.getHours() + amount)
   if (unit === 'days') date.setDate(date.getDate() + amount)
   return date
@@ -1103,6 +1121,26 @@ function normalizeSocialAccount(row) {
   }
 }
 
+function normalizeSocialVideo(row) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    filename: row.filename || '',
+    mimeType: row.mime_type || '',
+    sizeBytes: row.size_bytes || 0,
+    storageProvider: row.storage_provider || '',
+    storagePath: row.storage_path || '',
+    publicUrl: row.public_url || '',
+    streamUid: row.stream_uid || '',
+    uploadStatus: row.upload_status || '',
+    expiresAt: row.expires_at || null,
+    deleteAfter: row.delete_after || null,
+    cleanupStatus: row.cleanup_status || '',
+    createdAt: row.created_at || null,
+    updatedAt: row.updated_at || null,
+  }
+}
+
 function normalizeSocialJob(row) {
   const video = row.social_videos || null
   return {
@@ -1112,10 +1150,13 @@ function normalizeSocialJob(row) {
     title: row.title,
     caption: row.caption,
     status: row.status,
+    videoId: video?.id || row.video_id || '',
     videoName: video?.filename || '',
     videoSize: video?.size_bytes || 0,
     videoUploadStatus: video?.upload_status || '',
     videoStorageProvider: video?.storage_provider || '',
+    videoStoragePath: video?.storage_path || '',
+    videoPublicUrl: video?.public_url || '',
     videoStreamUid: video?.stream_uid || '',
     videoExpiresAt: video?.expires_at || null,
     videoDeleteAfter: video?.delete_after || null,
@@ -1138,6 +1179,33 @@ function ensureSocialPublisherConfigured(env) {
   }
 }
 
+function ensureSocialR2Configured(env) {
+  if (!(env.SOCIAL_PUBLISH_R2_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID) || !env.SOCIAL_PUBLISH_R2_ACCESS_KEY_ID || !env.SOCIAL_PUBLISH_R2_SECRET_ACCESS_KEY || !env.SOCIAL_PUBLISH_R2_BUCKET) {
+    throw new Error('R2 暫存尚未設定，請先設定 R2 bucket 與 S3 API 金鑰')
+  }
+}
+
+function normalizeSocialRetentionDays(value) {
+  const days = Number(value || SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS)
+  return Number.isFinite(days) ? Math.max(1, Math.min(30, Math.round(days))) : SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS
+}
+
+function makeSocialR2Key(userId, filename) {
+  const cleanName = String(filename || 'video.mp4')
+    .normalize('NFKD')
+    .replace(/[^\w.\-\u4e00-\u9fff]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120) || 'video.mp4'
+  const today = new Date().toISOString().slice(0, 10)
+  const random = crypto.randomUUID()
+  return `social-publisher/${userId}/${today}/${random}-${cleanName}`
+}
+
+function makeSocialR2PublicUrl(env, key) {
+  const base = String(env.SOCIAL_PUBLISH_R2_PUBLIC_BASE_URL || '').trim().replace(/\/$/, '')
+  return base ? `${base}/${key.split('/').map(encodeURIComponent).join('/')}` : null
+}
+
 async function handleGetSocialPublisherState(request, env) {
   ensureSocialPublisherConfigured(env)
   const user = await requireUser(request, env)
@@ -1154,6 +1222,73 @@ async function handleGetSocialPublisherState(request, env) {
   })
 }
 
+async function handleCreateSocialUpload(request, env) {
+  ensureSocialPublisherConfigured(env)
+  ensureSocialR2Configured(env)
+  const user = await requireUser(request, env)
+  const body = await request.json().catch(() => ({}))
+
+  const filename = String(body.filename || body.videoName || '').trim()
+  const mimeType = String(body.mimeType || body.videoType || 'video/mp4').trim()
+  const sizeBytes = Number(body.sizeBytes || body.videoSize || 0)
+  const title = String(body.title || '').trim()
+  const caption = String(body.caption || '').trim()
+  const retentionDays = normalizeSocialRetentionDays(body.retentionDays)
+
+  if (!filename) return err('請先選擇影片', 400)
+  if (!mimeType.startsWith('video/')) return err('請上傳影片檔案', 400)
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) return err('影片大小不正確', 400)
+
+  const storagePath = makeSocialR2Key(user.id, filename)
+  const upload = await createR2PresignedPutUrl(env, storagePath, mimeType)
+  const expiresAt = addTime(new Date(), retentionDays, 'days').toISOString()
+
+  const video = await insertSocialVideo(env, {
+    user_id: user.id,
+    filename,
+    mime_type: mimeType,
+    size_bytes: Math.round(sizeBytes),
+    storage_provider: 'cloudflare_r2',
+    storage_path: storagePath,
+    public_url: makeSocialR2PublicUrl(env, storagePath),
+    upload_status: 'uploading',
+    expires_at: expiresAt,
+    cleanup_status: 'active',
+    title: title || null,
+    caption: caption || null,
+  })
+
+  return json({
+    success: true,
+    video: normalizeSocialVideo(video),
+    uploadUrl: upload.url,
+    uploadHeaders: upload.headers,
+    uploadExpiresAt: upload.expiresAt,
+  })
+}
+
+async function handleCompleteSocialUpload(request, videoId, env) {
+  ensureSocialPublisherConfigured(env)
+  const user = await requireUser(request, env)
+  if (!videoId) return err('Missing video id', 400)
+
+  const body = await request.json().catch(() => ({}))
+  const status = String(body.status || 'ready').trim()
+  if (!['ready', 'failed'].includes(status)) return err('Invalid upload status', 400)
+
+  const payload = {
+    upload_status: status,
+    updated_at: new Date().toISOString(),
+  }
+  if (status === 'failed') {
+    payload.cleanup_status = 'failed'
+    payload.cleanup_error = body.errorMessage ? String(body.errorMessage).slice(0, 500) : 'Upload failed'
+  }
+
+  const video = await updateSocialVideo(env, user.id, videoId, payload)
+  return json({ success: true, video: normalizeSocialVideo(video) })
+}
+
 async function handleCreateSocialPublishJob(request, env) {
   ensureSocialPublisherConfigured(env)
   const user = await requireUser(request, env)
@@ -1161,37 +1296,44 @@ async function handleCreateSocialPublishJob(request, env) {
 
   const title = String(body.title || '').trim()
   const caption = String(body.caption || '').trim()
+  const videoId = String(body.videoId || '').trim()
   const videoName = String(body.videoName || body.filename || '').trim()
   const videoType = String(body.videoType || body.mimeType || '').trim()
   const videoSize = Number(body.videoSize || body.sizeBytes || 0)
-  const retentionDays = Number(body.retentionDays || SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS)
-  const expiresAt = addTime(
-    new Date(),
-    Number.isFinite(retentionDays) ? Math.max(1, Math.min(30, Math.round(retentionDays))) : SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS,
-    'days',
-  ).toISOString()
+  const retentionDays = normalizeSocialRetentionDays(body.retentionDays)
+  const expiresAt = addTime(new Date(), retentionDays, 'days').toISOString()
   const platforms = Array.isArray(body.platforms)
     ? [...new Set(body.platforms.map(item => String(item || '').trim().toLowerCase()).filter(item => SOCIAL_PLATFORMS.includes(item)))]
     : []
 
   if (!title) return err('請填寫發布標題', 400)
   if (!caption) return err('請填寫貼文文案', 400)
-  if (!videoName) return err('請先選擇影片', 400)
+  if (!videoId && !videoName) return err('請先選擇影片', 400)
   if (!platforms.length) return err('請至少選擇一個發布平台', 400)
 
-  const video = await insertSocialVideo(env, {
-    user_id: user.id,
-    filename: videoName,
-    mime_type: videoType || null,
-    size_bytes: Number.isFinite(videoSize) ? Math.max(0, Math.round(videoSize)) : 0,
-    storage_provider: body.storageProvider ? String(body.storageProvider).trim() : 'pending',
-    stream_uid: body.streamUid ? String(body.streamUid).trim() : null,
-    upload_status: body.uploadStatus ? String(body.uploadStatus).trim() : 'pending',
-    expires_at: expiresAt,
-    cleanup_status: 'active',
-    title,
-    caption,
-  })
+  const video = videoId
+    ? await updateSocialVideo(env, user.id, videoId, {
+      title,
+      caption,
+      updated_at: new Date().toISOString(),
+    })
+    : await insertSocialVideo(env, {
+      user_id: user.id,
+      filename: videoName,
+      mime_type: videoType || null,
+      size_bytes: Number.isFinite(videoSize) ? Math.max(0, Math.round(videoSize)) : 0,
+      storage_provider: body.storageProvider ? String(body.storageProvider).trim() : 'pending',
+      stream_uid: body.streamUid ? String(body.streamUid).trim() : null,
+      upload_status: body.uploadStatus ? String(body.uploadStatus).trim() : 'pending',
+      expires_at: expiresAt,
+      cleanup_status: 'active',
+      title,
+      caption,
+    })
+
+  if (video.upload_status && !['ready', 'pending'].includes(video.upload_status)) {
+    return err('影片尚未上傳完成，請稍後再建立發布任務', 400)
+  }
 
   const job = await insertSocialJob(env, {
     user_id: user.id,
@@ -3653,6 +3795,77 @@ async function sha256Hex(text) {
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
+function bytesToHex(bytes) {
+  return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function encodeR2Path(value) {
+  return String(value).split('/').map(encodeURIComponent).join('/')
+}
+
+async function hmacSha256(key, message, output = 'arrayBuffer') {
+  const rawKey = typeof key === 'string' ? new TextEncoder().encode(key) : key
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    rawKey,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  return await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(message)).then(signature => (
+    output === 'hex' ? bytesToHex(signature) : signature
+  ))
+}
+
+async function createR2PresignedPutUrl(env, key, contentType) {
+  const accountId = String(env.SOCIAL_PUBLISH_R2_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID).trim()
+  const bucket = String(env.SOCIAL_PUBLISH_R2_BUCKET).trim()
+  const accessKeyId = String(env.SOCIAL_PUBLISH_R2_ACCESS_KEY_ID).trim()
+  const secretAccessKey = String(env.SOCIAL_PUBLISH_R2_SECRET_ACCESS_KEY).trim()
+  const now = new Date()
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '')
+  const dateStamp = amzDate.slice(0, 8)
+  const credentialScope = `${dateStamp}/auto/s3/aws4_request`
+  const host = `${accountId}.r2.cloudflarestorage.com`
+  const canonicalUri = `/${encodeURIComponent(bucket)}/${encodeR2Path(key)}`
+  const query = {
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': `${accessKeyId}/${credentialScope}`,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': String(SOCIAL_UPLOAD_URL_EXPIRES_SECONDS),
+    'X-Amz-SignedHeaders': 'host',
+  }
+  const canonicalQuery = Object.entries(query)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`)
+    .join('&')
+  const canonicalRequest = [
+    'PUT',
+    canonicalUri,
+    canonicalQuery,
+    `host:${host}\n`,
+    'host',
+    'UNSIGNED-PAYLOAD',
+  ].join('\n')
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    await sha256Hex(canonicalRequest),
+  ].join('\n')
+  const kDate = await hmacSha256(`AWS4${secretAccessKey}`, dateStamp)
+  const kRegion = await hmacSha256(kDate, 'auto')
+  const kService = await hmacSha256(kRegion, 's3')
+  const kSigning = await hmacSha256(kService, 'aws4_request')
+  const signature = await hmacSha256(kSigning, stringToSign, 'hex')
+  const url = `https://${host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`
+  return {
+    url,
+    headers: contentType ? { 'Content-Type': contentType } : {},
+    expiresAt: addTime(now, SOCIAL_UPLOAD_URL_EXPIRES_SECONDS, 'seconds').toISOString(),
+  }
+}
+
 async function parseEcpayPayload(request) {
   const contentType = request.headers.get('Content-Type') || ''
   if (contentType.includes('application/json')) {
@@ -4595,7 +4808,7 @@ async function listSocialJobs(env, userId = '') {
     created_at,
     updated_at,
     profiles(display_name,email),
-    social_videos(filename,size_bytes,storage_provider,stream_uid,upload_status,expires_at,delete_after,cleanup_status),
+    social_videos(id,filename,size_bytes,public_url,storage_path,storage_provider,stream_uid,upload_status,expires_at,delete_after,cleanup_status),
     social_publish_targets(id,platform,status,error_message,external_post_url)
   `.replace(/\s+/g, ''))
   url.searchParams.set('order', 'created_at.desc')
@@ -4616,6 +4829,40 @@ async function insertSocialVideo(env, payload) {
     body: JSON.stringify(payload),
   })
   return Array.isArray(data) ? data[0] : data
+}
+
+async function getSocialVideo(env, userId, videoId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/social_videos`)
+  url.searchParams.set('id', `eq.${videoId}`)
+  url.searchParams.set('user_id', `eq.${userId}`)
+  url.searchParams.set('select', 'id,user_id,filename,mime_type,size_bytes,public_url,storage_path,title,caption,storage_provider,stream_uid,upload_status,expires_at,delete_after,cleanup_status,created_at,updated_at')
+  url.searchParams.set('limit', '1')
+
+  const response = await fetch(url.toString(), {
+    headers: serviceRoleHeaders(env),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to get social video')
+  const video = Array.isArray(data) ? data[0] : data
+  if (!video) throw new Error('找不到這支影片，請重新上傳')
+  return video
+}
+
+async function updateSocialVideo(env, userId, videoId, payload) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/social_videos`)
+  url.searchParams.set('id', `eq.${videoId}`)
+  url.searchParams.set('user_id', `eq.${userId}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'PATCH',
+    headers: serviceRoleHeaders(env, { Prefer: 'return=representation' }),
+    body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to update social video')
+  const video = Array.isArray(data) ? data[0] : data
+  if (!video) throw new Error('找不到這支影片，請重新上傳')
+  return video
 }
 
 async function insertSocialJob(env, payload) {

@@ -5,6 +5,7 @@ import {
   createSocialPublishJob,
   getSocialPublisherState,
   toggleSocialAccount,
+  uploadSocialVideo,
 } from '../../services/socialPublisher'
 
 const PLATFORMS = [
@@ -39,10 +40,13 @@ export default function SocialPublisher() {
     videoName: '',
     videoSize: 0,
     videoType: '',
+    videoId: '',
+    videoFile: null,
   })
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [storageMode, setStorageMode] = useState('')
 
   const loadState = async () => {
@@ -107,19 +111,46 @@ export default function SocialPublisher() {
   const handleVideo = event => {
     const file = event.target.files?.[0]
     if (!file) return
-    setForm(prev => ({ ...prev, videoName: file.name, videoSize: file.size, videoType: file.type }))
+    setForm(prev => ({
+      ...prev,
+      videoName: file.name,
+      videoSize: file.size,
+      videoType: file.type,
+      videoId: '',
+      videoFile: file,
+    }))
+    setUploadProgress(0)
   }
 
   const createJob = async () => {
     setSaving(true)
     try {
-      const localJob = await createSocialPublishJob(currentUser, form, isConnected)
+      let nextForm = form
+      if (form.videoFile && !form.videoId && storageMode !== 'local') {
+        setMessage('正在上傳影片到暫存空間，完成後會建立發布任務')
+        const video = await uploadSocialVideo(form.videoFile, {
+          title: form.title,
+          caption: form.caption,
+          retentionDays: 7,
+        }, setUploadProgress)
+        nextForm = {
+          ...form,
+          videoId: video.id,
+          videoName: video.filename || form.videoName,
+          videoSize: video.sizeBytes || form.videoSize,
+          videoType: video.mimeType || form.videoType,
+        }
+        setForm(nextForm)
+      }
+
+      const localJob = await createSocialPublishJob(currentUser, nextForm, isConnected)
       if (storageMode === 'local' && localJob) {
         setJobs(prev => [...prev, localJob])
       } else {
         await loadState()
       }
-      setForm({ title: '', caption: '', platforms: ['instagram', 'facebook'], videoName: '', videoSize: 0, videoType: '' })
+      setForm({ title: '', caption: '', platforms: ['instagram', 'facebook'], videoName: '', videoSize: 0, videoType: '', videoId: '', videoFile: null })
+      setUploadProgress(0)
       setMessage('發布任務已建立，正式 API 串好後就能直接送出')
     } catch (error) {
       console.error(error)
@@ -192,6 +223,12 @@ export default function SocialPublisher() {
               {form.videoSize > 0 && <small>{fileSize(form.videoSize)}</small>}
               <input type="file" accept="video/*" onChange={handleVideo} />
             </label>
+            {uploadProgress > 0 && (
+              <div className="spub-upload-progress" aria-label={`影片上傳進度 ${uploadProgress}%`}>
+                <span style={{ width: `${uploadProgress}%` }} />
+                <strong>{uploadProgress >= 100 ? '影片已上傳完成' : `影片上傳中 ${uploadProgress}%`}</strong>
+              </div>
+            )}
 
             <label className="form-label">發布標題</label>
             <input
@@ -226,7 +263,7 @@ export default function SocialPublisher() {
             </div>
 
             <button className="btn btn-primary btn-lg" disabled={saving || loading} onClick={createJob}>
-              <Send size={18} /> {saving ? '處理中...' : '建立發布任務'}
+              <Send size={18} /> {saving ? (uploadProgress > 0 && uploadProgress < 100 ? '上傳中...' : '處理中...') : '建立發布任務'}
             </button>
           </div>
         </section>

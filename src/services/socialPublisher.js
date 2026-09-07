@@ -74,10 +74,13 @@ function normalizeJob(row) {
     userName: row.profiles?.display_name || row.profiles?.email || '',
     title: row.title,
     caption: row.caption,
+    videoId: video?.id || row.video_id || '',
     videoName: video?.filename || '',
     videoSize: video?.size_bytes || 0,
     videoUploadStatus: video?.upload_status || '',
     videoStorageProvider: video?.storage_provider || '',
+    videoStoragePath: video?.storage_path || '',
+    videoPublicUrl: video?.public_url || '',
     videoStreamUid: video?.stream_uid || '',
     videoExpiresAt: video?.expires_at || null,
     videoDeleteAfter: video?.delete_after || null,
@@ -147,7 +150,7 @@ export async function getSocialPublisherState(userId) {
         title,
         caption,
         created_at,
-        social_videos(filename, size_bytes, storage_provider, stream_uid, upload_status, expires_at, delete_after, cleanup_status),
+        social_videos(id, filename, size_bytes, public_url, storage_path, storage_provider, stream_uid, upload_status, expires_at, delete_after, cleanup_status),
         social_publish_targets(platform, status, error_message)
       `)
       .eq('user_id', userId)
@@ -163,6 +166,62 @@ export async function getSocialPublisherState(userId) {
     jobs: (jobs || []).map(normalizeJob),
     mode: 'supabase',
   }
+}
+
+function putFileWithProgress(uploadUrl, file, headers = {}, onProgress = () => {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', uploadUrl)
+    Object.entries(headers || {}).forEach(([key, value]) => {
+      if (value) xhr.setRequestHeader(key, value)
+    })
+    xhr.upload.onprogress = event => {
+      if (!event.lengthComputable) return
+      onProgress(Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100))))
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress(100)
+        resolve(true)
+      } else {
+        reject(new Error(`影片上傳失敗：${xhr.status}`))
+      }
+    }
+    xhr.onerror = () => reject(new Error('影片上傳失敗，請確認 R2 CORS 或網路狀態'))
+    xhr.ontimeout = () => reject(new Error('影片上傳逾時，請重新上傳'))
+    xhr.send(file)
+  })
+}
+
+export async function uploadSocialVideo(file, details = {}, onProgress = () => {}) {
+  if (!file) throw new Error('請先選擇影片')
+  const upload = await workerJson('/api/social-publisher/uploads', {
+    method: 'POST',
+    body: JSON.stringify({
+      filename: file.name,
+      mimeType: file.type || 'video/mp4',
+      sizeBytes: file.size,
+      title: details.title || '',
+      caption: details.caption || '',
+      retentionDays: details.retentionDays || 7,
+    }),
+  })
+
+  try {
+    await putFileWithProgress(upload.uploadUrl, file, upload.uploadHeaders, onProgress)
+  } catch (error) {
+    await workerJson(`/api/social-publisher/uploads/${upload.video.id}/complete`, {
+      method: 'POST',
+      body: JSON.stringify({ status: 'failed', errorMessage: error.message }),
+    }).catch(() => {})
+    throw error
+  }
+
+  const completed = await workerJson(`/api/social-publisher/uploads/${upload.video.id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ status: 'ready' }),
+  })
+  return completed.video || upload.video
 }
 
 export async function toggleSocialAccount(user, platform) {
@@ -241,6 +300,7 @@ export async function createSocialPublishJob(user, form, isConnected) {
         body: JSON.stringify({
           title: cleanTitle,
           caption: cleanCaption,
+          videoId: form.videoId || '',
           videoName: form.videoName,
           videoType: form.videoType || '',
           videoSize: form.videoSize || 0,

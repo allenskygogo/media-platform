@@ -16,6 +16,11 @@ account_id         = "a7690c8b61158776e62541438f0ebda2"
 #   npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_EMAIL
 #   npx wrangler secret put GOOGLE_PRIVATE_KEY
 #   npx wrangler secret put GOOGLE_CALENDAR_ID
+#   npx wrangler secret put SOCIAL_PUBLISH_R2_ACCOUNT_ID
+#   npx wrangler secret put SOCIAL_PUBLISH_R2_ACCESS_KEY_ID
+#   npx wrangler secret put SOCIAL_PUBLISH_R2_SECRET_ACCESS_KEY
+#   npx wrangler secret put SOCIAL_PUBLISH_R2_BUCKET
+#   npx wrangler secret put SOCIAL_PUBLISH_R2_PUBLIC_BASE_URL
 #
 # Or create a .dev.vars file (gitignored) for local dev:
 #   CLOUDFLARE_ACCOUNT_ID=your_account_id
@@ -25,3 +30,8 @@ account_id         = "a7690c8b61158776e62541438f0ebda2"
 #   GOOGLE_SERVICE_ACCOUNT_EMAIL=your_service_account@project.iam.gserviceaccount.com
 #   GOOGLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----
 #   GOOGLE_CALENDAR_ID=your_calendar_id
+#   SOCIAL_PUBLISH_R2_ACCOUNT_ID=your_cloudflare_account_id
+#   SOCIAL_PUBLISH_R2_ACCESS_KEY_ID=your_r2_access_key_id
+#   SOCIAL_PUBLISH_R2_SECRET_ACCESS_KEY=your_r2_secret_access_key
+#   SOCIAL_PUBLISH_R2_BUCKET=media-platform-social-publisher
+#   SOCIAL_PUBLISH_R2_PUBLIC_BASE_URL=https://your-r2-custom-domain.example.com
