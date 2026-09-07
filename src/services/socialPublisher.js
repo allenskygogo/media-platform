@@ -76,6 +76,12 @@ function normalizeJob(row) {
     caption: row.caption,
     videoName: video?.filename || '',
     videoSize: video?.size_bytes || 0,
+    videoUploadStatus: video?.upload_status || '',
+    videoStorageProvider: video?.storage_provider || '',
+    videoStreamUid: video?.stream_uid || '',
+    videoExpiresAt: video?.expires_at || null,
+    videoDeleteAfter: video?.delete_after || null,
+    videoCleanupStatus: video?.cleanup_status || '',
     targets: (row.social_publish_targets || []).map(target => ({
       platform: target.platform,
       status: target.status,
@@ -141,7 +147,7 @@ export async function getSocialPublisherState(userId) {
         title,
         caption,
         created_at,
-        social_videos(filename, size_bytes),
+        social_videos(filename, size_bytes, storage_provider, stream_uid, upload_status, expires_at, delete_after, cleanup_status),
         social_publish_targets(platform, status, error_message)
       `)
       .eq('user_id', userId)
@@ -238,6 +244,7 @@ export async function createSocialPublishJob(user, form, isConnected) {
           videoName: form.videoName,
           videoType: form.videoType || '',
           videoSize: form.videoSize || 0,
+          retentionDays: 7,
           platforms: form.platforms,
         }),
       })
@@ -272,6 +279,10 @@ export async function createSocialPublishJob(user, form, isConnected) {
       filename: form.videoName,
       mime_type: form.videoType || null,
       size_bytes: form.videoSize || 0,
+      storage_provider: 'pending',
+      upload_status: 'pending',
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      cleanup_status: 'active',
       title: cleanTitle,
       caption: cleanCaption,
     })

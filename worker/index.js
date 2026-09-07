@@ -1080,6 +1080,15 @@ export default {
 // ── Handlers ──────────────────────────────────────────────────────────────
 
 const SOCIAL_PLATFORMS = ['youtube', 'facebook', 'instagram', 'tiktok']
+const SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS = 7
+const SOCIAL_VIDEO_DELETE_AFTER_SUCCESS_HOURS = 24
+
+function addTime(value, amount, unit) {
+  const date = value instanceof Date ? new Date(value) : new Date()
+  if (unit === 'hours') date.setHours(date.getHours() + amount)
+  if (unit === 'days') date.setDate(date.getDate() + amount)
+  return date
+}
 
 function normalizeSocialAccount(row) {
   return {
@@ -1105,6 +1114,12 @@ function normalizeSocialJob(row) {
     status: row.status,
     videoName: video?.filename || '',
     videoSize: video?.size_bytes || 0,
+    videoUploadStatus: video?.upload_status || '',
+    videoStorageProvider: video?.storage_provider || '',
+    videoStreamUid: video?.stream_uid || '',
+    videoExpiresAt: video?.expires_at || null,
+    videoDeleteAfter: video?.delete_after || null,
+    videoCleanupStatus: video?.cleanup_status || '',
     targets: (row.social_publish_targets || []).map(target => ({
       id: target.id,
       platform: target.platform,
@@ -1149,6 +1164,12 @@ async function handleCreateSocialPublishJob(request, env) {
   const videoName = String(body.videoName || body.filename || '').trim()
   const videoType = String(body.videoType || body.mimeType || '').trim()
   const videoSize = Number(body.videoSize || body.sizeBytes || 0)
+  const retentionDays = Number(body.retentionDays || SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS)
+  const expiresAt = addTime(
+    new Date(),
+    Number.isFinite(retentionDays) ? Math.max(1, Math.min(30, Math.round(retentionDays))) : SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS,
+    'days',
+  ).toISOString()
   const platforms = Array.isArray(body.platforms)
     ? [...new Set(body.platforms.map(item => String(item || '').trim().toLowerCase()).filter(item => SOCIAL_PLATFORMS.includes(item)))]
     : []
@@ -1163,6 +1184,11 @@ async function handleCreateSocialPublishJob(request, env) {
     filename: videoName,
     mime_type: videoType || null,
     size_bytes: Number.isFinite(videoSize) ? Math.max(0, Math.round(videoSize)) : 0,
+    storage_provider: body.storageProvider ? String(body.storageProvider).trim() : 'pending',
+    stream_uid: body.streamUid ? String(body.streamUid).trim() : null,
+    upload_status: body.uploadStatus ? String(body.uploadStatus).trim() : 'pending',
+    expires_at: expiresAt,
+    cleanup_status: 'active',
     title,
     caption,
   })
@@ -1216,6 +1242,7 @@ async function handleUpdateSocialPublishTarget(request, targetId, env) {
   }
 
   const target = await updateSocialTarget(env, user.id, targetId, payload)
+  await refreshSocialJobStatus(env, user.id, target.job_id)
   return json({ success: true, target })
 }
 
@@ -4568,7 +4595,7 @@ async function listSocialJobs(env, userId = '') {
     created_at,
     updated_at,
     profiles(display_name,email),
-    social_videos(filename,size_bytes),
+    social_videos(filename,size_bytes,storage_provider,stream_uid,upload_status,expires_at,delete_after,cleanup_status),
     social_publish_targets(id,platform,status,error_message,external_post_url)
   `.replace(/\s+/g, ''))
   url.searchParams.set('order', 'created_at.desc')
@@ -4625,6 +4652,74 @@ async function updateSocialTarget(env, userId, targetId, payload) {
   const target = Array.isArray(data) ? data[0] : data
   if (!target) throw new Error('Publish target not found')
   return target
+}
+
+async function listSocialTargetsForJob(env, userId, jobId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/social_publish_targets`)
+  url.searchParams.set('job_id', `eq.${jobId}`)
+  url.searchParams.set('user_id', `eq.${userId}`)
+  url.searchParams.set('select', 'id,job_id,user_id,platform,status')
+
+  const response = await fetch(url.toString(), {
+    headers: serviceRoleHeaders(env),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to list social publish targets')
+  return Array.isArray(data) ? data : []
+}
+
+async function updateSocialJob(env, userId, jobId, payload) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/social_publish_jobs`)
+  url.searchParams.set('id', `eq.${jobId}`)
+  url.searchParams.set('user_id', `eq.${userId}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'PATCH',
+    headers: serviceRoleHeaders(env, { Prefer: 'return=representation' }),
+    body: JSON.stringify({ ...payload, updated_at: new Date().toISOString() }),
+  })
+  const data = await response.json().catch(() => [])
+  if (!response.ok) throw new Error(data.message || 'Failed to update social publish job')
+  return Array.isArray(data) ? data[0] : data
+}
+
+async function scheduleSocialVideoCleanup(env, userId, videoId) {
+  if (!videoId) return null
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/social_videos`)
+  url.searchParams.set('id', `eq.${videoId}`)
+  url.searchParams.set('user_id', `eq.${userId}`)
+
+  const response = await fetch(url.toString(), {
+    method: 'PATCH',
+    headers: serviceRoleHeaders(env, { Prefer: 'return=minimal' }),
+    body: JSON.stringify({
+      delete_after: addTime(new Date(), SOCIAL_VIDEO_DELETE_AFTER_SUCCESS_HOURS, 'hours').toISOString(),
+      cleanup_status: 'scheduled',
+      updated_at: new Date().toISOString(),
+    }),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new Error(data.message || 'Failed to schedule social video cleanup')
+  }
+  return true
+}
+
+async function refreshSocialJobStatus(env, userId, jobId) {
+  const targets = await listSocialTargetsForJob(env, userId, jobId)
+  if (!targets.length) return null
+
+  let status = 'pending'
+  if (targets.every(target => target.status === 'success')) status = 'success'
+  else if (targets.every(target => target.status === 'failed')) status = 'failed'
+  else if (targets.some(target => target.status === 'failed') && targets.some(target => target.status === 'success')) status = 'partial_failed'
+  else if (targets.some(target => ['uploading', 'processing'].includes(target.status))) status = 'processing'
+
+  const job = await updateSocialJob(env, userId, jobId, { status })
+  if (status === 'success') {
+    await scheduleSocialVideoCleanup(env, userId, job?.video_id)
+  }
+  return job
 }
 
 async function requireAdmin(request, env) {
