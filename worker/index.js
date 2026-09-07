@@ -1114,13 +1114,9 @@ const SOCIAL_PLATFORMS = ['youtube', 'facebook', 'instagram', 'tiktok']
 const SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS = 7
 const SOCIAL_VIDEO_DELETE_AFTER_SUCCESS_HOURS = 24
 const SOCIAL_UPLOAD_URL_EXPIRES_SECONDS = 15 * 60
-const META_OAUTH_SCOPES = [
+const DEFAULT_META_OAUTH_SCOPES = [
   'public_profile',
   'pages_show_list',
-  'pages_read_engagement',
-  'pages_manage_posts',
-  'instagram_business_basic',
-  'instagram_business_content_publish',
 ]
 
 function addTime(value, amount, unit) {
@@ -1216,6 +1212,15 @@ function ensureMetaOAuthConfigured(env) {
 
 function getMetaGraphVersion(env) {
   return String(env.META_GRAPH_VERSION || 'v24.0').replace(/^\/+/, '')
+}
+
+function getMetaOAuthScopes(env) {
+  const configured = String(env.META_OAUTH_SCOPES || '').trim()
+  if (!configured) return DEFAULT_META_OAUTH_SCOPES
+  return configured
+    .split(',')
+    .map(scope => scope.trim())
+    .filter(Boolean)
 }
 
 function getMetaRedirectUri(request, env) {
@@ -1347,7 +1352,7 @@ async function handleStartMetaOAuth(request, env) {
   authUrl.searchParams.set('client_id', env.META_APP_ID)
   authUrl.searchParams.set('redirect_uri', redirectUri)
   authUrl.searchParams.set('state', state)
-  authUrl.searchParams.set('scope', META_OAUTH_SCOPES.join(','))
+  authUrl.searchParams.set('scope', getMetaOAuthScopes(env).join(','))
   authUrl.searchParams.set('response_type', 'code')
 
   return json({ success: true, authUrl: authUrl.toString() })
