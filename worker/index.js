@@ -1115,11 +1115,9 @@ const SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS = 7
 const SOCIAL_VIDEO_DELETE_AFTER_SUCCESS_HOURS = 24
 const SOCIAL_UPLOAD_URL_EXPIRES_SECONDS = 15 * 60
 const META_OAUTH_SCOPES = [
+  'public_profile',
+  'email',
   'pages_show_list',
-  'pages_read_engagement',
-  'pages_manage_posts',
-  'instagram_basic',
-  'instagram_content_publish',
 ]
 
 function addTime(value, amount, unit) {
