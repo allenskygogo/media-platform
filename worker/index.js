@@ -28,6 +28,11 @@
  *   SOCIAL_PUBLISH_R2_SECRET_ACCESS_KEY — R2 S3 secret access key
  *   SOCIAL_PUBLISH_R2_BUCKET      — R2 bucket for temporary social publisher videos
  *   SOCIAL_PUBLISH_R2_PUBLIC_BASE_URL — optional public/custom domain for uploaded objects
+ *   META_APP_ID                   — Meta app ID for Facebook/Instagram OAuth
+ *   META_APP_SECRET               — Meta app secret for Facebook/Instagram OAuth
+ *   META_REDIRECT_URI             — optional OAuth callback URL override
+ *   META_GRAPH_VERSION            — optional, defaults to v24.0
+ *   SOCIAL_TOKEN_ENCRYPTION_KEY   — optional server-only key for social account tokens
  */
 
 const CF_BASE = 'https://api.cloudflare.com/client/v4/accounts'
@@ -960,6 +965,16 @@ export default {
         return await handleCompleteSocialUpload(request, videoId, env)
       }
 
+      // POST /api/social-publisher/meta/oauth/start → get Meta authorization URL
+      if (path === '/api/social-publisher/meta/oauth/start' && request.method === 'POST') {
+        return await handleStartMetaOAuth(request, env)
+      }
+
+      // GET /api/social-publisher/meta/oauth/callback → Meta OAuth callback
+      if (path === '/api/social-publisher/meta/oauth/callback' && request.method === 'GET') {
+        return await handleMetaOAuthCallback(request, url, env)
+      }
+
       // POST /api/social-publisher/jobs → create a pending social publish job
       if (path === '/api/social-publisher/jobs' && request.method === 'POST') {
         return await handleCreateSocialPublishJob(request, env)
@@ -1099,6 +1114,13 @@ const SOCIAL_PLATFORMS = ['youtube', 'facebook', 'instagram', 'tiktok']
 const SOCIAL_VIDEO_DEFAULT_RETENTION_DAYS = 7
 const SOCIAL_VIDEO_DELETE_AFTER_SUCCESS_HOURS = 24
 const SOCIAL_UPLOAD_URL_EXPIRES_SECONDS = 15 * 60
+const META_OAUTH_SCOPES = [
+  'pages_show_list',
+  'pages_read_engagement',
+  'pages_manage_posts',
+  'instagram_basic',
+  'instagram_content_publish',
+]
 
 function addTime(value, amount, unit) {
   const date = value instanceof Date ? new Date(value) : new Date()
@@ -1183,6 +1205,22 @@ function ensureSocialR2Configured(env) {
   if (!(env.SOCIAL_PUBLISH_R2_ACCOUNT_ID || env.CLOUDFLARE_ACCOUNT_ID) || !env.SOCIAL_PUBLISH_R2_ACCESS_KEY_ID || !env.SOCIAL_PUBLISH_R2_SECRET_ACCESS_KEY || !env.SOCIAL_PUBLISH_R2_BUCKET) {
     throw new Error('R2 暫存尚未設定，請先設定 R2 bucket 與 S3 API 金鑰')
   }
+}
+
+function ensureMetaOAuthConfigured(env) {
+  if (!env.META_APP_ID || !env.META_APP_SECRET) {
+    throw new Error('Meta 串接尚未設定，請先設定 META_APP_ID 與 META_APP_SECRET')
+  }
+}
+
+function getMetaGraphVersion(env) {
+  return String(env.META_GRAPH_VERSION || 'v24.0').replace(/^\/+/, '')
+}
+
+function getMetaRedirectUri(request, env) {
+  if (env.META_REDIRECT_URI) return String(env.META_REDIRECT_URI).trim()
+  const base = String(env.WORKER_PUBLIC_URL || new URL(request.url).origin).replace(/\/$/, '')
+  return `${base}/api/social-publisher/meta/oauth/callback`
 }
 
 function normalizeSocialRetentionDays(value) {
@@ -1287,6 +1325,105 @@ async function handleCompleteSocialUpload(request, videoId, env) {
 
   const video = await updateSocialVideo(env, user.id, videoId, payload)
   return json({ success: true, video: normalizeSocialVideo(video) })
+}
+
+async function handleStartMetaOAuth(request, env) {
+  ensureSocialPublisherConfigured(env)
+  ensureMetaOAuthConfigured(env)
+  const user = await requireUser(request, env)
+  const body = await request.json().catch(() => ({}))
+  const platform = String(body.platform || 'instagram').trim().toLowerCase()
+  if (!['facebook', 'instagram'].includes(platform)) return err('Meta 目前只支援 Facebook / Instagram', 400)
+
+  const redirectUri = getMetaRedirectUri(request, env)
+  const state = await signMetaOAuthState(env, {
+    userId: user.id,
+    platform,
+    createdAt: Date.now(),
+    nonce: crypto.randomUUID(),
+  })
+  const authUrl = new URL(`https://www.facebook.com/${getMetaGraphVersion(env)}/dialog/oauth`)
+  authUrl.searchParams.set('client_id', env.META_APP_ID)
+  authUrl.searchParams.set('redirect_uri', redirectUri)
+  authUrl.searchParams.set('state', state)
+  authUrl.searchParams.set('scope', META_OAUTH_SCOPES.join(','))
+  authUrl.searchParams.set('response_type', 'code')
+
+  return json({ success: true, authUrl: authUrl.toString() })
+}
+
+async function handleMetaOAuthCallback(request, url, env) {
+  ensureSocialPublisherConfigured(env)
+  ensureMetaOAuthConfigured(env)
+  const code = String(url.searchParams.get('code') || '').trim()
+  const errorMessage = String(url.searchParams.get('error_message') || url.searchParams.get('error_description') || '').trim()
+  const state = String(url.searchParams.get('state') || '').trim()
+
+  try {
+    if (errorMessage) throw new Error(errorMessage)
+    if (!code || !state) throw new Error('Meta 授權資料不完整')
+
+    const payload = await verifyMetaOAuthState(env, state)
+    const ageMs = Date.now() - Number(payload.createdAt || 0)
+    if (!payload.userId || ageMs < 0 || ageMs > 15 * 60 * 1000) throw new Error('Meta 授權已逾時，請重新連結')
+
+    const redirectUri = getMetaRedirectUri(request, env)
+    const shortToken = await exchangeMetaCode(env, code, redirectUri)
+    const longToken = await exchangeMetaLongLivedToken(env, shortToken.access_token)
+    const pages = await fetchMetaPages(env, longToken.access_token)
+    if (!pages.length) throw new Error('這個 Meta 帳號沒有可用的 Facebook 粉專')
+
+    const firstPage = pages[0]
+    await upsertSocialAccount(env, {
+      user_id: payload.userId,
+      platform: 'facebook',
+      status: 'connected',
+      external_account_id: firstPage.id,
+      external_account_name: firstPage.name || 'Facebook 粉專',
+      access_token_enc: await encryptSocialSecret(env, firstPage.access_token || longToken.access_token),
+      expires_at: longToken.expires_in ? addTime(new Date(), Math.floor(Number(longToken.expires_in) / 86400), 'days').toISOString() : null,
+      extra: {
+        selectedPageId: firstPage.id,
+        selectedPageName: firstPage.name || '',
+        pages: pages.map(page => ({
+          id: page.id,
+          name: page.name || '',
+          instagramBusinessAccount: page.instagram_business_account || null,
+        })),
+      },
+      updated_at: new Date().toISOString(),
+    })
+
+    const instagramPage = pages.find(page => page.instagram_business_account?.id)
+    if (instagramPage) {
+      const ig = instagramPage.instagram_business_account
+      await upsertSocialAccount(env, {
+        user_id: payload.userId,
+        platform: 'instagram',
+        status: 'connected',
+        external_account_id: ig.id,
+        external_account_name: ig.username || ig.name || 'Instagram',
+        access_token_enc: await encryptSocialSecret(env, instagramPage.access_token || longToken.access_token),
+        expires_at: longToken.expires_in ? addTime(new Date(), Math.floor(Number(longToken.expires_in) / 86400), 'days').toISOString() : null,
+        extra: {
+          instagramBusinessAccount: ig,
+          pageId: instagramPage.id,
+          pageName: instagramPage.name || '',
+        },
+        updated_at: new Date().toISOString(),
+      })
+    }
+
+    return metaOAuthPopupHtml({
+      success: true,
+      message: instagramPage ? 'Meta 帳號已連結成功' : 'Facebook 粉專已連結成功；若要發 IG，請先確認粉專已連結 IG 商業帳號',
+    })
+  } catch (error) {
+    return metaOAuthPopupHtml({
+      success: false,
+      message: error.message || 'Meta 授權失敗',
+    })
+  }
 }
 
 async function handleCreateSocialPublishJob(request, env) {
@@ -3799,6 +3936,25 @@ function bytesToHex(bytes) {
   return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
+function bytesToBase64(bytes) {
+  let binary = ''
+  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
+function base64UrlEncode(value) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value)
+  return btoa(unescape(encodeURIComponent(text)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
+
+function base64UrlDecode(value) {
+  const padded = String(value).replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(String(value).length / 4) * 4, '=')
+  return decodeURIComponent(escape(atob(padded)))
+}
+
 function encodeR2Path(value) {
   return String(value).split('/').map(encodeURIComponent).join('/')
 }
@@ -3864,6 +4020,112 @@ async function createR2PresignedPutUrl(env, key, contentType) {
     headers: contentType ? { 'Content-Type': contentType } : {},
     expiresAt: addTime(now, SOCIAL_UPLOAD_URL_EXPIRES_SECONDS, 'seconds').toISOString(),
   }
+}
+
+function getSocialTokenSecret(env) {
+  return String(env.SOCIAL_TOKEN_ENCRYPTION_KEY || env.SUPABASE_SERVICE_ROLE_KEY || env.META_APP_SECRET || '').trim()
+}
+
+async function getSocialTokenCryptoKey(env) {
+  const secret = getSocialTokenSecret(env)
+  if (!secret) throw new Error('Social token encryption key is not configured')
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret))
+  return await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, ['encrypt'])
+}
+
+async function encryptSocialSecret(env, value) {
+  if (!value) return null
+  const key = await getSocialTokenCryptoKey(env)
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(String(value)),
+  )
+  return JSON.stringify({
+    alg: 'AES-GCM',
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(encrypted),
+  })
+}
+
+async function signMetaOAuthState(env, payload) {
+  const body = base64UrlEncode(payload)
+  const signature = await hmacSha256(getSocialTokenSecret(env), body, 'hex')
+  return `${body}.${signature}`
+}
+
+async function verifyMetaOAuthState(env, state) {
+  const [body, signature] = String(state || '').split('.')
+  if (!body || !signature) throw new Error('Meta 授權狀態不正確')
+  const expected = await hmacSha256(getSocialTokenSecret(env), body, 'hex')
+  if (expected !== signature) throw new Error('Meta 授權驗證失敗')
+  return JSON.parse(base64UrlDecode(body))
+}
+
+async function metaGraphJson(env, path, params = {}) {
+  const url = new URL(`https://graph.facebook.com/${getMetaGraphVersion(env)}${path}`)
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value)
+  })
+  const response = await fetch(url.toString())
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data?.error?.message || data?.message || `Meta API failed: ${response.status}`)
+  }
+  return data
+}
+
+async function exchangeMetaCode(env, code, redirectUri) {
+  return await metaGraphJson(env, '/oauth/access_token', {
+    client_id: env.META_APP_ID,
+    client_secret: env.META_APP_SECRET,
+    redirect_uri: redirectUri,
+    code,
+  })
+}
+
+async function exchangeMetaLongLivedToken(env, token) {
+  return await metaGraphJson(env, '/oauth/access_token', {
+    grant_type: 'fb_exchange_token',
+    client_id: env.META_APP_ID,
+    client_secret: env.META_APP_SECRET,
+    fb_exchange_token: token,
+  })
+}
+
+async function fetchMetaPages(env, token) {
+  const data = await metaGraphJson(env, '/me/accounts', {
+    access_token: token,
+    fields: 'id,name,access_token,instagram_business_account{id,username,name}',
+    limit: '100',
+  })
+  return Array.isArray(data.data) ? data.data : []
+}
+
+function metaOAuthPopupHtml(result) {
+  const payload = JSON.stringify({
+    type: 'social-publisher-meta-oauth',
+    success: Boolean(result.success),
+    message: result.message || '',
+  }).replace(/</g, '\\u003c')
+  return new Response(`<!doctype html>
+<html lang="zh-Hant">
+  <head><meta charset="utf-8"><title>Meta OAuth</title></head>
+  <body>
+    <script>
+      const payload = ${payload};
+      if (window.opener) window.opener.postMessage(payload, '*');
+      document.body.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      document.body.style.padding = '32px';
+      document.body.textContent = payload.message || (payload.success ? 'Meta 帳號已連結成功' : 'Meta 授權失敗');
+      setTimeout(() => window.close(), 900);
+    </script>
+  </body>
+</html>`, {
+    status: result.success ? 200 : 400,
+    headers: { ...CORS, 'Content-Type': 'text/html; charset=utf-8' },
+  })
 }
 
 async function parseEcpayPayload(request) {
@@ -4785,7 +5047,7 @@ async function supabaseJson(env, path, options = {}) {
 async function listSocialAccounts(env, userId, platforms = []) {
   const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/social_accounts`)
   url.searchParams.set('user_id', `eq.${userId}`)
-  url.searchParams.set('select', 'id,user_id,platform,status,external_account_id,external_account_name,expires_at,updated_at')
+  url.searchParams.set('select', 'id,user_id,platform,status,external_account_id,external_account_name,expires_at,extra,updated_at')
   url.searchParams.set('order', 'updated_at.desc')
   if (platforms.length) url.searchParams.set('platform', `in.(${platforms.join(',')})`)
 
@@ -4795,6 +5057,17 @@ async function listSocialAccounts(env, userId, platforms = []) {
   const data = await response.json().catch(() => [])
   if (!response.ok) throw new Error(data.message || 'Failed to list social accounts')
   return Array.isArray(data) ? data : []
+}
+
+async function upsertSocialAccount(env, payload) {
+  const data = await supabaseJson(env, '/rest/v1/social_accounts?on_conflict=user_id,platform', {
+    method: 'POST',
+    headers: {
+      Prefer: 'resolution=merge-duplicates,return=representation',
+    },
+    body: JSON.stringify(payload),
+  })
+  return Array.isArray(data) ? data[0] : data
 }
 
 async function listSocialJobs(env, userId = '') {

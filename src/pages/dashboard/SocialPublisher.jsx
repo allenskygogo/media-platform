@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import {
   createSocialPublishJob,
   getSocialPublisherState,
+  startMetaOAuth,
   toggleSocialAccount,
   uploadSocialVideo,
 } from '../../services/socialPublisher'
@@ -70,6 +71,16 @@ export default function SocialPublisher() {
     loadState()
   }, [userId])
 
+  useEffect(() => {
+    const onMessage = event => {
+      if (event.data?.type !== 'social-publisher-meta-oauth') return
+      setMessage(event.data.message || (event.data.success ? 'Meta 帳號已連結成功' : 'Meta 授權失敗'))
+      if (event.data.success) loadState()
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [userId])
+
   const myAccounts = useMemo(
     () => accounts.filter(account => String(account.userId) === String(userId)),
     [accounts, userId],
@@ -79,12 +90,24 @@ export default function SocialPublisher() {
     [jobs, userId],
   )
 
-  const isConnected = platform => myAccounts.some(account => account.platform === platform && account.status === 'connected')
+  const getConnectedAccount = platform => myAccounts.find(account => account.platform === platform && account.status === 'connected')
+  const isConnected = platform => Boolean(getConnectedAccount(platform))
   const connectedCount = PLATFORMS.filter(platform => isConnected(platform.id)).length
 
   const toggleAccount = async platform => {
     setSaving(true)
     try {
+      if (['facebook', 'instagram'].includes(platform)) {
+        const authUrl = await startMetaOAuth(platform)
+        const popup = window.open(authUrl, 'meta-oauth', 'width=720,height=760')
+        if (!popup) {
+          window.location.href = authUrl
+          return
+        }
+        setMessage('Meta 授權視窗已開啟，完成後會自動回到這裡')
+        return
+      }
+
       const localAccounts = await toggleSocialAccount(currentUser, platform)
       if (localAccounts) {
         setAccounts(localAccounts)
@@ -180,7 +203,8 @@ export default function SocialPublisher() {
           </div>
           <div className="spub-platform-grid">
             {PLATFORMS.map(platform => {
-              const connected = isConnected(platform.id)
+              const account = getConnectedAccount(platform.id)
+              const connected = Boolean(account)
               return (
                 <button
                   type="button"
@@ -192,10 +216,10 @@ export default function SocialPublisher() {
                   <span className="spub-platform-dot" style={{ background: platform.color }} />
                   <span>
                     <strong>{platform.name}</strong>
-                    <small>{platform.hint}</small>
+                    <small>{connected && account?.accountName ? account.accountName : platform.hint}</small>
                   </span>
                   <span className={`spub-status-pill ${connected ? 'success' : 'warning'}`}>
-                    {connected ? '已連結' : '待串接'}
+                    {connected ? '已連結' : (['facebook', 'instagram'].includes(platform.id) ? '連結 Meta' : '待串接')}
                   </span>
                 </button>
               )

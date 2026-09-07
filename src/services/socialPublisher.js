@@ -224,6 +224,14 @@ export async function uploadSocialVideo(file, details = {}, onProgress = () => {
   return completed.video || upload.video
 }
 
+export async function startMetaOAuth(platform = 'instagram') {
+  const data = await workerJson('/api/social-publisher/meta/oauth/start', {
+    method: 'POST',
+    body: JSON.stringify({ platform }),
+  })
+  return data.authUrl
+}
+
 export async function toggleSocialAccount(user, platform) {
   const userId = user?.id
   if (!userId) throw new Error('請先登入')
