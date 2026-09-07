@@ -1116,7 +1116,6 @@ const SOCIAL_VIDEO_DELETE_AFTER_SUCCESS_HOURS = 24
 const SOCIAL_UPLOAD_URL_EXPIRES_SECONDS = 15 * 60
 const META_OAUTH_SCOPES = [
   'public_profile',
-  'email',
   'pages_show_list',
 ]
 
