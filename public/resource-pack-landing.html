@@ -389,6 +389,54 @@ footer{padding:30px 0 90px;text-align:center;font-size:11.5px;color:#5a6d8f;}
   border-radius:10px;border:1px solid rgba(255,255,255,.1);display:block;
 }
 
+.line-modal{
+  position:fixed;inset:0;z-index:120;
+  display:none;align-items:center;justify-content:center;
+  padding:22px;background:rgba(1,7,18,.78);
+  backdrop-filter:blur(10px);
+}
+.line-modal.is-open{display:flex;}
+.line-card{
+  width:100%;max-width:360px;
+  background:linear-gradient(180deg,#10233f 0%,#07162b 100%);
+  border:1px solid rgba(0,217,255,.25);
+  border-radius:20px;padding:24px 20px;
+  box-shadow:0 20px 60px rgba(0,0,0,.45);
+  text-align:center;
+}
+.line-card h3{
+  font-size:22px;line-height:1.35;font-weight:900;
+  margin-bottom:10px;color:#fff;
+}
+.line-card p{
+  font-size:14px;line-height:1.75;color:var(--gray);
+  margin-bottom:16px;
+}
+.line-id{
+  display:flex;align-items:center;justify-content:center;
+  min-height:48px;margin-bottom:12px;
+  border-radius:14px;border:1px solid rgba(0,217,255,.35);
+  background:rgba(0,217,255,.08);
+  color:var(--cyan);font-size:22px;font-weight:900;
+  letter-spacing:.5px;
+}
+.line-actions{display:grid;gap:10px;}
+.line-copy,
+.line-open,
+.line-close{
+  appearance:none;border:0;border-radius:14px;
+  padding:13px 16px;font-size:15px;font-weight:900;
+  cursor:pointer;text-align:center;
+}
+.line-copy,.line-open{
+  background:linear-gradient(135deg,#06c755,#04a745);
+  color:#fff;
+}
+.line-close{
+  background:rgba(255,255,255,.08);
+  color:#c8d5ec;
+}
+
 @media (max-width: 430px){
   .wrap{padding:0 18px;}
   .hero{padding:34px 0 26px;}
@@ -423,7 +471,7 @@ footer{padding:30px 0 90px;text-align:center;font-size:11.5px;color:#5a6d8f;}
 <div class="navbar">
   <div class="wrap">
     <div class="brand">🎬 <span>頂級流量</span></div>
-    <a class="nav-cta" href="https://line.me/R/ti/p/@tt_01">NT$99報名</a>
+    <a class="nav-cta js-line-signup" href="https://page.line.me/tt_01">NT$99報名</a>
   </div>
 </div>
 
@@ -432,7 +480,7 @@ footer{padding:30px 0 90px;text-align:center;font-size:11.5px;color:#5a6d8f;}
     <div class="hero-badge">強人設三天影片創作營・NT$99加碼送+80頁自媒體攻略包</div>
     <h1><span class="hero-line">不會拍、不會剪、沒有粉絲?</span><br>你缺的不是天份,是<em>技能</em></h1>
     <p class="sub">就像學日文、學英文、學游泳,短影音也是一套練得會的技能。從選題、拍攝、剪輯到變現,五大定位公式+真實學員案例,讓你的帳號從0開始也能被看見。</p>
-    <a class="cta-btn" href="https://line.me/R/ti/p/@tt_01"><span class="cta-l1">🔥 NT$99報名三天創作營</span><span class="cta-l2">+80頁自媒體攻略包</span></a>
+    <a class="cta-btn js-line-signup" href="https://page.line.me/tt_01"><span class="cta-l1">🔥 NT$99報名三天創作營</span><span class="cta-l2">+80頁自媒體攻略包</span></a>
     <div class="cta-sub">加LINE好友完成報名,同步奉送+80頁自媒體攻略包</div>
   </div>
 </div>
@@ -656,17 +704,68 @@ footer{padding:30px 0 90px;text-align:center;font-size:11.5px;color:#5a6d8f;}
   <div class="wrap">
     <h2>NT$99報名,<em>從定位開始</em></h2>
     <p>加LINE好友完成報名,同步取得完整+80頁自媒體攻略包</p>
-    <a class="cta-btn" href="https://line.me/R/ti/p/@tt_01"><span class="cta-l1">🔥 NT$99報名三天創作營</span><span class="cta-l2">+80頁自媒體攻略包</span></a>
+    <a class="cta-btn js-line-signup" href="https://page.line.me/tt_01"><span class="cta-l1">🔥 NT$99報名三天創作營</span><span class="cta-l2">+80頁自媒體攻略包</span></a>
     <div class="cta-sub">加LINE好友完成報名,同步奉送+80頁自媒體攻略包<br>由專屬顧問安排合適上課時間</div>
   </div>
 </div>
 
 <footer>© 頂級流量 版權所有</footer>
 
+<div class="line-modal" id="lineSignupModal" aria-hidden="true">
+  <div class="line-card" role="dialog" aria-modal="true" aria-labelledby="lineSignupTitle">
+    <h3 id="lineSignupTitle">加入官方 LINE 完成報名</h3>
+    <p>請先複製官方帳號，開啟 LINE 後搜尋加入，並貼上「我要報名 NT$99 三天創作營」。</p>
+    <div class="line-id">@tt_01</div>
+    <div class="line-actions">
+      <button class="line-copy" type="button" id="copyLineId">複製 LINE ID</button>
+      <a class="line-open" href="https://page.line.me/tt_01" target="_blank" rel="noopener">開啟 LINE 加好友</a>
+      <button class="line-close" type="button" id="closeLineModal">先關閉</button>
+    </div>
+  </div>
+</div>
+
 <div class="sticky-bar">
   <div class="stext"><div class="s1">強人設三天創作營 NT$99</div><div class="s2">報名即送+80頁自媒體攻略包</div></div>
-  <a class="sbtn" href="https://line.me/R/ti/p/@tt_01">立即報名</a>
+  <a class="sbtn js-line-signup" href="https://page.line.me/tt_01">立即報名</a>
 </div>
+
+<script>
+  (function(){
+    const modal = document.getElementById('lineSignupModal');
+    const closeBtn = document.getElementById('closeLineModal');
+    const copyBtn = document.getElementById('copyLineId');
+    const lineId = '@tt_01';
+
+    function openModal(event){
+      event.preventDefault();
+      modal.classList.add('is-open');
+      modal.setAttribute('aria-hidden','false');
+    }
+
+    function closeModal(){
+      modal.classList.remove('is-open');
+      modal.setAttribute('aria-hidden','true');
+    }
+
+    document.querySelectorAll('.js-line-signup').forEach((button) => {
+      button.addEventListener('click', openModal);
+    });
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
+
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(lineId);
+        copyBtn.textContent = '已複製 LINE ID';
+      } catch (error) {
+        copyBtn.textContent = '請手動複製 @tt_01';
+      }
+    });
+  })();
+</script>
 
 </body>
 </html>
