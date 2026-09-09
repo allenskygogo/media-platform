@@ -1,11 +1,42 @@
-import { useEffect, useMemo, useState } from 'react'
-import BrandLogo from '../components/BrandLogo'
+import { useEffect, useState } from 'react'
 
 const LINE_URL = 'https://line.me/R/ti/p/@tt_01'
-const COPY_TEXT = '你好，我想領取「短影音從0到千粉資料包」。'
+const COPY_TEXT = '你好，我想報名「強人設三天影片創作營 NT$99」，並領取+80頁自媒體攻略包。'
 const ANALYTICS_KEY = 'resource_pack_analytics'
 const LEADS_KEY = 'resource_pack_leads'
-const PAGE_CONFIG_KEY = 'resource_pack_page_config'
+
+const demoTopics = [
+  ['親子 x 保養手法', '帶小孩太累？這招讓妳睡前5分鐘救回臉！'],
+  ['親子 x 成分分析', '這成分號稱溫和，卻讓我兒子過敏一整晚？'],
+  ['健身 x 上班族', '每天只練5分鐘，為什麼比你硬撐一小時更有效？'],
+]
+
+const formulas = [
+  ['商業定位', '你賣的是什麼、誰需要、為什麼現在要相信你。'],
+  ['內容定位', '把受眾痛點變成看得懂、想收藏、願意分享的題目。'],
+  ['製作定位', '用你現有的設備、人力與時間，做出可穩定產出的流程。'],
+  ['變現定位', '讓流量不是只有按讚，而是能導到私訊、名單和成交。'],
+  ['玩法定位', '找到你適合長期玩的內容節奏，不再每天硬想。'],
+]
+
+const scripts = [
+  ['開篇', '3秒內讓觀眾知道，這支影片跟他有關。'],
+  ['事件', '用真實場景或衝突，讓內容有畫面。'],
+  ['成效', '把改變、成果、前後對比說清楚。'],
+  ['互動', '讓觀眾知道下一步該留言、私訊或收藏。'],
+]
+
+const results = [
+  ['短影音新手', '從不知道拍什麼，到有一套能反覆產出的題庫。'],
+  ['服務業老闆', '把專業服務變成客戶看得懂的短影音內容。'],
+  ['個人品牌', '重新整理定位，讓帳號不再什麼都想講。'],
+]
+
+const campDays = [
+  ['DAY ONE・定位', '自媒體趨勢到強人設的內容支點', '自媒體趨勢／個人定位／受眾輪廓／人設特質／內容支點'],
+  ['DAY TWO・內容', '獲客抓手到人設化內容的四大類型', '漲粉型／流量型／人設型／故事型／選題思維／內容結構'],
+  ['DAY THREE・創作', '從0到1打造爆款影片全流程', '導演式腳本／AI輔助創作／畫面設計／拍攝表達／剪輯與封面優化'],
+]
 
 function readJson(key, fallback) {
   try {
@@ -75,28 +106,6 @@ function copyToClipboard(text) {
   return Promise.resolve()
 }
 
-function PackPreview() {
-  const cards = [
-    '五大定位公式',
-    '爆款選題公版',
-    '腳本與剪輯實戰',
-    '拍攝呈現清單',
-  ]
-
-  return (
-    <div className="beta-pack-stack" aria-label="資料包預覽">
-      {cards.map((title, index) => (
-        <div className={`beta-pack-card beta-pack-card-${index + 1}`} key={title}>
-          <span>TOP LEVEL TRAFFIC</span>
-          <strong>{title}</strong>
-          <small>短影音自媒體獲客資料包</small>
-        </div>
-      ))}
-      <div className="beta-pack-tag">資料包實際內頁，不只一頁</div>
-    </div>
-  )
-}
-
 function LineModal({ onClose, onLineClick }) {
   const [copied, setCopied] = useState(false)
 
@@ -106,18 +115,18 @@ function LineModal({ onClose, onLineClick }) {
   }
 
   return (
-    <div className="beta-modal-backdrop" role="dialog" aria-modal="true" aria-label="領取資料包">
+    <div className="beta-modal-backdrop" role="dialog" aria-modal="true" aria-label="報名三天創作營">
       <div className="beta-modal">
-        <button className="beta-modal-close" type="button" onClick={onClose} aria-label="關閉">×</button>
-        <p className="beta-kicker">領取資料包</p>
-        <h2>先複製這段訊息，再加入官方 LINE</h2>
+        <button className="beta-modal-close" type="button" onClick={onClose} aria-label="關閉">x</button>
+        <p className="beta-kicker">加入官方 LINE</p>
+        <h2>先複製這段訊息，再加入官方帳號</h2>
         <div className="beta-copy-box">{COPY_TEXT}</div>
         <div className="beta-modal-actions">
           <button className="beta-secondary-btn" type="button" onClick={handleCopy}>
             {copied ? '已複製' : '複製文字'}
           </button>
           <a className="beta-primary-btn" href={LINE_URL} target="_blank" rel="noreferrer" onClick={onLineClick}>
-            加入 LINE 領取
+            加入 LINE @tt_01
           </a>
         </div>
       </div>
@@ -125,304 +134,518 @@ function LineModal({ onClose, onLineClick }) {
   )
 }
 
+function Logo() {
+  return (
+    <a className="beta-logo" href="/" aria-label="回到首頁">
+      <span className="beta-logo-mark">TT</span>
+      <span>
+        <strong>TOP LEVEL</strong>
+        <small>TRAFFIC</small>
+      </span>
+    </a>
+  )
+}
+
 export default function BetaSignupPage() {
   const [modalOpen, setModalOpen] = useState(false)
-  const [pageConfig, setPageConfig] = useState(() => readJson(PAGE_CONFIG_KEY, {}))
 
   useEffect(() => {
     trackResourcePackEvent('page_view')
   }, [])
 
-  useEffect(() => {
-    const sync = () => setPageConfig(readJson(PAGE_CONFIG_KEY, {}))
-    window.addEventListener('storage', sync)
-    window.addEventListener('resourcePackPageChanged', sync)
-    return () => {
-      window.removeEventListener('storage', sync)
-      window.removeEventListener('resourcePackPageChanged', sync)
-    }
-  }, [])
-
-  const features = useMemo(() => ([
-    {
-      title: '五大定位公式',
-      desc: '商業內容、製作、變現玩法，把帳號從「亂拍」變成「有系統」。',
-    },
-    {
-      title: '爆款選題公版',
-      desc: '不用每天從零開始想，直接用受眾興趣交叉做出選題方向。',
-    },
-    {
-      title: '腳本與剪輯實戰',
-      desc: '拆解短影音腳本結構、拍攝剪輯 SOP，新手也看得懂。',
-    },
-  ]), [])
-
-  const cases = useMemo(() => ([
-    { tag: '學員', title: '自媒體新手', value: '30 天', desc: '從不知道拍什麼，到穩定產出內容。' },
-    { tag: '業主', title: '實體店家', value: '3 套', desc: '整理可直接拍攝的短影音題材。' },
-    { tag: '顧問', title: '服務業者', value: '12 支', desc: '把專業服務轉成可被理解的內容。' },
-    { tag: '創作者', title: '個人品牌', value: '1 套', desc: '重新建立定位與內容主軸。' },
-  ]), [])
+  const openLineModal = () => setModalOpen(true)
 
   return (
     <main className="beta-pack-page">
       <style>{`
         .beta-pack-page {
+          --navy: #071426;
+          --navy2: #0b1d35;
+          --cyan: #00d9ff;
+          --cyan2: #4ea7ff;
+          --gold: #ffc94a;
+          --line: #06c755;
           min-height: 100vh;
-          background: #09090f;
+          background: #071426;
           color: #fff;
           font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
           overflow-x: hidden;
         }
-        .beta-pack-nav {
+        .beta-pack-page * { box-sizing: border-box; }
+        .beta-wrap {
+          width: min(100%, 560px);
+          margin: 0 auto;
+          padding: 0 18px;
+        }
+        .beta-navbar {
           position: sticky;
           top: 0;
-          z-index: 20;
+          z-index: 30;
+          background: rgba(7, 20, 38, .92);
+          border-bottom: 1px solid rgba(255,255,255,.08);
+          backdrop-filter: blur(18px);
+        }
+        .beta-navbar-inner {
+          width: min(100%, 560px);
+          margin: 0 auto;
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 14px clamp(18px, 5vw, 64px);
-          border-bottom: 1px solid rgba(255,255,255,.08);
-          background: rgba(9,9,15,.86);
-          backdrop-filter: blur(16px);
+          gap: 16px;
+          padding: 12px 18px;
         }
-        .beta-pack-nav .brand-logo-mark { width: 36px; height: 36px; }
-        .beta-pack-nav .brand-logo-text { height: 28px; }
-        .beta-nav-link {
-          color: rgba(255,255,255,.58);
-          font-size: 14px;
-          font-weight: 700;
+        .beta-logo {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          color: #fff;
           text-decoration: none;
         }
-        .beta-pack-hero {
-          max-width: 1120px;
-          margin: 0 auto;
-          padding: clamp(44px, 8vw, 84px) clamp(18px, 5vw, 40px) 48px;
+        .beta-logo-mark {
+          width: 42px;
+          height: 42px;
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
-          gap: clamp(28px, 6vw, 72px);
-          align-items: center;
+          place-items: center;
+          border-radius: 12px;
+          background: linear-gradient(135deg, #38bdf8, #8b4dff);
+          font-size: 15px;
+          font-weight: 1000;
+          letter-spacing: 0;
         }
-        .beta-kicker {
-          margin: 0 0 14px;
-          color: #77b8ff;
-          font-size: 13px;
-          font-weight: 900;
+        .beta-logo strong,
+        .beta-logo small {
+          display: block;
+          line-height: 1.05;
           letter-spacing: .12em;
         }
-        .beta-pack-hero h1 {
-          margin: 0;
-          color: #fff;
-          font-size: clamp(38px, 7vw, 76px);
-          line-height: 1.04;
+        .beta-logo strong { font-size: 12px; }
+        .beta-logo small { margin-top: 4px; font-size: 14px; font-weight: 900; }
+        .beta-nav-cta,
+        .beta-primary-btn,
+        .beta-secondary-btn,
+        .beta-sticky-btn {
+          border: 0;
+          cursor: pointer;
+          text-decoration: none;
+          font-family: inherit;
           letter-spacing: 0;
+        }
+        .beta-nav-cta {
+          flex: 0 0 auto;
+          border-radius: 999px;
+          padding: 10px 14px;
+          color: #071426;
+          background: var(--gold);
+          font-size: 14px;
           font-weight: 900;
         }
-        .beta-pack-hero h1 span {
+        .beta-hero {
+          background:
+            radial-gradient(circle at 78% 18%, rgba(0,217,255,.24), transparent 34%),
+            radial-gradient(circle at 12% 12%, rgba(80,96,255,.24), transparent 34%),
+            linear-gradient(180deg, #071426 0%, #0b1d35 100%);
+          padding: 42px 0 34px;
+        }
+        .beta-hero-badge {
+          display: inline-flex;
+          align-items: center;
+          margin-bottom: 18px;
+          border: 1px solid rgba(0,217,255,.28);
+          border-radius: 999px;
+          padding: 7px 12px;
+          color: #a7ebff;
+          background: rgba(0,217,255,.08);
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .beta-hero h1 {
+          margin: 0;
+          color: #fff;
+          font-size: clamp(30px, 8.8vw, 48px);
+          line-height: 1.28;
+          font-weight: 1000;
+          letter-spacing: 0;
+        }
+        .beta-hero h1 em,
+        .beta-section-title em,
+        .beta-camp-title em,
+        .beta-final h2 em {
           color: transparent;
-          background: linear-gradient(135deg, #4f8cff, #8b4dff);
+          font-style: normal;
+          background: linear-gradient(90deg, var(--cyan), var(--cyan2));
           -webkit-background-clip: text;
           background-clip: text;
         }
-        .beta-hero-copy {
-          margin: 20px 0 28px;
-          max-width: 560px;
-          color: rgba(255,255,255,.68);
-          font-size: 17px;
-          line-height: 1.9;
-        }
-        .beta-primary-btn,
-        .beta-secondary-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 52px;
-          border-radius: 14px;
-          padding: 0 22px;
-          border: 1px solid rgba(255,255,255,.14);
-          color: #fff;
-          font-size: 16px;
-          font-weight: 900;
-          text-decoration: none;
-          cursor: pointer;
+        .beta-sub {
+          margin: 16px 0 22px;
+          color: rgba(214,226,245,.76);
+          font-size: 15.5px;
+          line-height: 1.82;
         }
         .beta-primary-btn {
-          background: linear-gradient(135deg, #5060ff, #8040e0);
-          box-shadow: 0 18px 36px rgba(80,96,255,.28);
-        }
-        .beta-secondary-btn {
-          background: rgba(255,255,255,.06);
-        }
-        .beta-cta-row {
-          display: flex;
-          gap: 12px;
-          flex-wrap: wrap;
+          display: inline-flex;
+          width: 100%;
+          min-height: 64px;
           align-items: center;
+          justify-content: center;
+          flex-direction: column;
+          border-radius: 18px;
+          color: #071426;
+          background: linear-gradient(135deg, #06c755, #04a745);
+          box-shadow: 0 18px 38px rgba(6,199,85,.28);
+          font-weight: 1000;
         }
-        .beta-subnote {
-          margin-top: 12px;
-          color: rgba(255,255,255,.42);
-          font-size: 13px;
+        .beta-primary-btn .beta-cta-l1 {
+          font-size: 17px;
+          line-height: 1.3;
         }
-        .beta-pack-stack {
-          position: relative;
-          min-height: 330px;
+        .beta-primary-btn .beta-cta-l2 {
+          margin-top: 2px;
+          font-size: 12.5px;
+          line-height: 1.3;
+          opacity: .88;
         }
-        .beta-pack-card {
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          width: min(330px, 78vw);
-          min-height: 190px;
-          padding: 26px;
-          border: 1px solid rgba(255,255,255,.16);
-          border-radius: 22px;
-          background: linear-gradient(145deg, rgba(20,25,46,.98), rgba(8,10,18,.98));
-          box-shadow: 0 22px 42px rgba(0,0,0,.35);
+        .beta-cta-sub {
+          margin-top: 10px;
+          color: rgba(214,226,245,.58);
+          text-align: center;
+          font-size: 12.5px;
+          line-height: 1.65;
         }
-        .beta-pack-card span {
-          display: block;
-          margin-bottom: 38px;
-          color: rgba(255,255,255,.42);
-          font-size: 11px;
-          font-weight: 900;
-          letter-spacing: .16em;
+        .beta-section,
+        .beta-section-alt,
+        .beta-camp-section,
+        .beta-final {
+          padding: 40px 0;
         }
-        .beta-pack-card strong {
-          display: block;
-          color: #fff;
-          font-size: 30px;
-          line-height: 1.15;
-        }
-        .beta-pack-card small {
-          display: block;
-          margin-top: 14px;
-          color: #65d8ff;
-          font-size: 13px;
-        }
-        .beta-pack-card-1 { transform: translate(-58%, -50%) rotate(-13deg); opacity: .74; }
-        .beta-pack-card-2 { transform: translate(-48%, -50%) rotate(-5deg); opacity: .86; }
-        .beta-pack-card-3 { transform: translate(-39%, -50%) rotate(8deg); opacity: .72; }
-        .beta-pack-card-4 { transform: translate(-50%, -48%) rotate(0); border-color: rgba(80,96,255,.46); }
-        .beta-pack-tag {
-          position: absolute;
-          left: 50%;
-          bottom: 8px;
-          transform: translateX(-50%);
-          white-space: nowrap;
-          padding: 8px 16px;
-          border-radius: 999px;
-          border: 1px solid rgba(255,255,255,.14);
-          background: rgba(5,5,8,.78);
-          color: rgba(255,255,255,.86);
-          font-size: 12px;
-          font-weight: 800;
-        }
-        .beta-pack-section {
-          max-width: 1040px;
-          margin: 0 auto;
-          padding: 46px clamp(18px, 5vw, 40px);
+        .beta-section-alt {
+          background: rgba(255,255,255,.025);
         }
         .beta-section-title {
           margin: 0 0 8px;
           color: #fff;
           text-align: center;
-          font-size: clamp(25px, 4vw, 36px);
-          font-weight: 900;
+          font-size: 26px;
+          font-weight: 1000;
+          line-height: 1.42;
+          letter-spacing: 0;
         }
-        .beta-section-subtitle {
-          margin: 0 0 26px;
-          color: rgba(255,255,255,.5);
+        .beta-section-desc {
+          margin: 0 auto 22px;
+          max-width: 440px;
+          color: rgba(214,226,245,.62);
           text-align: center;
-          font-size: 15px;
-        }
-        .beta-feature-list {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 14px;
-        }
-        .beta-feature-card,
-        .beta-case-card,
-        .beta-step {
-          border: 1px solid rgba(255,255,255,.1);
-          border-radius: 18px;
-          background: rgba(255,255,255,.045);
-        }
-        .beta-feature-card {
-          padding: 22px;
-          min-width: 0;
-        }
-        .beta-feature-index {
-          width: 34px;
-          height: 34px;
-          border-radius: 12px;
-          display: grid;
-          place-items: center;
-          margin-bottom: 18px;
-          background: linear-gradient(135deg, #38bdf8, #5060ff);
-          font-weight: 900;
-        }
-        .beta-feature-card h3,
-        .beta-case-card h3 {
-          margin: 0 0 8px;
-          color: #fff;
-          font-size: 18px;
-        }
-        .beta-feature-card p,
-        .beta-case-card p {
-          margin: 0;
-          color: rgba(255,255,255,.58);
-          font-size: 14px;
+          font-size: 14.5px;
           line-height: 1.75;
         }
-        .beta-case-grid {
+        .beta-demo-grid,
+        .beta-formula-grid,
+        .beta-script-grid,
+        .beta-result-grid,
+        .beta-get-list,
+        .beta-camp-days {
           display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 12px;
         }
-        .beta-case-card {
+        .beta-demo-card,
+        .beta-formula-card,
+        .beta-script-card,
+        .beta-result-card,
+        .beta-get-item,
+        .beta-camp-day,
+        .beta-suit-item {
+          border: 1px solid rgba(255,255,255,.1);
+          border-radius: 16px;
+          background: linear-gradient(135deg, rgba(255,255,255,.07), rgba(255,255,255,.025));
+          box-shadow: 0 18px 44px rgba(0,0,0,.14);
+        }
+        .beta-demo-card {
           padding: 18px;
-          border-top-color: rgba(80,96,255,.58);
         }
-        .beta-case-card small {
-          display: inline-flex;
-          margin-bottom: 18px;
-          padding: 4px 10px;
-          border-radius: 999px;
-          color: #8ecaff;
-          background: rgba(56,189,248,.12);
-          font-weight: 800;
-        }
-        .beta-case-value {
-          margin-bottom: 8px;
-          color: #ffd86a;
-          font-size: 28px;
+        .beta-demo-label,
+        .beta-card-kicker {
+          color: #86e8ff;
+          font-size: 12px;
           font-weight: 900;
         }
-        .beta-steps {
+        .beta-demo-quote {
+          margin-top: 8px;
+          color: #fff;
+          font-size: 18px;
+          font-weight: 900;
+          line-height: 1.55;
+        }
+        .beta-demo-tag {
+          display: inline-flex;
+          margin-top: 12px;
+          border-radius: 999px;
+          padding: 5px 10px;
+          color: #ffdd78;
+          background: rgba(255,201,74,.12);
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .beta-portfolio-hero {
+          margin-top: 14px;
+          overflow: hidden;
+          min-height: 220px;
+          border: 1px solid rgba(0,217,255,.18);
+          border-radius: 18px;
+          background:
+            linear-gradient(0deg, rgba(7,20,38,.86), rgba(7,20,38,.1)),
+            radial-gradient(circle at 50% 25%, rgba(0,217,255,.34), transparent 30%),
+            linear-gradient(135deg, rgba(13,71,161,.72), rgba(5,10,24,.9));
+        }
+        .beta-portfolio-inner {
+          min-height: 220px;
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 12px;
+          align-content: end;
+          padding: 22px;
         }
-        .beta-step {
-          padding: 20px;
-        }
-        .beta-step span {
+        .beta-portfolio-inner strong {
           display: block;
-          margin-bottom: 10px;
-          color: #7fbfff;
+          font-size: 28px;
+          line-height: 1.25;
+          font-weight: 1000;
+        }
+        .beta-portfolio-inner span {
+          margin-top: 8px;
+          color: rgba(214,226,245,.68);
+          font-size: 13px;
+        }
+        .beta-formula-grid {
+          grid-template-columns: 1fr;
+        }
+        .beta-formula-card,
+        .beta-script-card,
+        .beta-result-card {
+          padding: 18px;
+        }
+        .beta-formula-card h3,
+        .beta-script-card h3,
+        .beta-result-card h3 {
+          margin: 6px 0 8px;
+          color: #fff;
+          font-size: 18px;
+          line-height: 1.45;
+        }
+        .beta-formula-card p,
+        .beta-script-card p,
+        .beta-result-card p {
+          margin: 0;
+          color: rgba(214,226,245,.62);
+          font-size: 14px;
+          line-height: 1.72;
+        }
+        .beta-suit-list {
+          display: grid;
+          gap: 10px;
+        }
+        .beta-suit-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          padding: 14px;
+        }
+        .beta-check {
+          width: 24px;
+          height: 24px;
+          flex: 0 0 auto;
+          display: grid;
+          place-items: center;
+          border-radius: 999px;
+          color: #071426;
+          background: var(--gold);
+          font-weight: 1000;
+        }
+        .beta-suit-item span {
+          color: rgba(255,255,255,.86);
+          font-size: 15px;
+          font-weight: 800;
+          line-height: 1.65;
+        }
+        .beta-get-item {
+          display: flex;
+          gap: 12px;
+          align-items: flex-start;
+          padding: 14px;
+        }
+        .beta-get-num {
+          width: 30px;
+          height: 30px;
+          flex: 0 0 auto;
+          display: grid;
+          place-items: center;
+          border-radius: 10px;
+          color: #071426;
+          background: var(--cyan);
+          font-size: 14px;
+          font-weight: 1000;
+        }
+        .beta-get-text {
+          color: rgba(255,255,255,.86);
+          font-size: 15px;
+          font-weight: 800;
+          line-height: 1.65;
+        }
+        .beta-camp-section {
+          background:
+            radial-gradient(circle at 80% 0%, rgba(255,201,74,.18), transparent 36%),
+            linear-gradient(180deg, #0b1d35, #071426);
+        }
+        .beta-camp-badge {
+          width: fit-content;
+          margin: 0 auto 12px;
+          border-radius: 999px;
+          padding: 7px 12px;
+          color: #071426;
+          background: var(--gold);
+          font-size: 12px;
+          font-weight: 1000;
+        }
+        .beta-camp-title {
+          margin: 0;
+          text-align: center;
+          font-size: 30px;
+          line-height: 1.38;
+          font-weight: 1000;
+          letter-spacing: 0;
+        }
+        .beta-camp-sub {
+          margin: 10px auto 22px;
+          max-width: 450px;
+          color: rgba(214,226,245,.68);
+          text-align: center;
+          font-size: 14.5px;
+          line-height: 1.78;
+        }
+        .beta-price-row {
+          display: flex;
+          align-items: baseline;
+          justify-content: center;
+          gap: 10px;
+          margin-bottom: 18px;
+          flex-wrap: wrap;
+        }
+        .beta-old-price {
+          color: rgba(214,226,245,.48);
+          text-decoration: line-through;
+          font-size: 15px;
+        }
+        .beta-new-price {
+          color: var(--gold);
+          font-size: 42px;
+          font-weight: 1000;
+        }
+        .beta-unit {
+          color: rgba(214,226,245,.62);
           font-size: 13px;
           font-weight: 900;
         }
-        .beta-step strong {
-          display: block;
+        .beta-camp-day {
+          padding: 16px;
+        }
+        .beta-camp-day-top {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 8px;
+        }
+        .beta-camp-num {
+          color: var(--gold);
+          font-weight: 1000;
+        }
+        .beta-camp-tag {
+          color: #86e8ff;
+          font-size: 12px;
+          font-weight: 900;
+        }
+        .beta-camp-day-title {
           color: #fff;
-          font-size: 18px;
+          font-size: 17px;
+          font-weight: 900;
+          line-height: 1.45;
+        }
+        .beta-camp-day-items {
+          margin-top: 8px;
+          color: rgba(214,226,245,.58);
+          font-size: 12.5px;
+          line-height: 1.7;
+        }
+        .beta-camp-time {
+          margin: 18px 0;
+          border: 1px solid rgba(255,255,255,.1);
+          border-radius: 16px;
+          padding: 14px;
+          color: rgba(255,255,255,.84);
+          background: rgba(255,255,255,.045);
+          text-align: center;
+          font-size: 14px;
+          line-height: 1.75;
+          font-weight: 800;
         }
         .beta-final {
-          padding-bottom: 92px;
+          padding-bottom: 108px;
           text-align: center;
+          background:
+            radial-gradient(circle at 50% 0%, rgba(0,217,255,.16), transparent 38%),
+            #071426;
+        }
+        .beta-final h2 {
+          margin: 0 0 10px;
+          font-size: 28px;
+          line-height: 1.42;
+          font-weight: 1000;
+        }
+        .beta-final p {
+          margin: 0 0 20px;
+          color: rgba(214,226,245,.68);
+          font-size: 14.5px;
+          line-height: 1.75;
+        }
+        .beta-footer {
+          padding: 24px 18px 104px;
+          color: rgba(214,226,245,.5);
+          text-align: center;
+          font-size: 12px;
+          background: #071426;
+        }
+        .beta-sticky-bar {
+          position: fixed;
+          left: 50%;
+          bottom: 14px;
+          z-index: 40;
+          width: min(524px, calc(100vw - 24px));
+          transform: translateX(-50%);
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 10px;
+          align-items: center;
+          border: 1px solid rgba(255,255,255,.12);
+          border-radius: 18px;
+          padding: 10px;
+          background: rgba(7,20,38,.9);
+          box-shadow: 0 18px 50px rgba(0,0,0,.36);
+          backdrop-filter: blur(18px);
+        }
+        .beta-sticky-title {
+          color: #fff;
+          font-size: 13px;
+          font-weight: 1000;
+        }
+        .beta-sticky-sub {
+          color: rgba(214,226,245,.58);
+          font-size: 11px;
+          font-weight: 800;
+        }
+        .beta-sticky-btn {
+          min-width: 92px;
+          min-height: 44px;
+          border-radius: 14px;
+          color: #071426;
+          background: var(--line);
+          font-size: 14px;
+          font-weight: 1000;
         }
         .beta-modal-backdrop {
           position: fixed;
@@ -439,7 +662,7 @@ export default function BetaSignupPage() {
           padding: 28px;
           border: 1px solid rgba(255,255,255,.12);
           border-radius: 22px;
-          background: #14141d;
+          background: #101827;
           box-shadow: 0 24px 80px rgba(0,0,0,.55);
         }
         .beta-modal h2 {
@@ -447,6 +670,13 @@ export default function BetaSignupPage() {
           color: #fff;
           font-size: 24px;
           line-height: 1.35;
+        }
+        .beta-kicker {
+          margin: 0 0 10px;
+          color: #86e8ff;
+          font-size: 13px;
+          font-weight: 1000;
+          letter-spacing: .08em;
         }
         .beta-modal-close {
           position: absolute;
@@ -458,7 +688,7 @@ export default function BetaSignupPage() {
           border-radius: 12px;
           color: #fff;
           background: rgba(255,255,255,.06);
-          font-size: 24px;
+          font-size: 18px;
           cursor: pointer;
         }
         .beta-copy-box {
@@ -466,175 +696,276 @@ export default function BetaSignupPage() {
           padding: 16px;
           border: 1px solid rgba(255,255,255,.1);
           border-radius: 14px;
-          color: rgba(255,255,255,.82);
+          color: rgba(255,255,255,.84);
           background: rgba(255,255,255,.05);
           line-height: 1.8;
         }
         .beta-modal-actions {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-        .beta-one-page-shell {
-          max-width: 1040px;
-          margin: 0 auto;
-          padding: clamp(18px, 4vw, 40px) clamp(12px, 4vw, 28px) 112px;
-        }
-        .beta-one-page-image-wrap {
-          overflow: hidden;
-          border: 1px solid rgba(255,255,255,.1);
-          border-radius: 22px;
-          background: rgba(255,255,255,.04);
-          box-shadow: 0 24px 80px rgba(0,0,0,.36);
-        }
-        .beta-one-page-image {
-          display: block;
-          width: 100%;
-          height: auto;
-        }
-        .beta-floating-cta {
-          position: fixed;
-          left: 50%;
-          bottom: 18px;
-          z-index: 40;
-          width: min(520px, calc(100vw - 32px));
-          transform: translateX(-50%);
           display: grid;
-          grid-template-columns: 1fr;
-          gap: 8px;
-          padding: 12px;
-          border: 1px solid rgba(255,255,255,.12);
-          border-radius: 18px;
-          background: rgba(12,12,18,.82);
-          box-shadow: 0 18px 44px rgba(0,0,0,.42);
-          backdrop-filter: blur(18px);
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
         }
-        .beta-floating-note {
-          color: rgba(255,255,255,.52);
-          font-size: 12px;
-          font-weight: 700;
-          text-align: center;
+        .beta-secondary-btn {
+          display: inline-flex;
+          min-height: 52px;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgba(255,255,255,.14);
+          border-radius: 14px;
+          color: #fff;
+          background: rgba(255,255,255,.06);
+          font-size: 16px;
+          font-weight: 900;
         }
-        @media (max-width: 820px) {
-          .beta-pack-hero {
-            grid-template-columns: 1fr;
+        .beta-modal .beta-primary-btn {
+          min-height: 52px;
+          color: #071426;
+          font-size: 16px;
+        }
+        @media (min-width: 760px) {
+          .beta-wrap,
+          .beta-navbar-inner {
+            width: min(100%, 1040px);
           }
-          .beta-feature-list,
-          .beta-case-grid,
-          .beta-steps {
-            grid-template-columns: 1fr;
+          .beta-wrap {
+            padding-inline: 32px;
           }
-          .beta-pack-stack {
-            min-height: 280px;
+          .beta-hero {
+            padding: 76px 0 62px;
           }
-          .beta-pack-nav {
-            padding-inline: 16px;
+          .beta-hero .beta-wrap {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 380px;
+            gap: 48px;
+            align-items: center;
           }
-          .beta-nav-link {
+          .beta-visual-panel {
+            display: block;
+          }
+          .beta-formula-grid,
+          .beta-script-grid,
+          .beta-result-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+          .beta-formula-grid {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+          }
+        }
+        @media (max-width: 759px) {
+          .beta-visual-panel {
             display: none;
           }
-          .beta-one-page-shell {
-            padding-inline: 0;
-            padding-top: 0;
+          .beta-navbar-inner {
+            padding-inline: 14px;
           }
-          .beta-one-page-image-wrap {
-            border-left: 0;
-            border-right: 0;
-            border-radius: 0;
+          .beta-nav-cta {
+            padding-inline: 12px;
+            font-size: 13px;
+          }
+          .beta-modal {
+            padding: 24px 18px;
+          }
+          .beta-modal-actions {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
 
-      <nav className="beta-pack-nav">
-        <BrandLogo />
-        <a className="beta-nav-link" href="/">回到首頁</a>
+      <nav className="beta-navbar">
+        <div className="beta-navbar-inner">
+          <Logo />
+          <button className="beta-nav-cta" type="button" onClick={openLineModal}>NT$99 報名</button>
+        </div>
       </nav>
 
-      {pageConfig.onePageImageUrl ? (
-        <>
-          <section className="beta-one-page-shell">
-            <div className="beta-one-page-image-wrap">
-              <img
-                className="beta-one-page-image"
-                src={pageConfig.onePageImageUrl}
-                alt="短影音從0到千粉資料包"
-              />
-            </div>
-          </section>
-          <div className="beta-floating-cta">
-            <button className="beta-primary-btn" type="button" onClick={() => setModalOpen(true)}>
-              加 LINE 好友，免費領資料包
+      <section className="beta-hero">
+        <div className="beta-wrap">
+          <div>
+            <div className="beta-hero-badge">強人設三天影片創作營・NT$99 加碼送 +80 頁自媒體攻略包</div>
+            <h1>不會拍、不會剪、沒有粉絲？<br />你缺的不是天份，是<em>技能</em></h1>
+            <p className="beta-sub">
+              就像學日文、學英文、學游泳，短影音也是一套練得會的技能。從選題、拍攝、剪輯到變現，五大定位公式加真實學員案例，讓你的帳號從 0 開始也能被看見。
+            </p>
+            <button className="beta-primary-btn" type="button" onClick={openLineModal}>
+              <span className="beta-cta-l1">NT$99 報名三天創作營</span>
+              <span className="beta-cta-l2">+80 頁自媒體攻略包</span>
             </button>
-            <div className="beta-floating-note">加入官方 LINE {LINE_URL.includes('@tt_01') ? '@tt_01' : ''} 後貼上領取文字</div>
+            <div className="beta-cta-sub">加 LINE 好友完成報名，同步奉送 +80 頁自媒體攻略包</div>
           </div>
-        </>
-      ) : (
-        <>
-          <section className="beta-pack-hero">
-            <div>
-              <p className="beta-kicker">免費資料包</p>
-              <h1>短影音從0到千粉<br />只靠這<span>一份資料包</span></h1>
-              <p className="beta-hero-copy">
-                五大定位公式、爆款選題公版、腳本與拍攝整理，一次把新手最常卡住的內容方向整理好。
-              </p>
-              <div className="beta-cta-row">
-                <button className="beta-primary-btn" type="button" onClick={() => setModalOpen(true)}>
-                  加 LINE 好友，免費領資料包
-                </button>
+          <div className="beta-visual-panel">
+            <div className="beta-portfolio-hero">
+              <div className="beta-portfolio-inner">
+                <strong>先定位<br />再放大流量</strong>
+                <span>選題、腳本、拍攝、剪輯、變現，一套練得會的短影音系統。</span>
               </div>
-              <p className="beta-subnote">加好友後自動收到資料包，不用等，隨時可封鎖取消。</p>
             </div>
-            <PackPreview />
-          </section>
+          </div>
+        </div>
+      </section>
 
-          <section className="beta-pack-section">
-            <h2 className="beta-section-title">資料包裡有什麼</h2>
-            <p className="beta-section-subtitle">不是空泛理論，是能直接照做的方法。</p>
-            <div className="beta-feature-list">
-              {features.map((item, index) => (
-                <article className="beta-feature-card" key={item.title}>
-                  <div className="beta-feature-index">{index + 1}</div>
-                  <h3>{item.title}</h3>
-                  <p>{item.desc}</p>
-                </article>
-              ))}
+      <section className="beta-section">
+        <div className="beta-wrap">
+          <h2 className="beta-section-title">我教的不是招式，是<em>練得會的技能</em></h2>
+          <p className="beta-section-desc">照著方法練，誰都學得會。換行業、換受眾，一樣套得出爆款選題。</p>
+          <div className="beta-demo-grid">
+            {demoTopics.map(([label, quote]) => (
+              <article className="beta-demo-card" key={quote}>
+                <div className="beta-demo-label">{label}</div>
+                <div className="beta-demo-quote">「{quote}」</div>
+                <span className="beta-demo-tag">AI 選題公版</span>
+              </article>
+            ))}
+          </div>
+          <div className="beta-portfolio-hero">
+            <div className="beta-portfolio-inner">
+              <strong>實體課程<br />超過 300 場</strong>
+              <span>不是只講概念，而是帶你把內容真的做出來。</span>
             </div>
-          </section>
+          </div>
+        </div>
+      </section>
 
-          <section className="beta-pack-section">
-            <h2 className="beta-section-title">適合誰領取</h2>
-            <p className="beta-section-subtitle">想開始做內容、正在卡選題、想把服務變成流量的人。</p>
-            <div className="beta-case-grid">
-              {cases.map(item => (
-                <article className="beta-case-card" key={item.title}>
-                  <small>{item.tag}</small>
-                  <h3>{item.title}</h3>
-                  <div className="beta-case-value">{item.value}</div>
-                  <p>{item.desc}</p>
-                </article>
-              ))}
-            </div>
-          </section>
+      <section className="beta-section-alt">
+        <div className="beta-wrap">
+          <h2 className="beta-section-title">不是零碎技巧，是一套<em>定位系統</em></h2>
+          <p className="beta-section-desc">很多人卡住不是不努力，而是一開始就沒有把帳號、受眾、內容和變現串起來。</p>
+          <div className="beta-formula-grid">
+            {formulas.map(([title, desc], index) => (
+              <article className="beta-formula-card" key={title}>
+                <div className="beta-card-kicker">0{index + 1}</div>
+                <h3>{title}</h3>
+                <p>{desc}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
 
-          <section className="beta-pack-section">
-            <h2 className="beta-section-title">怎麼領取</h2>
-            <p className="beta-section-subtitle">3 步驟，不用留信箱、不用付費。</p>
-            <div className="beta-steps">
-              <div className="beta-step"><span>01</span><strong>複製領取文字</strong></div>
-              <div className="beta-step"><span>02</span><strong>加入官方 LINE</strong></div>
-              <div className="beta-step"><span>03</span><strong>貼上訊息領資料包</strong></div>
-            </div>
-          </section>
+      <section className="beta-section">
+        <div className="beta-wrap">
+          <h2 className="beta-section-title">腳本，決定影片的<em>質感</em></h2>
+          <p className="beta-section-desc">資料包會把金字塔腳本結構拆開，讓你知道每一段該說什麼。</p>
+          <div className="beta-script-grid">
+            {scripts.map(([title, desc], index) => (
+              <article className="beta-script-card" key={title}>
+                <div className="beta-card-kicker">STEP {index + 1}</div>
+                <h3>{title}</h3>
+                <p>{desc}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
 
-          <section className="beta-pack-section beta-final">
-            <h2 className="beta-section-title">現在就領取資料包</h2>
-            <p className="beta-section-subtitle">先把短影音方向整理好，再開始拍就不會一直重來。</p>
-            <button className="beta-primary-btn" type="button" onClick={() => setModalOpen(true)}>
-              免費領資料包
-            </button>
-          </section>
-        </>
-      )}
+      <section className="beta-section-alt">
+        <div className="beta-wrap">
+          <h2 className="beta-section-title">這套系統<em>適合這些人</em></h2>
+          <div className="beta-suit-list">
+            {[
+              '幫老闆拍片，拍不出成效',
+              '不知道如何一天產 30 條影片',
+              '拍了很多支，流量卻一直起不來',
+              '中小企業主、個人品牌，想用短影音導客',
+              '想把流量真正變成訂單和收入，不只是按讚數',
+            ].map(item => (
+              <div className="beta-suit-item" key={item}>
+                <div className="beta-check">✓</div>
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="beta-section">
+        <div className="beta-wrap">
+          <h2 className="beta-section-title">報名三天創作營，<em>加碼送你 +80 頁自媒體攻略包</em></h2>
+          <div className="beta-get-list">
+            {[
+              '五大定位公式：商業／內容／製作／變現／玩法',
+              '帳號搭建個人簡介表：4 句話公式，附範例',
+              '爆款選題公版：AI 問法與 10 個選題公版',
+              '金字塔腳本結構：開篇、事件、成效、互動',
+              '剪輯與拍攝實戰 SOP',
+            ].map((item, index) => (
+              <div className="beta-get-item" key={item}>
+                <div className="beta-get-num">{index + 1}</div>
+                <div className="beta-get-text">{item}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="beta-camp-section">
+        <div className="beta-wrap">
+          <div className="beta-camp-badge">報名即送 +80 頁自媒體攻略包</div>
+          <h2 className="beta-camp-title">強人設<em>三天影片創作營</em></h2>
+          <p className="beta-camp-sub">從內容定位到爆款影片，打造能傳播的強人設內容力。三個晚上，線上 Zoom 直接跟著做。</p>
+          <div className="beta-price-row">
+            <span className="beta-old-price">原價 NT$1,980</span>
+            <span className="beta-new-price">NT$99</span>
+            <span className="beta-unit">/ 三天完整課程</span>
+          </div>
+          <div className="beta-camp-days">
+            {campDays.map(([tag, title, items], index) => (
+              <article className="beta-camp-day" key={tag}>
+                <div className="beta-camp-day-top">
+                  <span className="beta-camp-num">0{index + 1}</span>
+                  <span className="beta-camp-tag">{tag}</span>
+                </div>
+                <div className="beta-camp-day-title">{title}</div>
+                <div className="beta-camp-day-items">{items}</div>
+              </article>
+            ))}
+          </div>
+          <div className="beta-camp-time">
+            適合想開始做短影音、想整理定位、想用內容獲客的人。<br />
+            加入官方 LINE 後，由專屬顧問安排合適上課時間。
+          </div>
+          <button className="beta-primary-btn" type="button" onClick={openLineModal}>
+            <span className="beta-cta-l1">NT$99 報名三天創作營</span>
+            <span className="beta-cta-l2">+80 頁自媒體攻略包</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="beta-section-alt">
+        <div className="beta-wrap">
+          <h2 className="beta-section-title">真實案例不是炫耀，是告訴你<em>這套能落地</em></h2>
+          <div className="beta-result-grid">
+            {results.map(([title, desc]) => (
+              <article className="beta-result-card" key={title}>
+                <div className="beta-card-kicker">學員案例</div>
+                <h3>{title}</h3>
+                <p>{desc}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="beta-final">
+        <div className="beta-wrap">
+          <h2>NT$99 報名，<em>從定位開始</em></h2>
+          <p>加 LINE 好友完成報名，同步取得完整 +80 頁自媒體攻略包。</p>
+          <button className="beta-primary-btn" type="button" onClick={openLineModal}>
+            <span className="beta-cta-l1">立即報名三天創作營</span>
+            <span className="beta-cta-l2">加 LINE @tt_01 領取資料包</span>
+          </button>
+          <div className="beta-cta-sub">由專屬顧問安排合適上課時間</div>
+        </div>
+      </section>
+
+      <footer className="beta-footer">© 頂級流量 版權所有</footer>
+
+      <div className="beta-sticky-bar">
+        <div>
+          <div className="beta-sticky-title">強人設三天創作營 NT$99</div>
+          <div className="beta-sticky-sub">報名即送 +80 頁自媒體攻略包</div>
+        </div>
+        <button className="beta-sticky-btn" type="button" onClick={openLineModal}>立即報名</button>
+      </div>
 
       {modalOpen && <LineModal onClose={() => setModalOpen(false)} onLineClick={() => trackResourcePackEvent('line_click')} />}
     </main>
