@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getSystemSettings, saveSystemSettings } from '../../data/mockData'
+import { fetchResourcePackEvents } from '../../utils/resourcePackTracking'
 
 const PAGE_URL = '/beta'
 const LINE_ID = '@tt_01'
@@ -291,7 +292,7 @@ function buildPerformanceRows(performance) {
 export default function BetaAdmin() {
   const [flash, setFlash] = useState('')
   const landingImageInputRef = useRef(null)
-  const [events] = useState(() => readJson(ANALYTICS_KEY, []))
+  const [events, setEvents] = useState(() => readJson(ANALYTICS_KEY, []))
   const [leads, setLeads] = useState(() => {
     const stored = readJson(LEADS_KEY, [])
     return stored.length > 0 ? stored : SAMPLE_LEADS
@@ -307,6 +308,14 @@ export default function BetaAdmin() {
   })
   const [performance, setPerformance] = useState(() => normalizePerformance(readJson(PERFORMANCE_KEY, DEFAULT_PERFORMANCE)))
   const [pageConfig, setPageConfig] = useState(() => ({ ...DEFAULT_PAGE_CONFIG, ...readJson(PAGE_CONFIG_KEY, DEFAULT_PAGE_CONFIG) }))
+
+  useEffect(() => {
+    let cancelled = false
+    fetchResourcePackEvents().then(nextEvents => {
+      if (!cancelled) setEvents(nextEvents)
+    })
+    return () => { cancelled = true }
+  }, [])
 
   const todayEvents = useMemo(() => events.filter(event => isToday(event.createdAt)), [events])
   const todayViews = todayEvents.filter(event => event.type === 'page_view').length
@@ -429,7 +438,7 @@ export default function BetaAdmin() {
 
       {flash && <div className="auth-alert success" style={{ marginBottom: 16 }}>{flash}</div>}
 
-      <SectionCard title="數據總覽" subtitle="目前先顯示前台本機測試紀錄；正式投放後可接 Meta Pixel、GA4、GTM 與 Conversion API。">
+      <SectionCard title="數據總覽" subtitle="優先讀取雲端事件資料；若資料庫尚未建立，會暫時顯示本機測試紀錄。">
         <div className="stats-grid">
           <StatCard label="今日瀏覽" value={todayViews} sub="資料包頁 page_view" />
           <StatCard label="LINE 點擊" value={lineClicks} sub={`加入官方 LINE ${LINE_ID}`} />
