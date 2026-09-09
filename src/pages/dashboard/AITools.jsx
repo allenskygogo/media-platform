@@ -844,9 +844,8 @@ const BENCHMARK_MOCK = {
 const SOCIAL_TABS = [
   { id: 'ig',      label: 'IG'       },
   { id: 'fb',      label: 'Facebook' },
-  { id: 'threads', label: 'Threads'  },
-  { id: 'xiaohongshu', label: '小紅書' },
-  { id: 'douyin', label: '抖音' },
+  { id: 'youtube', label: 'YouTube' },
+  { id: 'tiktok', label: 'TikTok' },
 ]
 
 const LIVESTREAM_SECTIONS = [
@@ -866,7 +865,6 @@ function getPlatformInfo(url) {
   if (url.includes('tiktok.com'))    return { Icon: Music2,        label: 'TikTok'  }
   if (url.includes('instagram.com')) return { Icon: Image,         label: 'IG'      }
   if (url.includes('youtube.com'))   return { Icon: PlayCircle,    label: 'YouTube' }
-  if (url.includes('threads.net'))   return { Icon: MessageCircle, label: 'Threads' }
   return { Icon: Link, label: '連結' }
 }
 
@@ -3105,13 +3103,14 @@ function normalizeSocialAngles(payload) {
 function normalizeSocialResult(payload) {
   if (!payload) return null
   if (payload.platforms) return payload
-  if (payload.ig || payload.fb || payload.threads) {
+  if (payload.ig || payload.fb || payload.youtube || payload.tiktok) {
     return {
       strategy: payload.strategy || null,
       platforms: {
         ig: payload.ig,
         fb: payload.fb,
-        threads: payload.threads,
+        youtube: payload.youtube,
+        tiktok: payload.tiktok,
       },
     }
   }
@@ -3176,7 +3175,7 @@ function SocialPage() {
   const selectedAngle = selectedIndex !== null ? angles[selectedIndex] : null
   const normalizedResult = normalizeSocialResult(result)
   const availableSocialTabs = SOCIAL_TABS.filter(t => normalizedResult?.platforms?.[t.id])
-  const visibleSocialTabs = availableSocialTabs.length ? availableSocialTabs : SOCIAL_TABS.slice(0, 3)
+  const visibleSocialTabs = availableSocialTabs.length ? availableSocialTabs : SOCIAL_TABS
   const activeContent = normalizedResult?.platforms?.[activeTab] || normalizedResult?.platforms?.[visibleSocialTabs[0]?.id] || ''
   const visibleSections = platformSections(activeContent)
   const shownSections = canSeeAll ? visibleSections : visibleSections.slice(0, 2)
@@ -3295,7 +3294,7 @@ function SocialPage() {
                 <strong>{socialAngleName(angle, index)}</strong>
                 <p><span>角度</span>{angle.category || ['批判', '溫馨', '開心', '分析'][index] || '內容角度'}</p>
                 <p><span>風格</span>{angle.style || angle.tone || '依角度判斷'}</p>
-                <p><span>平台</span>{Array.isArray(angle.platforms) ? angle.platforms.join(' / ') : angle.platform || angle.suitablePlatform || 'IG / FB / Threads'}</p>
+                <p><span>平台</span>{Array.isArray(angle.platforms) ? angle.platforms.join(' / ') : angle.platform || angle.suitablePlatform || 'IG / FB / YT / TK'}</p>
                 <p><span>受眾</span>{angle.targetAudience || angle.audience || '依主題推斷'}</p>
                 <p><span>觸發點</span>{angle.trigger || angle.psychology || angle.audienceTrigger || '受眾痛點與情緒共鳴'}</p>
                 <p><span>互動理由</span>{angle.reason || angle.shareReason || angle.interactionReason || '具備留言、分享或收藏潛力'}</p>
