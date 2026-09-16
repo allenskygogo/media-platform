@@ -33,6 +33,8 @@ export default function UsersAdmin() {
   const [filterTier, setFilterTier] = useState('all')
   const [editUser, setEditUser] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [editError, setEditError] = useState('')
+  const [provisionError, setProvisionError] = useState('')
   const [resetUser, setResetUser] = useState(null)
   const [resetPassword, setResetPassword] = useState('')
   const [resettingPassword, setResettingPassword] = useState(false)
@@ -172,13 +174,18 @@ export default function UsersAdmin() {
   }
 
   const openEdit = (user) => {
+    setEditError('')
     setEditUser(user)
     setEditForm({ name: user.name, tier: user.tier, status: user.status, expiresAt: toDateValue(user.expiresAt) })
   }
 
-  const saveEdit = async () => {
-    if (isAIOnly(editForm) && !editForm.expiresAt) {
-      flashError('請指定 AI 使用到期日。')
+  const saveEdit = async (event) => {
+    event.preventDefault()
+    const values = { ...editForm, expiresAt: String(new FormData(event.currentTarget).get('expiresAt') || '') }
+    if (updatingId === editUser?.id) return
+    setEditError('')
+    if (isAIOnly(values) && !values.expiresAt) {
+      setEditError('請先填寫 AI 使用到期日，再按儲存變更。')
       return
     }
     if (hasSupabase && supabase && editUser?.source === 'supabase') {
@@ -187,19 +194,19 @@ export default function UsersAdmin() {
         await workerJson(`/api/admin/students/${encodeURIComponent(editUser.id)}`, {
           method: 'PATCH',
           body: JSON.stringify({
-            name: editForm.name,
-            status: editForm.status,
-            tier: editForm.tier,
-            planId: TIER_TO_PLAN_ID[editForm.tier],
-            legacyTier: editForm.tier,
-            expiresAt: editForm.expiresAt || null,
+            name: values.name,
+            status: values.status,
+            tier: values.tier,
+            planId: TIER_TO_PLAN_ID[values.tier],
+            legacyTier: values.tier,
+            expiresAt: values.expiresAt || null,
           }),
         })
         await loadStudents()
         setEditUser(null)
         flash('正式會員資料已更新')
       } catch (error) {
-        flashError(error.message || '更新正式會員失敗')
+        setEditError(error.message || '更新正式會員失敗')
       } finally {
         setUpdatingId('')
       }
@@ -210,12 +217,12 @@ export default function UsersAdmin() {
     const idx = all.findIndex(u => u.id === editUser.id)
     all[idx] = {
       ...all[idx],
-      name: editForm.name,
-      avatar: editForm.name.charAt(0),
-      tier: editForm.tier,
-      planId: TIER_TO_PLAN_ID[editForm.tier],
-      status: editForm.status,
-      expiresAt: editForm.expiresAt || null,
+      name: values.name,
+      avatar: values.name.charAt(0),
+      tier: values.tier,
+      planId: TIER_TO_PLAN_ID[values.tier],
+      status: values.status,
+      expiresAt: values.expiresAt || null,
     }
     saveUsers(all)
     setUsers(all.filter(u => u.role === 'student' && u.tier !== 'managed'))
@@ -293,8 +300,9 @@ export default function UsersAdmin() {
 
   const changeTier = async (user, tier) => {
     if (isAIOnly({ tier })) {
+      setEditError('')
       setEditUser(user)
-      setEditForm({ name: user.name, tier, status: user.status, expiresAt: '' })
+      setEditForm({ name: user.name, tier, status: user.status, expiresAt: toDateValue(user.expiresAt) })
       return
     }
     if (hasSupabase && supabase && user.source === 'supabase') {
@@ -433,26 +441,27 @@ export default function UsersAdmin() {
   const provisionStudent = async (event) => {
     event.preventDefault()
     if (provisioning) return
+    setProvisionError('')
 
     const name = provisionForm.name.trim()
     const email = provisionForm.email.trim().toLowerCase()
     const password = provisionForm.password.trim()
 
     if (!name || !email || !password) {
-      flashError('請填寫姓名、Email 和登入密碼。')
+      setProvisionError('請填寫姓名、Email 和登入密碼。')
       return
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      flashError('Email 格式不正確。')
+      setProvisionError('Email 格式不正確。')
       return
     }
     if (password.length < 6) {
-      flashError('登入密碼至少需要 6 碼。')
+      setProvisionError('登入密碼至少需要 6 碼。')
       return
     }
 
     if (isAIOnly(provisionForm) && !provisionForm.expiresAt) {
-      flashError('請指定 AI 使用到期日。試用天數尚未固定，不會自動套用課程效期。')
+      setProvisionError('請指定 AI 使用到期日。試用天數尚未固定，不會自動套用課程效期。')
       return
     }
 
@@ -480,7 +489,7 @@ export default function UsersAdmin() {
       setShowProvision(false)
       flash(`已開通 ${name}，學員可直接用 ${email} 登入。`)
     } catch (error) {
-      flashError(error.message || '開通學員失敗，請稍後再試。')
+      setProvisionError(error.message || '開通學員失敗，請稍後再試。')
     } finally {
       setProvisioning(false)
     }
@@ -490,7 +499,7 @@ export default function UsersAdmin() {
     <div>
       <div className="page-actions" style={{ marginBottom: 24 }}>
         <div className="page-heading" style={{ margin: 0 }}><h1>學員管理</h1><p>{loading ? '讀取正式會員中...' : `共 ${users.length} 位學員（不含代操會員）`}</p></div>
-        <button className="btn btn-primary" onClick={() => setShowProvision(true)}>
+        <button className="btn btn-primary" onClick={() => { setProvisionError(''); setShowProvision(true) }}>
           協助開通已購學員
         </button>
       </div>
@@ -597,8 +606,9 @@ export default function UsersAdmin() {
               <button type="button" className="modal-close" onClick={() => setShowProvision(false)}>×</button>
             </div>
             <div className="modal-body">
+              {provisionError && <div role="alert" className="auth-alert error" style={{ marginBottom: 16 }}>{provisionError}</div>}
               <p style={{ marginTop: 0, color: 'var(--gray-500)', fontSize: 13 }}>
-                用於已經線下購買課程的學員。建立後他們不需要再次付款，可直接用 Email 與密碼登入。
+                用於已經線下購買課程或 AI 方案的學員。建立後他們不需要再次付款，可直接用 Email 與密碼登入。
               </p>
               <div className="form-group">
                 <label className="form-label">姓名</label>
@@ -672,9 +682,12 @@ export default function UsersAdmin() {
 
       {editUser && (
         <div className="modal-overlay" onClick={() => setEditUser(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header"><h2 className="modal-title">編輯學員</h2><button className="modal-close" onClick={() => setEditUser(null)}>×</button></div>
+          <form className="modal" onSubmit={saveEdit} onClick={e => e.stopPropagation()}>
+            <div className="modal-header"><h2 className="modal-title">編輯學員</h2><button type="button" className="modal-close" onClick={() => setEditUser(null)}>×</button></div>
             <div className="modal-body">
+              {editError && <div role="alert" className="auth-alert error" style={{ marginBottom: 16 }}>{editError}</div>}
+              {isAIOnly(editForm) && <p className="form-hint" style={{ marginBottom: 16 }}>正在設定為「{TIER_META[editForm.tier]?.label}」。確認到期日並按「儲存變更」後才會生效。</p>}
+              {isAIOnly(editForm) && editForm.expiresAt && new Date(editForm.expiresAt).getTime() <= Date.now() && <div role="status" className="auth-alert error" style={{ marginBottom: 16 }}>目前到期日已過期，請調整日期才能讓帳號登入使用。</div>}
               <div className="form-group"><label className="form-label">姓名</label>
                 <input className="form-input" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} /></div>
               <div className="form-group"><label className="form-label">電子郵件</label>
@@ -684,19 +697,19 @@ export default function UsersAdmin() {
                   {TIERS.map(t => <option key={t} value={t}>{TIER_MARK[t]} {TIER_META[t]?.label}</option>)}
                 </select></div>
               <div className="form-group"><label className="form-label">{isAIOnly(editForm) ? 'AI 使用到期日（必填）' : '效期（留空自動設定）'}</label>
-                <input type="date" className="form-input" value={editForm.expiresAt} onChange={e => setEditForm(f => ({ ...f, expiresAt: e.target.value }))} /></div>
+                <input name="expiresAt" type="date" className="form-input" value={editForm.expiresAt} onChange={e => setEditForm(f => ({ ...f, expiresAt: e.target.value }))} /></div>
               <div className="form-group"><label className="form-label">帳號狀態</label>
                 <select className="form-select" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>
                   <option value="active">啟用</option><option value="inactive">停用</option>
                 </select></div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setEditUser(null)}>取消</button>
-              <button className="btn btn-primary" onClick={saveEdit} disabled={updatingId === editUser.id}>
+              <button type="button" className="btn btn-secondary" onClick={() => setEditUser(null)}>取消</button>
+              <button type="submit" className="btn btn-primary" disabled={updatingId === editUser.id}>
                 {updatingId === editUser.id ? '儲存中...' : '儲存變更'}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </div>
