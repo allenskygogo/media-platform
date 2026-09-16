@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import worker from '../worker/index.js'
 
 test('planning conversation authenticates membership and passes owner instructions with conversation history', async t => {
-  const env = { SUPABASE_URL: 'https://auth.example.test', SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'service', OPENAI_API_KEY: 'test' }
+  const env = { SUPABASE_URL: 'https://auth.example.test', SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'service', OPENAI_API_KEY: 'test', OPENAI_MODEL: 'global-model' }
   let status = 'active'
   let expiry = null
   let configured = true
@@ -47,6 +47,8 @@ test('planning conversation authenticates membership and passes owner instructio
   assert.deepEqual(sent.input, [{ role: 'system', content: 'Owner instructions' }, ...history])
   assert.equal(sent.tools[0].vector_store_ids[0], 'vs-test')
   assert.equal(sent.store, false)
+  assert.equal(sent.model, 'gpt-4.1-mini')
+  assert.equal(sent.temperature, 0.4)
   assert.equal(aiCalls, 1)
   outputStatus = 'incomplete'
   assert.equal((await request(first)).status, 502)

@@ -1943,11 +1943,12 @@ async function handlePlanningConversation(request, env) {
   if (!env.OPENAI_API_KEY) return err('企劃師服務尚未就緒，請稍後再試。', 503)
 
   const requestBody = {
-    model: env.OPENAI_MODEL || agent.model || 'gpt-4.1-mini',
+    model: agent.model || env.OPENAI_MODEL || 'gpt-4.1-mini',
     input: [{ role: 'system', content: agent.system_prompt }, ...messages.map(({ role, content }) => ({ role, content }))],
     max_output_tokens: 12000,
     store: false,
   }
+  if (requestBody.model.startsWith('gpt-4.1')) requestBody.temperature = Number(agent.temperature ?? 0.4)
   if (agent.vector_store_id) requestBody.tools = [{ type: 'file_search', vector_store_ids: [agent.vector_store_id], max_num_results: 10 }]
   const response = await fetch(`${getOpenAIBaseURL(env)}/responses`, {
     method: 'POST',
