@@ -13,6 +13,6 @@
 
 既有 `trial/basic` 是原 NT$980 線上體驗課，保留原權益，不能與新引流課混為一談。`creator/standard`、`master/advanced` 的課程與一年 AI 體系維持原設定。此次沒有批量修改任何既有學員。
 
-不需要增加資料表：現有 `memberships.plan_id` 與 `legacy_tier` 是文字欄位。前後端必須一起部署，新方案才能由後台開通。先部署前端，再部署 Worker，讓課程 API 的新驗證方式與 client 相容。
+不需要增加資料表，但正式資料庫的 `memberships.plan_id` 與 `legacy_tier` 有舊方案的 CHECK 限制。必須套用 `supabase/migrations/20260917001000_allow_ai_only_memberships.sql`，同時允許兩個新方案；此 migration 不修改既有會員資料。前後端也必須一起部署，新方案才能由後台開通。先部署前端，再部署 Worker，讓課程 API 的新驗證方式與 client 相容。
 
 驗證：`node --test tests/member-access.test.js`、`npm run build`、`node --check worker/index.js`；另以本機隔離瀏覽器測試兩種 AI 身分的桌面／手機／直接網址導向與舊三種課程身分的入口。
