@@ -1,3 +1,4 @@
+import { AI_ONLY_PLANS, hasActiveCourseMembership } from '../shared/memberAccess.js'
 /**
  * Cloudflare Worker — Media Platform API
  *
@@ -41,6 +42,8 @@ const BOOKING_TIME_SLOTS = ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'
 const DEFAULT_BOOKING_DURATION_MINUTES = 180
 const TAIPEI_OFFSET = '+08:00'
 const PLAN_TO_LEGACY_TIER = {
+  ai_trial: 'ai_trial',
+  ai_subscription: 'ai_subscription',
   trial: 'basic',
   creator: 'standard',
   master: 'advanced',
@@ -58,6 +61,8 @@ const PLAN_AMOUNT = {
   master: 129800,
 }
 const PLAN_LABELS = {
+  ai_trial: '引流課 AI',
+  ai_subscription: 'AI 訂閱',
   trial: '自媒體獲客-定位體驗課',
   creator: '頂流達人',
   master: '頂流私塾',
@@ -833,6 +838,13 @@ export default {
     const path = url.pathname
 
     try {
+      const courseResource = path === '/api/course-catalog' || path === '/api/course-progress' ||
+        path.startsWith('/api/token/') || path === '/api/videos' || path.startsWith('/api/videos/')
+      if (courseResource) {
+        try { await requireCourseMember(request, env) }
+        catch (error) { return err(error.message, 403) }
+      }
+
       // POST /api/upload/start  → get a direct-upload URL from CF Stream
       if (path === '/api/upload/start' && request.method === 'POST') {
         return await handleUploadStart(request, env)
@@ -2381,8 +2393,9 @@ async function handleProvisionStudent(request, env) {
   if (!name) return err('Missing student name', 400)
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return err('Invalid email', 400)
   if (password.length < 6) return err('Password must be at least 6 characters', 400)
-  if (!['trial', 'creator', 'master', 'managed'].includes(planId)) return err('Invalid plan', 400)
-  if (!['basic', 'standard', 'advanced', 'managed'].includes(legacyTier)) return err('Invalid legacy tier', 400)
+  if (!Object.hasOwn(PLAN_TO_LEGACY_TIER, planId)) return err('Invalid plan', 400)
+  if (legacyTier !== planToLegacyTier(planId)) return err('Invalid legacy tier', 400)
+  if (AI_ONLY_PLANS.includes(planId) && !expiresAt) return err('請指定 AI 使用到期日', 400)
 
   const existingProfile = await getProfileByEmail(env, email)
   let authUser = existingProfile?.id ? { id: existingProfile.id, email } : await getAuthUserByEmail(env, email)
@@ -3157,6 +3170,13 @@ async function handleUpdateStudent(request, userId, env) {
   const planId = String(body.planId || tierToPlanId(tier) || '').trim()
   const expiresAt = body.expiresAt === '' ? null : normalizeDate(body.expiresAt)
 
+  const legacyTier = String(body.legacyTier || planToLegacyTier(planId)).trim()
+  if (planId) {
+    if (!Object.hasOwn(PLAN_TO_LEGACY_TIER, planId)) return err('Invalid plan', 400)
+    if (legacyTier !== planToLegacyTier(planId)) return err('Invalid legacy tier', 400)
+    if (AI_ONLY_PLANS.includes(planId) && !expiresAt) return err('請指定 AI 使用到期日', 400)
+  }
+
   if (name || status) {
     const profilePayload = {}
     if (name) profilePayload.display_name = name
@@ -3168,10 +3188,6 @@ async function handleUpdateStudent(request, userId, env) {
   }
 
   if (planId) {
-    if (!['trial', 'creator', 'master', 'managed'].includes(planId)) return err('Invalid plan', 400)
-    const legacyTier = String(body.legacyTier || planToLegacyTier(planId)).trim()
-    if (!['basic', 'standard', 'advanced', 'managed'].includes(legacyTier)) return err('Invalid legacy tier', 400)
-
     await insertMembership(env, {
       user_id: userId,
       plan_id: planId,
@@ -5266,6 +5282,16 @@ async function refreshSocialJobStatus(env, userId, jobId) {
     await scheduleSocialVideoCleanup(env, userId, job?.video_id)
   }
   return job
+}
+
+async function requireCourseMember(request, env) {
+  const user = await requireUser(request, env)
+  const profile = await getProfileById(env, user.id)
+  if (profile?.status !== 'active') throw new Error('帳號未啟用')
+  if (profile.role === 'admin') return user
+  const membership = await getLatestActiveMembership(env, user.id)
+  if (!hasActiveCourseMembership(membership)) throw new Error('此帳號未開通線上課程')
+  return user
 }
 
 async function requireAdmin(request, env) {

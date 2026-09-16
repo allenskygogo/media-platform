@@ -296,6 +296,8 @@ export function addDays(dateStr, days) {
 }
 
 export const TIER_META = {
+  ai_trial: { label: '引流課 AI', emoji: '', color: 'basic', duration: '依開通效期', days: null },
+  ai_subscription: { label: 'AI 訂閱', emoji: '', color: 'standard', duration: '依開通效期', days: null },
   basic:    { label: '體驗課',    emoji: '', color: 'basic',    duration: '3 個月',  days: 90  },
   standard: { label: '頂流達人',  emoji: '', color: 'standard', duration: '1 年',    days: 365 },
   advanced: { label: '頂流私塾',  emoji: '', color: 'advanced', duration: '1 年',    days: 365 },

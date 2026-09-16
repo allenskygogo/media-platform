@@ -1,3 +1,4 @@
+import { isAIOnly } from '../shared/memberAccess'
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -52,7 +53,7 @@ import { canUseSocialPublisher } from './utils/socialPublisherAccess'
 function StudentShell({ children }) {
   const { currentUser } = useAuth()
   useEffect(() => {
-    const tier = currentUser?.tier || 'basic'
+    const tier = isAIOnly(currentUser) ? 'standard' : currentUser?.tier || 'basic'
     const cls  = `tier-${tier}`
     document.body.classList.add(cls)
     return () => document.body.classList.remove(cls)

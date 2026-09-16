@@ -1,3 +1,4 @@
+import { canAccessStudentPath, memberHome, isAIOnly } from '../../shared/memberAccess'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -29,6 +30,10 @@ export default function ProtectedRoute({ children, requireAdmin = false, require
   if (isAdmin)   return <Navigate to="/admin"   replace />
   if (isManaged) return <Navigate to="/managed" replace />
 
+  if (!canAccessStudentPath(currentUser, location.pathname)) {
+    return <Navigate to={memberHome(currentUser)} replace />
+  }
+
   // Basic tier without expiresAt → must complete trial first
   // Allow trial, AI tools, and profile so upgrade CTAs can route directly to checkout.
   const onTrialRoute = location.pathname.startsWith('/dashboard/trial')
@@ -38,7 +43,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, require
     return <Navigate to="/dashboard/trial" replace />
   }
 
-  if (requireTier) {
+  if (requireTier && !isAIOnly(currentUser)) {
     const ORDER = { basic: 1, standard: 2, advanced: 3 }
     if ((ORDER[currentUser.tier] || 0) < ORDER[requireTier]) {
       return <Navigate to="/dashboard" replace />

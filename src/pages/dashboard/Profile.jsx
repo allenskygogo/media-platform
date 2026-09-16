@@ -1,3 +1,4 @@
+import { isAIOnly } from '../../../shared/memberAccess'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { BarChart3, CheckCircle2, ChevronRight, Crown, Headphones, LockKeyhole, Menu, Rocket, ShieldCheck, Star, TrendingUp, UserRoundCheck } from 'lucide-react'
@@ -1529,10 +1530,11 @@ export default function Profile() {
   const [showPlanModal, setShowPlanModal] = useState(false)
   const upgradePlanId = new URLSearchParams(location.search).get('upgrade') || ''
 
+  const aiOnly = isAIOnly(currentUser)
   const meta = TIER_META[currentUser.tier] || {}
-  const perks = TIER_PERKS[currentUser.tier] || { perks: [], locked: [] }
-  const currentPlan = getPlanByTier(currentUser.tier)
-  const nextPlan = getNextPlanByTier(currentUser.tier)
+  const perks = aiOnly ? { perks: ['爆款選題腳本', '素材靈感', '社群貼文'], locked: [] } : TIER_PERKS[currentUser.tier] || { perks: [], locked: [] }
+  const currentPlan = aiOnly ? null : getPlanByTier(currentUser.tier)
+  const nextPlan = aiOnly ? null : getNextPlanByTier(currentUser.tier)
 
   const saveProfile = (e) => {
     e.preventDefault()
@@ -1688,7 +1690,7 @@ export default function Profile() {
           </div>
 
           {/* Pricing summary */}
-          <div className="card">
+          {!aiOnly && <div className="card">
             <div className="card-header"><h2 className="card-title">方案比較</h2>
               <button className="btn btn-outline btn-sm" onClick={() => setShowPlanModal(true)}>查看完整方案</button>
             </div>
@@ -1704,10 +1706,10 @@ export default function Profile() {
                 )
               })}
             </div>
-          </div>
+          </div>}
         </div>
       </div>
-      {showPlanModal && <PlanComparisonModal currentPlan={currentPlan} currentUser={currentUser} initialPlanId={upgradePlanId} onClose={() => setShowPlanModal(false)} />}
+      {!aiOnly && showPlanModal && <PlanComparisonModal currentPlan={currentPlan} currentUser={currentUser} initialPlanId={upgradePlanId} onClose={() => setShowPlanModal(false)} />}
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { isAIOnly } from '../../../shared/memberAccess'
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
@@ -242,6 +243,12 @@ function ComingSoonLabel() {
 }
 
 function getAITierInfo(user) {
+  if (isAIOnly(user)) return {
+    name: user.tier === 'ai_trial' ? '引流課 AI' : 'AI 訂閱',
+    count: 3, total: NAV_TOOLS.length,
+    summary: '可使用爆款選題腳本、素材靈感與社群貼文。',
+    next: user.expiresAt ? `AI 使用期限：${user.expiresAt}` : '使用效期請聯繫客服確認。',
+  }
   const tier = deriveAITier(user)
   if (tier === 'trial') {
     return {
@@ -1444,6 +1451,7 @@ async function getSupabaseSessionToken() {
 
 // ── Tier helper ───────────────────────────────────────
 function deriveAITier(user) {
+  if (isAIOnly(user)) return 'standard'
   if (hasFullAITestAccess(user)) return 'advanced'
   const tier = user?.tier || 'basic'
   if (tier === 'advanced' || tier === 'managed') return 'advanced'

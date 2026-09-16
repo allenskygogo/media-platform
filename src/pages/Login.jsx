@@ -1,3 +1,4 @@
+import { memberHome } from '../../shared/memberAccess'
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -15,9 +16,7 @@ export default function Login() {
     setLoading(true)
     try {
       const user = await login(form.email.trim(), form.password)
-      if (user.role === 'admin') navigate('/admin', { replace: true })
-      else if (user.tier === 'managed') navigate('/managed', { replace: true })
-      else navigate('/dashboard', { replace: true })
+      navigate(memberHome(user), { replace: true })
     } catch (err) {
       setError(err.message)
     } finally {

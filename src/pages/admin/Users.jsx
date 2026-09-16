@@ -1,12 +1,15 @@
+import { isAIOnly } from '../../../shared/memberAccess'
 import { useEffect, useState } from 'react'
 import { getUsers, saveUsers, TIER_META } from '../../data/mockData'
 import { hasSupabase, supabase, allowLocalFallback } from '../../lib/supabase'
 
-const TIERS = ['basic', 'standard', 'advanced']
-const TIER_MARK = { basic: '體驗', standard: '達人', advanced: '進階' }
+const TIERS = ['ai_trial', 'ai_subscription', 'basic', 'standard', 'advanced']
+const TIER_MARK = { ai_trial: '', ai_subscription: '', basic: '體驗', standard: '達人', advanced: '進階' }
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const PROVISION_TIERS = [
+  { tier: 'ai_trial', planId: 'ai_trial', label: '引流課 AI（無線上回放）' },
+  { tier: 'ai_subscription', planId: 'ai_subscription', label: 'AI 訂閱（僅 AI 工具）' },
   { tier: 'basic', planId: 'trial', label: '體驗課' },
   { tier: 'standard', planId: 'creator', label: '頂流達人' },
   { tier: 'advanced', planId: 'master', label: '頂流私塾' },
@@ -174,6 +177,10 @@ export default function UsersAdmin() {
   }
 
   const saveEdit = async () => {
+    if (isAIOnly(editForm) && !editForm.expiresAt) {
+      flashError('請指定 AI 使用到期日。')
+      return
+    }
     if (hasSupabase && supabase && editUser?.source === 'supabase') {
       setUpdatingId(editUser.id)
       try {
@@ -206,6 +213,7 @@ export default function UsersAdmin() {
       name: editForm.name,
       avatar: editForm.name.charAt(0),
       tier: editForm.tier,
+      planId: TIER_TO_PLAN_ID[editForm.tier],
       status: editForm.status,
       expiresAt: editForm.expiresAt || null,
     }
@@ -284,6 +292,11 @@ export default function UsersAdmin() {
   }
 
   const changeTier = async (user, tier) => {
+    if (isAIOnly({ tier })) {
+      setEditUser(user)
+      setEditForm({ name: user.name, tier, status: user.status, expiresAt: '' })
+      return
+    }
     if (hasSupabase && supabase && user.source === 'supabase') {
       setUpdatingId(user.id)
       try {
@@ -309,6 +322,7 @@ export default function UsersAdmin() {
     const all = getUsers()
     const idx = all.findIndex(u => u.id === user.id)
     all[idx].tier = tier
+    all[idx].planId = TIER_TO_PLAN_ID[tier]
     all[idx].expiresAt = null
     saveUsers(all)
     setUsers(all.filter(u => u.role === 'student' && u.tier !== 'managed'))
@@ -389,6 +403,7 @@ export default function UsersAdmin() {
         password,
         role: 'student',
         tier,
+        planId: TIER_TO_PLAN_ID[tier],
         avatar: name.charAt(0),
         status: 'active',
         expiresAt,
@@ -402,6 +417,7 @@ export default function UsersAdmin() {
         password,
         role: 'student',
         tier,
+        planId: TIER_TO_PLAN_ID[tier],
         avatar: name.charAt(0),
         createdAt: today,
         status: 'active',
@@ -432,6 +448,11 @@ export default function UsersAdmin() {
     }
     if (password.length < 6) {
       flashError('登入密碼至少需要 6 碼。')
+      return
+    }
+
+    if (isAIOnly(provisionForm) && !provisionForm.expiresAt) {
+      flashError('請指定 AI 使用到期日。試用天數尚未固定，不會自動套用課程效期。')
       return
     }
 
@@ -598,7 +619,7 @@ export default function UsersAdmin() {
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">效期（選填，留空代表第一次登入才起算）</label>
+                <label className="form-label">{isAIOnly(provisionForm) ? 'AI 使用到期日（必填）' : '效期（選填，留空代表第一次登入才起算）'}</label>
                 <input className="form-input" type="date" value={provisionForm.expiresAt} onChange={e => setProvisionForm(f => ({ ...f, expiresAt: e.target.value }))} />
               </div>
             </div>
@@ -662,7 +683,7 @@ export default function UsersAdmin() {
                 <select className="form-select" value={editForm.tier} onChange={e => setEditForm(f => ({ ...f, tier: e.target.value }))}>
                   {TIERS.map(t => <option key={t} value={t}>{TIER_MARK[t]} {TIER_META[t]?.label}</option>)}
                 </select></div>
-              <div className="form-group"><label className="form-label">效期（留空自動設定）</label>
+              <div className="form-group"><label className="form-label">{isAIOnly(editForm) ? 'AI 使用到期日（必填）' : '效期（留空自動設定）'}</label>
                 <input type="date" className="form-input" value={editForm.expiresAt} onChange={e => setEditForm(f => ({ ...f, expiresAt: e.target.value }))} /></div>
               <div className="form-group"><label className="form-label">帳號狀態</label>
                 <select className="form-select" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>

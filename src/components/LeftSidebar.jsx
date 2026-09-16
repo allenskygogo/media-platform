@@ -1,3 +1,4 @@
+import { isAIOnly } from '../../shared/memberAccess'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { canUseSocialPublisher } from '../utils/socialPublisherAccess'
@@ -22,8 +23,10 @@ const MANAGED_NAV = [
 export default function LeftSidebar() {
   const { currentUser } = useAuth()
   if (currentUser?.role === 'admin') return null
-  const baseNav = currentUser?.tier === 'managed' ? MANAGED_NAV : STUDENT_NAV
-  const nav = canUseSocialPublisher(currentUser)
+  const baseNav = isAIOnly(currentUser)
+    ? STUDENT_NAV.filter(item => ['/dashboard/ai-tools', '/dashboard/profile'].includes(item.to))
+    : currentUser?.tier === 'managed' ? MANAGED_NAV : STUDENT_NAV
+  const nav = !isAIOnly(currentUser) && canUseSocialPublisher(currentUser)
     ? [
       ...baseNav.slice(0, currentUser?.tier === 'managed' ? 2 : 4),
       {

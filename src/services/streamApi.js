@@ -1,3 +1,4 @@
+import { supabase } from '../lib/supabase'
 import * as tus from 'tus-js-client'
 
 /**
@@ -10,11 +11,13 @@ const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-ap
 
 export const isConfigured = () => Boolean(WORKER_URL)
 
-function workerFetch(path, options = {}) {
+async function workerFetch(path, options = {}) {
+  const { data } = supabase ? await supabase.auth.getSession() : { data: null }
+  const token = data?.session?.access_token
   if (!WORKER_URL) throw new Error('Worker not configured — set VITE_WORKER_URL in .env.local')
   return fetch(`${WORKER_URL}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options.headers || {}) },
   }).then(async r => {
     const data = await r.json().catch(() => ({}))
     if (!r.ok || data.success === false) {

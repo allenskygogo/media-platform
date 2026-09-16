@@ -1,3 +1,4 @@
+import { isAIOnly } from '../../shared/memberAccess'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { canUseSocialPublisher } from '../utils/socialPublisherAccess'
@@ -17,7 +18,9 @@ export default function MobileTabBar() {
   const { currentUser } = useAuth()
 
   if (!currentUser || currentUser.role === 'admin' || currentUser.tier === 'managed') return null
-  const tabs = canUseSocialPublisher(currentUser)
+  const tabs = isAIOnly(currentUser)
+    ? STUDENT_TABS.filter(item => ['/dashboard/ai-tools', '/dashboard/profile'].includes(item.to))
+    : canUseSocialPublisher(currentUser)
     ? [
       ...STUDENT_TABS.slice(0, 3),
       { to: '/dashboard/publisher', label: '發布', Icon: IconShare2, end: false },

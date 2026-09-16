@@ -46,7 +46,11 @@ export function getLocalCourseCatalog() {
 }
 
 async function readRemoteCourseCatalog() {
-  const response = await fetch(`${WORKER_URL}/api/course-catalog`)
+  const { data: sessionData } = supabase ? await supabase.auth.getSession() : { data: null }
+  const token = sessionData?.session?.access_token
+  const response = await fetch(`${WORKER_URL}/api/course-catalog`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
   const data = await response.json().catch(() => ({}))
   if (!response.ok || data.success === false) {
     throw new Error(data.error || '讀取課程目錄失敗')
