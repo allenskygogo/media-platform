@@ -10,7 +10,7 @@ import {
   BarChart2, Bookmark, Flame, Target, Bot,
   RefreshCw, BookOpen, MessageSquare, BookMarked, Video,
   Camera, Eye, Users, MessageCircle, X, Download, Lightbulb, Folder,
-  Copy, Check,
+  Copy, Check, ExternalLink,
   Plus, Trash2, Music2, Image, PlayCircle, Link, ChevronRight, Send,
 } from 'lucide-react'
 
@@ -191,7 +191,7 @@ const AI_TOOL_ACCESS = {
   material: { lockedLabel: '頂流達人解鎖', unlockedLabel: '可使用' },
   social: { lockedLabel: '頂流達人解鎖', unlockedLabel: '可使用' },
   trending: { lockedLabel: '即將開放' },
-  planning: { lockedLabel: '即將開放' },
+  planning: { unlockedLabel: '可使用' },
   analysis: { lockedLabel: '即將開放' },
   livestream: { lockedLabel: '即將開放' },
   chat: { lockedLabel: '即將開放' },
@@ -204,7 +204,7 @@ function hasFullAITestAccess(user) {
 
 function canUseAITool(id, user) {
   const tier = deriveAITier(user)
-  if (id === 'topics') return true
+  if (id === 'topics' || id === 'planning') return true
   if (id === 'material' || id === 'social') return tier !== 'trial'
   return false
 }
@@ -245,25 +245,25 @@ function ComingSoonLabel() {
 function getAITierInfo(user) {
   if (isAIOnly(user)) return {
     name: 'AI 會員',
-    count: 3, total: NAV_TOOLS.length,
-    summary: '目前免費開放爆款選題腳本、素材靈感與社群貼文，不會自動扣款。',
+    count: 4, total: NAV_TOOLS.length,
+    summary: '目前開放爆款選題腳本、素材靈感、社群貼文與企劃定位。企劃定位會在 ChatGPT 開啟。',
     next: user.expiresAt ? `AI 使用期限：${user.expiresAt}` : '免費使用中，未設定到期日。',
   }
   const tier = deriveAITier(user)
   if (tier === 'trial') {
     return {
       name: '體驗學生',
-      count: 1,
+      count: 2,
       total: NAV_TOOLS.length,
-      summary: '目前只開放爆款選題。腳本內容僅可預覽前兩行，完整腳本需升級頂流達人。',
+      summary: '目前開放爆款選題與企劃定位。腳本內容僅可預覽前兩行，完整腳本需升級頂流達人。',
       next: '升級頂流達人可解鎖完整腳本、素材靈感與社群貼文。',
     }
   }
   const base = {
-    count: 3,
+    count: 4,
     total: NAV_TOOLS.length,
-    summary: '目前開放爆款選題腳本、素材靈感與社群貼文。',
-    next: '流量熱點、企劃定位、爆款解析、直播話術、頂流助理與對標分析即將開放。',
+    summary: '目前開放爆款選題腳本、素材靈感、社群貼文與企劃定位。',
+    next: '流量熱點、爆款解析、直播話術、頂流助理與對標分析即將開放。',
   }
   if (tier === 'advanced') {
     return {
@@ -4889,6 +4889,33 @@ function PlanningPage() {
 //  Main component
 // ══════════════════════════════════════════════════════
 
+function PlanningAgentPage() {
+  return (
+    <section>
+      <h1 className="ait-tool-title">企劃定位</h1>
+      <p className="ait-tool-desc">使用「自媒體獲客企劃師」，開始規劃你的自媒體方向。</p>
+      <div className="card" style={{ marginTop: 24 }}>
+        <div className="card-body" style={{ padding: 28 }}>
+          <Target size={32} aria-hidden="true" style={{ color: 'var(--primary)', marginBottom: 16 }} />
+          <h2 style={{ fontSize: 22, margin: '0 0 12px' }}>自媒體獲客企劃師</h2>
+          <p style={{ color: 'var(--gray-500)', lineHeight: 1.8, marginBottom: 24 }}>
+            點擊下方按鈕，在 ChatGPT 與企劃師對話。可以先準備你的行業、目標客群與目前的經營狀況。
+          </p>
+          <a
+            className="btn btn-primary"
+            href="https://chatgpt.com/g/g-6a15738df7b88191bbe3e3a84b9ac199-zi-mei-ti-huo-ke-qi-hua-shi"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            開啟自媒體獲客企劃師 <ExternalLink size={16} aria-hidden="true" />
+          </a>
+          <p className="form-hint" style={{ marginTop: 12 }}>將在新分頁開啟 ChatGPT；如出現登入畫面，請登入你的 ChatGPT 帳號。</p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function AITools() {
   const { currentUser } = useAuth()
   const [activeId, setActiveId] = useState('topics')
@@ -4931,7 +4958,7 @@ export default function AITools() {
             {activeId === 'benchmark'  && <BenchmarkPage />}
             {activeId === 'material'   && <MaterialPage />}
             {activeId === 'trending'   && <TrendingPage />}
-            {activeId === 'planning'   && <PlanningPage />}
+            {activeId === 'planning'   && <PlanningAgentPage />}
             {activeId === 'chat'       && <ChatPage onGoToTopics={() => setActiveId('topics')} />}
           </div>
         </main>
