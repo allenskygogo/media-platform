@@ -1,4 +1,5 @@
 import { isAIOnly } from '../../../shared/memberAccess'
+import PlanningAgentChat from './PlanningAgentChat'
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
@@ -10,7 +11,7 @@ import {
   BarChart2, Bookmark, Flame, Target, Bot,
   RefreshCw, BookOpen, MessageSquare, BookMarked, Video,
   Camera, Eye, Users, MessageCircle, X, Download, Lightbulb, Folder,
-  Copy, Check, ExternalLink,
+  Copy, Check,
   Plus, Trash2, Music2, Image, PlayCircle, Link, ChevronRight, Send,
 } from 'lucide-react'
 
@@ -246,7 +247,7 @@ function getAITierInfo(user) {
   if (isAIOnly(user)) return {
     name: 'AI 會員',
     count: 4, total: NAV_TOOLS.length,
-    summary: '目前開放爆款選題腳本、素材靈感、社群貼文與企劃定位。企劃定位會在 ChatGPT 開啟。',
+    summary: '目前開放爆款選題腳本、素材靈感、社群貼文與企劃定位。企劃定位可直接在站內對話。',
     next: user.expiresAt ? `AI 使用期限：${user.expiresAt}` : '免費使用中，未設定到期日。',
   }
   const tier = deriveAITier(user)
@@ -4889,33 +4890,6 @@ function PlanningPage() {
 //  Main component
 // ══════════════════════════════════════════════════════
 
-function PlanningAgentPage() {
-  return (
-    <section>
-      <h1 className="ait-tool-title">企劃定位</h1>
-      <p className="ait-tool-desc">使用「自媒體獲客企劃師」，開始規劃你的自媒體方向。</p>
-      <div className="card" style={{ marginTop: 24 }}>
-        <div className="card-body" style={{ padding: 28 }}>
-          <Target size={32} aria-hidden="true" style={{ color: 'var(--primary)', marginBottom: 16 }} />
-          <h2 style={{ fontSize: 22, margin: '0 0 12px' }}>自媒體獲客企劃師</h2>
-          <p style={{ color: 'var(--gray-500)', lineHeight: 1.8, marginBottom: 24 }}>
-            點擊下方按鈕，在 ChatGPT 與企劃師對話。可以先準備你的行業、目標客群與目前的經營狀況。
-          </p>
-          <a
-            className="btn btn-primary"
-            href="https://chatgpt.com/g/g-6a15738df7b88191bbe3e3a84b9ac199-zi-mei-ti-huo-ke-qi-hua-shi"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            開啟自媒體獲客企劃師 <ExternalLink size={16} aria-hidden="true" />
-          </a>
-          <p className="form-hint" style={{ marginTop: 12 }}>將在新分頁開啟 ChatGPT；如出現登入畫面，請登入你的 ChatGPT 帳號。</p>
-        </div>
-      </div>
-    </section>
-  )
-}
-
 export default function AITools() {
   const { currentUser } = useAuth()
   const [activeId, setActiveId] = useState('topics')
@@ -4958,7 +4932,7 @@ export default function AITools() {
             {activeId === 'benchmark'  && <BenchmarkPage />}
             {activeId === 'material'   && <MaterialPage />}
             {activeId === 'trending'   && <TrendingPage />}
-            {activeId === 'planning'   && <PlanningAgentPage />}
+            {activeId === 'planning'   && <PlanningAgentChat key={currentUser.id} />}
             {activeId === 'chat'       && <ChatPage onGoToTopics={() => setActiveId('topics')} />}
           </div>
         </main>

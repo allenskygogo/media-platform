@@ -891,6 +891,10 @@ export default {
         return await handleCalendarAvailability(url, env)
       }
 
+      if (path === '/api/ai/planning/conversation' && request.method === 'POST') {
+        return await handlePlanningConversation(request, env)
+      }
+
       // POST /api/ai → server-side AI generation
       if (path === '/api/ai' && request.method === 'POST') {
         return await handleAI(request, env)
@@ -1906,6 +1910,57 @@ async function handleToken(request, videoUid, env) {
   return json({ success: true, token })
 }
 
+async function handlePlanningConversation(request, env) {
+  let user
+  try { user = await requireUser(request, env) }
+  catch (_) { return err('請重新登入後再使用企劃定位。', 401) }
+  const profile = await getProfileById(env, user.id)
+  if (profile.status !== 'active') return err('帳號未啟用。', 403)
+  if (profile.role !== 'admin') {
+    const membership = await getLatestActiveMembership(env, user.id)
+    if (!membership || membership.status !== 'active' ||
+        !Object.hasOwn(PLAN_TO_LEGACY_TIER, membership.plan_id) ||
+        (membership.expires_at && !(new Date(membership.expires_at).getTime() > Date.now()))) {
+      return err('AI 使用權限已到期或尚未開通，請聯繫客服。', 403)
+    }
+  }
+
+  const body = await request.json().catch(() => ({}))
+  const messages = body.messages
+  if (!Array.isArray(messages) || !messages.length || messages.length > 61 ||
+      messages.some((message, index) => !message || message.role !== (index % 2 === 0 ? 'user' : 'assistant') ||
+        typeof message.content !== 'string' || !message.content.trim() || message.content.length > 40000) ||
+      messages[messages.length - 1].role !== 'user') {
+    return err('對話格式不正確或對話過長，請重新開始。', 400)
+  }
+  if (messages.reduce((sum, message) => sum + message.content.length, 0) > 100000 ||
+      messages[messages.length - 1].content.length > 12000) {
+    return err('對話內容過長，請縮短訊息或重新開始。', 400)
+  }
+  // No generic fallback: this feature must use the owner's configured agent.
+  const agent = await getAIAgent('planning', env)
+  if (!agent?.system_prompt?.trim()) return err('企劃師尚未完成設定，請稍後再試。', 503)
+  if (!env.OPENAI_API_KEY) return err('企劃師服務尚未就緒，請稍後再試。', 503)
+
+  const requestBody = {
+    model: env.OPENAI_MODEL || agent.model || 'gpt-4.1-mini',
+    input: [{ role: 'system', content: agent.system_prompt }, ...messages.map(({ role, content }) => ({ role, content }))],
+    max_output_tokens: 12000,
+    store: false,
+  }
+  if (agent.vector_store_id) requestBody.tools = [{ type: 'file_search', vector_store_ids: [agent.vector_store_id], max_num_results: 10 }]
+  const response = await fetch(`${getOpenAIBaseURL(env)}/responses`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) return err('企劃師暫時無法回覆，請稍後重試。', 502)
+  const reply = extractOpenAIText(data)
+  if (!reply?.trim() || data.status === 'incomplete') return err('回覆未完成，請縮小問題範圍後重試。', 502)
+  return json({ success: true, reply })
+}
+
 async function handleAI(request, env) {
   if (!env.OPENAI_API_KEY) {
     return err('OpenAI API key is not configured', 503)
@@ -1917,6 +1972,7 @@ async function handleAI(request, env) {
   const userPlan = String(body.userPlan || 'free')
 
   if (!feature) return err('Missing AI feature', 400)
+  if (feature === 'planning') return err('請透過已登入的企劃定位對話使用此功能。', 400)
 
   const agent = await getAIAgent(feature, env)
   if (!agent) return err('Unsupported AI feature', 400)
