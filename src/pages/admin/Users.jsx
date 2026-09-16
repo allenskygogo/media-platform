@@ -8,7 +8,7 @@ const TIER_MARK = { ai_free: '', basic: '體驗', standard: '達人', advanced: 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const PROVISION_TIERS = [
-  { tier: 'ai_free', planId: 'ai_free', label: 'AI 使用者（免費，僅 AI 工具）' },
+  { tier: 'ai_free', planId: 'ai_free', label: 'AI 會員（僅 AI 工具）' },
   { tier: 'basic', planId: 'trial', label: '體驗課' },
   { tier: 'standard', planId: 'creator', label: '頂流達人' },
   { tier: 'advanced', planId: 'master', label: '頂流私塾' },
@@ -490,7 +490,7 @@ export default function UsersAdmin() {
       <div className="page-actions" style={{ marginBottom: 24 }}>
         <div className="page-heading" style={{ margin: 0 }}><h1>學員管理</h1><p>{loading ? '讀取正式會員中...' : `共 ${users.length} 位學員（不含代操會員）`}</p></div>
         <button className="btn btn-primary" onClick={() => { setProvisionError(''); setShowProvision(true) }}>
-          開通學員／AI 使用者
+          開通學員／AI 會員
         </button>
       </div>
       {msg && <div className="auth-alert success" style={{ marginBottom: 16 }}>{msg}</div>}
@@ -592,13 +592,13 @@ export default function UsersAdmin() {
         <div className="modal-overlay" onClick={() => setShowProvision(false)}>
           <form className="modal" onSubmit={provisionStudent} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">開通學員／AI 使用者</h2>
+              <h2 className="modal-title">開通學員／AI 會員</h2>
               <button type="button" className="modal-close" onClick={() => setShowProvision(false)}>×</button>
             </div>
             <div className="modal-body">
               {provisionError && <div role="alert" className="auth-alert error" style={{ marginBottom: 16 }}>{provisionError}</div>}
               <p style={{ marginTop: 0, color: 'var(--gray-500)', fontSize: 13 }}>
-                可開通已購課程學員或免費 AI 使用者，建立後可直接用 Email 與密碼登入。AI 目前免費，不會自動扣款。
+                可開通已購課程學員或AI 會員，建立後可直接用 Email 與密碼登入。AI 目前免費，不會自動扣款。
               </p>
               <div className="form-group">
                 <label className="form-label">姓名</label>

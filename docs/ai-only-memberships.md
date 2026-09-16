@@ -1,6 +1,6 @@
 # Free AI access
 
-The only AI-only account type is now `ai_free` (AI 使用者／免費). The NT$99 AI trial and AI subscription identities are retired. No AI pricing, recurring billing, automatic paid conversion, or user-count billing trigger is enabled. Future pricing and the activation threshold require a separate decision.
+The only AI-only account type is now `ai_free` (AI 會員). The NT$99 AI trial and AI subscription identities are retired. No AI pricing, recurring billing, automatic paid conversion, or user-count billing trigger is enabled. Future pricing and the activation threshold require a separate decision.
 
 Admins can provision or edit free AI users. Expiry is optional; blank means no expiry. Migrated accounts retain their existing expiry and status. Public registration is not added in this change.
 
