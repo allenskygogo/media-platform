@@ -9,8 +9,9 @@ const AuthContext = createContext(null)
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const PLAN_TO_TIER = {
-  ai_trial: 'ai_trial',
-  ai_subscription: 'ai_subscription',
+  ai_free: 'ai_free',
+  ai_trial: 'ai_free',
+  ai_subscription: 'ai_free',
   trial: 'basic',
   creator: 'standard',
   master: 'advanced',

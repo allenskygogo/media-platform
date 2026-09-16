@@ -3,13 +3,12 @@ import { useEffect, useState } from 'react'
 import { getUsers, saveUsers, TIER_META } from '../../data/mockData'
 import { hasSupabase, supabase, allowLocalFallback } from '../../lib/supabase'
 
-const TIERS = ['ai_trial', 'ai_subscription', 'basic', 'standard', 'advanced']
-const TIER_MARK = { ai_trial: '', ai_subscription: '', basic: '體驗', standard: '達人', advanced: '進階' }
+const TIERS = ['ai_free', 'basic', 'standard', 'advanced']
+const TIER_MARK = { ai_free: '', basic: '體驗', standard: '達人', advanced: '進階' }
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const PROVISION_TIERS = [
-  { tier: 'ai_trial', planId: 'ai_trial', label: '引流課 AI（無線上回放）' },
-  { tier: 'ai_subscription', planId: 'ai_subscription', label: 'AI 訂閱（僅 AI 工具）' },
+  { tier: 'ai_free', planId: 'ai_free', label: 'AI 使用者（免費，僅 AI 工具）' },
   { tier: 'basic', planId: 'trial', label: '體驗課' },
   { tier: 'standard', planId: 'creator', label: '頂流達人' },
   { tier: 'advanced', planId: 'master', label: '頂流私塾' },
@@ -184,10 +183,6 @@ export default function UsersAdmin() {
     const values = { ...editForm, expiresAt: String(new FormData(event.currentTarget).get('expiresAt') || '') }
     if (updatingId === editUser?.id) return
     setEditError('')
-    if (isAIOnly(values) && !values.expiresAt) {
-      setEditError('請先填寫 AI 使用到期日，再按儲存變更。')
-      return
-    }
     if (hasSupabase && supabase && editUser?.source === 'supabase') {
       setUpdatingId(editUser.id)
       try {
@@ -460,11 +455,6 @@ export default function UsersAdmin() {
       return
     }
 
-    if (isAIOnly(provisionForm) && !provisionForm.expiresAt) {
-      setProvisionError('請指定 AI 使用到期日。試用天數尚未固定，不會自動套用課程效期。')
-      return
-    }
-
     const selectedPlan = PROVISION_TIERS.find(item => item.tier === provisionForm.tier)
     setProvisioning(true)
     try {
@@ -500,7 +490,7 @@ export default function UsersAdmin() {
       <div className="page-actions" style={{ marginBottom: 24 }}>
         <div className="page-heading" style={{ margin: 0 }}><h1>學員管理</h1><p>{loading ? '讀取正式會員中...' : `共 ${users.length} 位學員（不含代操會員）`}</p></div>
         <button className="btn btn-primary" onClick={() => { setProvisionError(''); setShowProvision(true) }}>
-          協助開通已購學員
+          開通學員／AI 使用者
         </button>
       </div>
       {msg && <div className="auth-alert success" style={{ marginBottom: 16 }}>{msg}</div>}
@@ -558,7 +548,7 @@ export default function UsersAdmin() {
                     </select>
                   </td>
                   <td className={user.expiresAt && new Date(user.expiresAt) < new Date() ? 'date-cell expired' : 'date-cell'}>
-                    {formatDateOnly(user.expiresAt)}
+                    {isAIOnly(user) && !user.expiresAt ? '免費使用中' : formatDateOnly(user.expiresAt)}
                   </td>
                   <td className="contract-cell">
                     {user.latestContract ? (
@@ -602,13 +592,13 @@ export default function UsersAdmin() {
         <div className="modal-overlay" onClick={() => setShowProvision(false)}>
           <form className="modal" onSubmit={provisionStudent} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2 className="modal-title">協助開通已購學員</h2>
+              <h2 className="modal-title">開通學員／AI 使用者</h2>
               <button type="button" className="modal-close" onClick={() => setShowProvision(false)}>×</button>
             </div>
             <div className="modal-body">
               {provisionError && <div role="alert" className="auth-alert error" style={{ marginBottom: 16 }}>{provisionError}</div>}
               <p style={{ marginTop: 0, color: 'var(--gray-500)', fontSize: 13 }}>
-                用於已經線下購買課程或 AI 方案的學員。建立後他們不需要再次付款，可直接用 Email 與密碼登入。
+                可開通已購課程學員或免費 AI 使用者，建立後可直接用 Email 與密碼登入。AI 目前免費，不會自動扣款。
               </p>
               <div className="form-group">
                 <label className="form-label">姓名</label>
@@ -629,7 +619,7 @@ export default function UsersAdmin() {
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">{isAIOnly(provisionForm) ? 'AI 使用到期日（必填）' : '效期（選填，留空代表第一次登入才起算）'}</label>
+                <label className="form-label">{isAIOnly(provisionForm) ? 'AI 使用到期日（選填，留空不設期限）' : '效期（選填，留空代表第一次登入才起算）'}</label>
                 <input className="form-input" type="date" value={provisionForm.expiresAt} onChange={e => setProvisionForm(f => ({ ...f, expiresAt: e.target.value }))} />
               </div>
             </div>
@@ -696,7 +686,7 @@ export default function UsersAdmin() {
                 <select className="form-select" value={editForm.tier} onChange={e => setEditForm(f => ({ ...f, tier: e.target.value }))}>
                   {TIERS.map(t => <option key={t} value={t}>{TIER_MARK[t]} {TIER_META[t]?.label}</option>)}
                 </select></div>
-              <div className="form-group"><label className="form-label">{isAIOnly(editForm) ? 'AI 使用到期日（必填）' : '效期（留空自動設定）'}</label>
+              <div className="form-group"><label className="form-label">{isAIOnly(editForm) ? 'AI 使用到期日（選填，留空不設期限）' : '效期（留空自動設定）'}</label>
                 <input name="expiresAt" type="date" className="form-input" value={editForm.expiresAt} onChange={e => setEditForm(f => ({ ...f, expiresAt: e.target.value }))} /></div>
               <div className="form-group"><label className="form-label">帳號狀態</label>
                 <select className="form-select" value={editForm.status} onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}>

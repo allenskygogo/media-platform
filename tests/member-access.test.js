@@ -4,7 +4,7 @@ import worker from '../worker/index.js'
 import { isAIOnly, memberHome, canAccessStudentPath, hasActiveCourseMembership } from '../shared/memberAccess.js'
 
 test('AI products land in tools and cannot navigate to courses or booking', () => {
-  for (const tier of ['ai_trial', 'ai_subscription']) {
+  for (const tier of ['ai_free', 'ai_trial', 'ai_subscription']) {
     const user = { role: 'student', tier }
     assert.equal(isAIOnly(user), true)
     assert.equal(memberHome(user), '/dashboard/ai-tools')
@@ -32,7 +32,7 @@ test('only active, unexpired course plans grant course access', () => {
     assert.equal(hasActiveCourseMembership({ plan_id, status: 'inactive' }), false)
     assert.equal(hasActiveCourseMembership({ plan_id, status: 'active', expires_at: '2000-01-01' }), false)
   }
-  for (const plan_id of ['ai_trial', 'ai_subscription', 'unknown']) {
+  for (const plan_id of ['ai_free', 'ai_trial', 'ai_subscription', 'unknown']) {
     assert.equal(hasActiveCourseMembership({ plan_id, status: 'active' }), false)
   }
   assert.equal(hasActiveCourseMembership(null), false)
@@ -58,7 +58,7 @@ test('Worker blocks AI-only course calls before accessing course or video data',
   const request = (path, method = 'GET') => worker.fetch(new Request(`https://worker.example.test${path}`, {
     method, headers: { Authorization: 'Bearer test-session' },
   }), env)
-  for (plan of ['ai_trial', 'ai_subscription']) {
+  for (plan of ['ai_free', 'ai_trial', 'ai_subscription']) {
     for (const [path, method] of [
       ['/api/course-catalog', 'GET'], ['/api/course-progress?courseId=1', 'GET'],
       ['/api/course-progress', 'POST'], ['/api/token/video-id', 'POST'],
@@ -81,7 +81,7 @@ test('Worker blocks AI-only course calls before accessing course or video data',
   assert.equal((await request('/api/course-catalog')).status, 200)
 })
 
-test('admin can assign AI-only plans with an explicit expiry; invalid requests do not mutate profiles', async (t) => {
+test('admin can assign free AI access with optional expiry; retired plans cannot be assigned', async (t) => {
   const env = { SUPABASE_URL: 'https://auth.example.test', SUPABASE_ANON_KEY: 'test-anon', SUPABASE_SERVICE_ROLE_KEY: 'test-service' }
   const writes = []
   let membership = null
@@ -106,11 +106,31 @@ test('admin can assign AI-only plans with an explicit expiry; invalid requests d
   assert.equal((await update({ planId: 'ai_trial', legacyTier: 'standard', expiresAt: '2027-01-01' })).status, 400)
   assert.equal(writes.length, 0)
   for (const planId of ['ai_trial', 'ai_subscription']) {
+    assert.equal((await update({ planId, legacyTier: planId, expiresAt: '2027-01-01' })).status, 400)
+  }
+  assert.equal(writes.length, 0)
+  for (const planId of ['ai_free']) {
     const response = await update({ planId, legacyTier: planId, expiresAt: '2027-01-01' })
     assert.equal(response.status, 200)
     assert.equal(membership.plan_id, planId)
     assert.equal(membership.legacy_tier, planId)
     assert.ok(membership.expires_at)
     assert.equal((await response.json()).student.tier, planId)
+  }
+  assert.equal((await update({ planId: 'ai_free', legacyTier: 'ai_free', expiresAt: null })).status, 200)
+  assert.equal(membership.expires_at, null)
+})
+
+
+test('free and retired AI plans cannot create paid checkout orders', async (t) => {
+  const env = { SUPABASE_URL: 'https://auth.example.test', SUPABASE_SERVICE_ROLE_KEY: 'test-service' }
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('Checkout must reject AI before upstream writes') })
+  for (const planId of ['ai_free', 'ai_trial', 'ai_subscription']) {
+    const response = await worker.fetch(new Request('https://worker.example.test/api/checkout/orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Test', email: 'test@example.test', phone: '0912345678', password: 'test-password', planId }),
+    }), env)
+    assert.equal(response.status, 400)
+    assert.equal((await response.json()).error, 'Invalid checkout plan')
   }
 })

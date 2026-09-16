@@ -1,5 +1,5 @@
 // Separate AI-only products from the existing course memberships.
-export const AI_ONLY_PLANS = ['ai_trial', 'ai_subscription']
+export const AI_ONLY_PLANS = ['ai_free', 'ai_trial', 'ai_subscription']
 
 export function isAIOnly(user) {
   return Boolean(user && user.role !== 'admin' &&

@@ -42,8 +42,7 @@ const BOOKING_TIME_SLOTS = ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'
 const DEFAULT_BOOKING_DURATION_MINUTES = 180
 const TAIPEI_OFFSET = '+08:00'
 const PLAN_TO_LEGACY_TIER = {
-  ai_trial: 'ai_trial',
-  ai_subscription: 'ai_subscription',
+  ai_free: 'ai_free',
   trial: 'basic',
   creator: 'standard',
   master: 'advanced',
@@ -61,8 +60,7 @@ const PLAN_AMOUNT = {
   master: 129800,
 }
 const PLAN_LABELS = {
-  ai_trial: '引流課 AI',
-  ai_subscription: 'AI 訂閱',
+  ai_free: 'AI 使用者（免費）',
   trial: '自媒體獲客-定位體驗課',
   creator: '頂流達人',
   master: '頂流私塾',
@@ -2395,7 +2393,6 @@ async function handleProvisionStudent(request, env) {
   if (password.length < 6) return err('Password must be at least 6 characters', 400)
   if (!Object.hasOwn(PLAN_TO_LEGACY_TIER, planId)) return err('Invalid plan', 400)
   if (legacyTier !== planToLegacyTier(planId)) return err('Invalid legacy tier', 400)
-  if (AI_ONLY_PLANS.includes(planId) && !expiresAt) return err('請指定 AI 使用到期日', 400)
 
   const existingProfile = await getProfileByEmail(env, email)
   let authUser = existingProfile?.id ? { id: existingProfile.id, email } : await getAuthUserByEmail(env, email)
@@ -3174,7 +3171,6 @@ async function handleUpdateStudent(request, userId, env) {
   if (planId) {
     if (!Object.hasOwn(PLAN_TO_LEGACY_TIER, planId)) return err('Invalid plan', 400)
     if (legacyTier !== planToLegacyTier(planId)) return err('Invalid legacy tier', 400)
-    if (AI_ONLY_PLANS.includes(planId) && !expiresAt) return err('請指定 AI 使用到期日', 400)
   }
 
   if (name || status) {
@@ -3418,6 +3414,7 @@ async function upsertKnowledgeFile(env, payload) {
 }
 
 function planToLegacyTier(planId) {
+  if (AI_ONLY_PLANS.includes(planId)) return 'ai_free'
   return PLAN_TO_LEGACY_TIER[planId] || 'standard'
 }
 

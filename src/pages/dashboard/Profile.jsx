@@ -1642,7 +1642,7 @@ export default function Profile() {
                     { label: '姓名',     value: currentUser.name },
                     { label: '電子郵件', value: currentUser.email },
                     { label: '加入日期', value: currentUser.createdAt },
-                    { label: '方案效期', value: currentUser.expiresAt ? `${currentUser.expiresAt}${daysLeft !== null ? `（剩 ${daysLeft} 天）` : ''}` : '依合約' },
+                    { label: '方案效期', value: currentUser.expiresAt ? `${currentUser.expiresAt}${daysLeft !== null ? `（剩 ${daysLeft} 天）` : ''}` : (aiOnly ? '免費使用中，未設定到期日' : '依合約') },
                     { label: '帳號狀態', value: currentUser.status === 'active' ? '正常' : '停用' },
                   ].map(({ label, value }) => (
                     <div key={label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--gray-100)' }}>

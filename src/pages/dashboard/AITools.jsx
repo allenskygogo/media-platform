@@ -244,10 +244,10 @@ function ComingSoonLabel() {
 
 function getAITierInfo(user) {
   if (isAIOnly(user)) return {
-    name: user.tier === 'ai_trial' ? '引流課 AI' : 'AI 訂閱',
+    name: 'AI 使用者（免費）',
     count: 3, total: NAV_TOOLS.length,
-    summary: '可使用爆款選題腳本、素材靈感與社群貼文。',
-    next: user.expiresAt ? `AI 使用期限：${user.expiresAt}` : '使用效期請聯繫客服確認。',
+    summary: '目前免費開放爆款選題腳本、素材靈感與社群貼文，不會自動扣款。',
+    next: user.expiresAt ? `AI 使用期限：${user.expiresAt}` : '免費使用中，未設定到期日。',
   }
   const tier = deriveAITier(user)
   if (tier === 'trial') {
