@@ -134,3 +134,48 @@ test('free and retired AI plans cannot create paid checkout orders', async (t) =
     assert.equal((await response.json()).error, 'Invalid checkout plan')
   }
 })
+
+test('entry login destinations preserve intent without bypassing role or AI-only boundaries', async () => {
+  const { loginDestination } = await import('../shared/memberAccess.js')
+  const student = { role: 'student', tier: 'standard' }
+  const ai = { role: 'student', tier: 'ai_free' }
+  assert.equal(loginDestination(student, '/dashboard/ai-tools'), '/dashboard/ai-tools')
+  assert.equal(loginDestination(student, '/dashboard/courses'), '/dashboard/courses')
+  assert.equal(loginDestination(ai, '/dashboard/courses'), '/dashboard/ai-tools')
+  for (const user of [student, ai]) {
+    assert.equal(loginDestination(user, '/dashboard/profile?upgrade=creator'), '/dashboard/profile?upgrade=creator')
+    for (const next of ['https://example.com', '//example.com', '/admin', '/dashboard/profile?upgrade=unknown', '/dashboard/courses/private']) {
+      assert.equal(loginDestination(user, next), memberHome(user))
+    }
+  }
+  assert.equal(loginDestination({ role: 'admin' }, '/dashboard/ai-tools'), '/admin')
+  assert.equal(loginDestination({ tier: 'managed' }, '/dashboard/ai-tools'), '/managed')
+})
+
+test('AI member course purchase uses the same account and waits for payment before access changes', async (t) => {
+  const env = { SUPABASE_URL: 'https://auth.example.test', SUPABASE_ANON_KEY: 'test-anon', SUPABASE_SERVICE_ROLE_KEY: 'test-service' }
+  const orders = []
+  t.mock.method(globalThis, 'fetch', async (input, options = {}) => {
+    const url = new URL(input)
+    if (url.pathname === '/rest/v1/orders' && options.method === 'POST') {
+      const order = JSON.parse(options.body)
+      orders.push(order)
+      return Response.json([{ id: 'test-order', ...order }])
+    }
+    assert.ok(!options.method || options.method === 'GET', 'no account or membership writes before payment')
+    if (url.pathname === '/auth/v1/user') return Response.json({ id: 'existing-ai-user', email: 'ai@example.test' })
+    if (url.pathname === '/rest/v1/profiles') return Response.json([{ id: 'existing-ai-user', role: 'student', status: 'active', display_name: 'Test', email: 'ai@example.test' }])
+    if (url.pathname === '/rest/v1/memberships') return Response.json([{ user_id: 'existing-ai-user', plan_id: 'ai_free', status: 'active' }])
+    throw new Error(`Unexpected request: ${url.pathname}`)
+  })
+  const response = await worker.fetch(new Request('https://worker.example.test/api/checkout/upgrade', {
+    method: 'POST', headers: { Authorization: 'Bearer test-session', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ planId: 'creator', phone: '0912345678' }),
+  }), env)
+  assert.equal(response.status, 200)
+  assert.equal(orders.length, 1)
+  assert.equal(orders[0].user_id, 'existing-ai-user')
+  assert.equal(orders[0].customer_email, 'ai@example.test')
+  assert.equal(orders[0].plan_id, 'creator')
+  assert.equal(orders[0].status, 'pending')
+})

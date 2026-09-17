@@ -1,10 +1,13 @@
-import { memberHome } from '../../shared/memberAccess'
+import { loginDestination } from '../../shared/memberAccess'
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, currentUser, loading: authLoading } = useAuth()
+  const [searchParams] = useSearchParams()
+  const next = searchParams.get('next')
+  const aiIntent = next === '/dashboard/ai-tools'
   const navigate  = useNavigate()
   const [form, setForm]     = useState({ email: '', password: '' })
   const [error, setError]   = useState('')
@@ -16,7 +19,7 @@ export default function Login() {
     setLoading(true)
     try {
       const user = await login(form.email.trim(), form.password)
-      navigate(memberHome(user), { replace: true })
+      navigate(loginDestination(user, next), { replace: true })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -24,11 +27,13 @@ export default function Login() {
     }
   }
 
+  if (!authLoading && currentUser) return <Navigate to={loginDestination(currentUser, next)} replace />
+
   return (
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-logo">TOP LEVEL TRAFFIC</div>
-        <p className="auth-subtitle">歡迎回來！請登入繼續學習</p>
+        <p className="auth-subtitle">{aiIntent ? '登入後，直接使用 AI 工具' : next === '/dashboard/courses' ? '登入後，前往我的課程' : '會員登入｜AI 與課程共用同一個帳號'}</p>
         <p className="auth-divider" style={{ marginBottom: 18 }}>
           <Link to="/" className="auth-link">回到首頁</Link>
         </p>
@@ -52,8 +57,8 @@ export default function Login() {
         </form>
 
         <p className="auth-divider" style={{ marginTop: 20 }}>
-          還沒有帳號？<Link to="/register" className="auth-link">立即註冊</Link>
-          &nbsp;·&nbsp;<span className="auth-link" aria-disabled="true">方案即將開放</span>
+          還沒有帳號？<Link to="/register?intent=ai" className="auth-link">申請 AI 使用</Link>
+          &nbsp;·&nbsp;<Link to="/courses" className="auth-link">查看線上課程</Link>
         </p>
 
       </div>

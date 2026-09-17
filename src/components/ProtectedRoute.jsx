@@ -11,7 +11,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, require
   const location = useLocation()
 
   if (loading) return <Loading />
-  if (!currentUser) return <Navigate to="/login" replace />
+  if (!currentUser) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />
 
   const isAdmin   = currentUser.role === 'admin'
   const isManaged = currentUser.tier === 'managed'

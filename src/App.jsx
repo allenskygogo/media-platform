@@ -8,6 +8,7 @@ import MobileTabBar from './components/MobileTabBar'
 import LeftSidebar from './components/LeftSidebar'
 
 import SalesPage       from './pages/SalesPage'
+import { AIEntryPage, CourseEntryPage } from './pages/EntryPages'
 import CheckoutResult  from './pages/CheckoutResult'
 import Login           from './pages/Login'
 import Register        from './pages/Register'
@@ -102,6 +103,8 @@ export default function App() {
         <Routes>
           {/* Public landing page — visible to all visitors, no auth required */}
           <Route path="/"             element={<SalesPage />} />
+          <Route path="/ai" element={<AIEntryPage />} />
+          <Route path="/courses" element={<CourseEntryPage />} />
           <Route path="/checkout/result" element={<CheckoutResult />} />
           <Route path="/login"        element={<Login />} />
           <Route path="/register"     element={<Register />} />

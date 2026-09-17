@@ -63,7 +63,7 @@ export default function CoursesPage() {
   return (
     <div className="page-content">
       <div className="page-heading">
-        <h1>所有課程</h1>
+        <h1>我的課程</h1>
         <p>共 {allCourses.length} 門課程，你目前可觀看 {allCourses.filter(c => accessible(c)).length} 門</p>
       </div>
       {loadError && <div className="auth-alert error" style={{ marginBottom: 16 }}>{loadError}</div>}

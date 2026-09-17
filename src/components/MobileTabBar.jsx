@@ -6,7 +6,7 @@ import { IconHome, IconBook, IconZap, IconCalendar, IconShare2, IconUser } from 
 
 const STUDENT_TABS = [
   { to: '/dashboard',          label: '首頁',  Icon: IconHome,     end: true  },
-  { to: '/dashboard/courses',  label: '課程',  Icon: IconBook,     end: false },
+  { to: '/dashboard/courses',  label: '我的課程',  Icon: IconBook,     end: false },
   { to: '/dashboard/ai-tools', label: 'AI工具',Icon: IconZap,      end: false },
   { to: '/dashboard/booking',  label: '預約',  Icon: IconCalendar, end: false },
   { to: '/dashboard/profile',  label: '我的',  Icon: IconUser,     end: false },

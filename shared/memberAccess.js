@@ -23,3 +23,12 @@ export function hasActiveCourseMembership(membership, now = Date.now()) {
   if (!['trial', 'creator', 'master', 'managed'].includes(membership.plan_id)) return false
   return !membership.expires_at || new Date(membership.expires_at).getTime() > now
 }
+
+// Login destinations are explicit internal routes; never follow arbitrary URLs.
+export function loginDestination(user, next) {
+  if (user?.role === 'admin' || user?.tier === 'managed') return memberHome(user)
+  if (next === '/dashboard/ai-tools') return next
+  if (next === '/dashboard/courses' && !isAIOnly(user)) return next
+  if (['/dashboard/profile?upgrade=creator', '/dashboard/profile?upgrade=master'].includes(next)) return next
+  return memberHome(user)
+}

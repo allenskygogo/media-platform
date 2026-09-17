@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import BrandLogo from '../components/BrandLogo'
+import { memberHome } from '../../shared/memberAccess'
 import { initPixel, fbq } from '../utils/fbPixel'
 import { callAI } from '../services/aiService'
 
-const REGISTER_NOTICE = '目前僅開放已購買體驗課的學員註冊，請先購買體驗課後再完成會員註冊。'
 const TRIAL_PRICE = 980
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
@@ -99,12 +99,10 @@ const learningStages = [
 ]
 
 const FEATURES = [
-  ['爆款選題生成', '自媒體獲客-定位體驗課即可使用'],
-  ['腳本全文生成', '頂流達人解鎖'],
-  ['拍攝形式推薦', '頂流達人解鎖'],
-  ['三個月策劃提案', '頂流私塾解鎖'],
-  ['行銷文案生成', '頂流私塾解鎖'],
-  ['直播話術生成', '頂流私塾解鎖'],
+  ['企劃定位', '整理品牌定位與 90 天內容策略'],
+  ['爆款腳本', '從選題到短影音腳本練習'],
+  ['素材靈感', '找到創作素材與內容切角'],
+  ['社群貼文', '把想法轉成社群內容'],
 ]
 
 const resultCases = [
@@ -178,97 +176,6 @@ function normalizeSalesTopics(result, industryInput) {
     }
     return item
   })
-}
-
-function SalesLoginModal({ onClose }) {
-  const { login } = useAuth()
-  const navigate = useNavigate()
-  const [form, setForm] = useState({ email: '', password: '' })
-  const [error, setError] = useState('')
-  const [registerNotice, setRegisterNotice] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-    setRegisterNotice('')
-    setLoading(true)
-    try {
-      const user = await login(form.email.trim(), form.password)
-      if (user.role === 'admin') navigate('/admin', { replace: true })
-      else if (user.tier === 'managed') navigate('/managed', { replace: true })
-      else navigate('/dashboard', { replace: true })
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal sp-login-modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">學員登入</h2>
-          <button className="modal-close" onClick={onClose} aria-label="關閉登入視窗">✕</button>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <div className="modal-body">
-            <p style={{ color: 'var(--gray-500)', fontSize: 13, lineHeight: 1.7, margin: 0 }}>
-              已購買體驗課或正式課程的學員，請使用購買時建立的 Email 登入。
-            </p>
-
-            {error && <div className="auth-alert error">{error}</div>}
-            {registerNotice && <div className="auth-alert danger">{registerNotice}</div>}
-
-            <div className="auth-form">
-              <div className="form-group">
-                <label className="form-label">電子郵件</label>
-                <input
-                  type="email"
-                  className="form-input"
-                  placeholder="輸入電子郵件"
-                  value={form.email}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  required
-                  autoFocus
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">密碼</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  placeholder="輸入密碼"
-                  value={form.password}
-                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                  required
-                />
-              </div>
-              <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={loading}>
-                {loading ? '登入中…' : '登入'}
-              </button>
-            </div>
-
-            <p className="auth-divider">
-              還沒有帳號？
-              <button
-                type="button"
-                className="auth-link auth-link-button"
-                onClick={() => setRegisterNotice(REGISTER_NOTICE)}
-              >
-                立即註冊
-              </button>
-            </p>
-
-          </div>
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>回到首頁</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
 }
 
 export function SalesCheckoutModal({ onClose }) {
@@ -481,19 +388,14 @@ export default function SalesPage() {
   const { currentUser } = useAuth()
   const navigate = useNavigate()
   const scrollRef = useRef(false)
-  const [showLogin, setShowLogin] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
   const [industry, setIndustry] = useState('健身')
   const [topics, setTopics] = useState(() => makeTopics('健身'))
   const [generatingTopics, setGeneratingTopics] = useState(false)
 
-  const memberHome = currentUser?.role === 'admin'
-    ? '/admin'
-    : currentUser?.tier === 'managed'
-      ? '/managed'
-      : '/dashboard'
 
   useEffect(() => {
+    window.scrollTo(0, 0)
     initPixel()
     const onScroll = () => {
       if (scrollRef.current) return
@@ -509,8 +411,11 @@ export default function SalesPage() {
   }, [])
 
   const handleLogin = () => {
-    if (currentUser) navigate(memberHome)
-    else setShowLogin(true)
+    navigate(currentUser ? memberHome(currentUser) : '/login')
+  }
+
+  const handleAIEntry = () => {
+    navigate(currentUser && currentUser.role !== 'admin' && currentUser.tier !== 'managed' ? '/dashboard/ai-tools' : '/ai')
   }
 
   const handleGenerate = async () => {
@@ -527,6 +432,7 @@ export default function SalesPage() {
   }
 
   const handlePurchaseClick = () => {
+    if (currentUser) { navigate('/courses'); return }
     fbq.initiateCheckout()
     setShowCheckout(true)
   }
@@ -543,8 +449,8 @@ export default function SalesPage() {
         </button>
 
         <nav className="sp2-nav-links" aria-label="首頁導覽">
-          <button onClick={() => scrollToSection('#courses')}>課程體系</button>
-          <button onClick={() => scrollToSection('#ai-tools')}>AI 工具</button>
+          <button onClick={handleAIEntry}>AI 工具</button>
+          <button onClick={() => navigate('/courses')}>線上課程</button>
           <button onClick={() => scrollToSection('#results')}>學員成果</button>
           <button onClick={() => scrollToSection('#about')}>關於我們</button>
         </nav>
@@ -553,8 +459,8 @@ export default function SalesPage() {
           <button className="sp2-btn sp2-btn-ghost" onClick={handleLogin}>
             {currentUser ? (currentUser.role === 'admin' ? '回控制台' : '會員中心') : '登入'}
           </button>
-          <button className="sp2-btn sp2-btn-primary" onClick={() => scrollToSection('#ai-tools')}>
-            免費試用 AI
+          <button className="sp2-btn sp2-btn-primary" onClick={handleAIEntry}>
+            使用 AI 工具
           </button>
         </div>
       </header>
@@ -582,12 +488,14 @@ export default function SalesPage() {
                   不只是工具，是真正幫你從自媒體變現的完整體系。
                 </p>
                 <div className="sp2-hero-actions">
-                  <button className="sp2-btn sp2-btn-primary sp2-btn-lg" onClick={() => scrollToSection('#ai-tools')}>
-                    ⚡ 免費體驗 AI 選題
-                  </button>
-                  <button className="sp2-btn sp2-btn-outline sp2-btn-lg" onClick={() => scrollToSection('#courses')}>
-                    了解完整課程 →
-                  </button>
+                  <div className="sp2-entry-choice">
+                    <button className="sp2-btn sp2-btn-primary sp2-btn-lg" onClick={handleAIEntry}>使用 AI 工具 →</button>
+                    <small>做企劃、寫腳本、找靈感、產生社群貼文</small>
+                  </div>
+                  <div className="sp2-entry-choice">
+                    <Link className="sp2-btn sp2-btn-outline sp2-btn-lg" to="/courses">查看線上課程 →</Link>
+                    <small>系統學習自媒體經營與獲客方法</small>
+                  </div>
                 </div>
 
                 <div className="sp2-platform-bar" aria-label="支援平台">
@@ -820,12 +728,10 @@ export default function SalesPage() {
               </div>
 
               <div className="sp2-unlock-card">
-                <h3>還有 5 個爆款選題等你解鎖</h3>
-                <p>購買 自媒體獲客-定位體驗課，解鎖完整 8 個選題 + 腳本預覽 + 課程教學</p>
-                <button className="sp2-btn sp2-btn-primary" onClick={handlePurchaseClick}>
-                  立即購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
-                </button>
-                <small>每天免費試用 3 次，明天可以再來</small>
+                <h3>到 AI 工具箱繼續創作</h3>
+                <p>企劃定位、爆款腳本、素材靈感與社群貼文。AI 使用可獨立申請，不必先購買課程。</p>
+                <button className="sp2-btn sp2-btn-primary" onClick={handleAIEntry}>使用 AI 工具</button>
+                <small>已有課程帳號，可用同一組帳號登入。</small>
               </div>
             </div>
           </div>
@@ -876,7 +782,7 @@ export default function SalesPage() {
           <div className="sp2-container">
             <SectionHeader
               eyebrow="AI 工具"
-              title="6 大 AI 功能，全方位輔助創作"
+              title="4 大 AI 工具，協助你的日常創作"
               subtitle="不只生成內容，更幫你理解爆款背後的邏輯"
             />
             <div className="sp2-card-grid features">
@@ -923,8 +829,8 @@ export default function SalesPage() {
               <button className="sp2-btn sp2-btn-primary sp2-btn-lg" onClick={handlePurchaseClick}>
                 立即購買 自媒體獲客-定位體驗課 ${TRIAL_PRICE}
               </button>
-              <button className="sp2-btn sp2-btn-outline sp2-btn-lg" onClick={() => scrollToSection('#ai-tools')}>
-                先免費試用 AI →
+              <button className="sp2-btn sp2-btn-outline sp2-btn-lg" onClick={handleAIEntry}>
+                使用 AI 工具 →
               </button>
             </div>
           </div>
@@ -948,7 +854,6 @@ export default function SalesPage() {
         </div>
       </footer>
 
-      {showLogin && <SalesLoginModal onClose={() => setShowLogin(false)} />}
       {showCheckout && <SalesCheckoutModal onClose={() => setShowCheckout(false)} />}
     </div>
   )

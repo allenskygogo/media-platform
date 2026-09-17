@@ -1172,7 +1172,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
   const [checkoutStep, setCheckoutStep] = useState(0)
   const [autoStartedPlanId, setAutoStartedPlanId] = useState('')
   const checkoutSectionRef = useRef(null)
-  const nextPlan = plans.find(plan => plan.level === (currentPlan?.level || 0) + 1) || null
+  const nextPlan = isAIOnly(currentUser) ? plans.find(plan => plan.id === 'creator') : plans.find(plan => plan.level === (currentPlan?.level || 0) + 1) || null
 
   const getPlanBadge = (plan) => {
     if (currentPlan?.id === plan.id) return '目前方案'
@@ -1223,6 +1223,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
   }, [initialPlanId, autoStartedPlanId])
 
   const getUpgradeAction = (plan) => {
+    if (isAIOnly(currentUser) && plan.id === 'trial') return { label: '請洽客服', disabled: true }
     if (currentPlan?.id === plan.id) return { label: '目前方案', disabled: true }
     if (currentPlan && plan.level < currentPlan.level) return { label: '已包含', disabled: true }
     if (plan.id === 'managed') return { label: '聯繫官方帳號', disabled: true }
@@ -1261,7 +1262,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
           <div>
             <h2 className="modal-title">方案比較</h2>
             <p className="plan-modal-subtitle">
-              目前方案：{currentPlan?.name || '未設定'}
+              目前方案：{currentPlan?.name || (isAIOnly(currentUser) ? 'AI 會員' : '未設定')}
             </p>
           </div>
           <button className="modal-close" onClick={onClose} aria-label="關閉">✕</button>
@@ -1709,7 +1710,7 @@ export default function Profile() {
           </div>}
         </div>
       </div>
-      {!aiOnly && showPlanModal && <PlanComparisonModal currentPlan={currentPlan} currentUser={currentUser} initialPlanId={upgradePlanId} onClose={() => setShowPlanModal(false)} />}
+      {showPlanModal && <PlanComparisonModal currentPlan={currentPlan} currentUser={currentUser} initialPlanId={upgradePlanId} onClose={() => setShowPlanModal(false)} />}
     </div>
   )
 }

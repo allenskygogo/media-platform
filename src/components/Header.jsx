@@ -64,7 +64,7 @@ export default function Header() {
       {!isAdmin && !isManaged && (
         <nav className="header-nav">
           {!aiOnly && nl('/dashboard', '首頁', true)}
-          {!aiOnly && nl('/dashboard/courses', '課程')}
+          {!aiOnly && nl('/dashboard/courses', '我的課程')}
           {nl('/dashboard/ai-tools', '✨ AI 工具')}
           {showSocialPublisher && nl('/dashboard/publisher', '一鍵發布')}
           {!aiOnly && nl('/dashboard/booking', '預約一對一')}
