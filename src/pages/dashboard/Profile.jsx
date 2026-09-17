@@ -1532,7 +1532,7 @@ export default function Profile() {
 
   const aiOnly = isAIOnly(currentUser)
   const meta = TIER_META[currentUser.tier] || {}
-  const perks = aiOnly ? { perks: ['爆款選題腳本', '素材靈感', '社群貼文', '企劃定位'], locked: [] } : TIER_PERKS[currentUser.tier] || { perks: [], locked: [] }
+  const perks = aiOnly ? { perks: ['企劃定位', '爆款腳本', '素材靈感', '社群貼文'], locked: [] } : TIER_PERKS[currentUser.tier] || { perks: [], locked: [] }
   const currentPlan = aiOnly ? null : getPlanByTier(currentUser.tier)
   const nextPlan = aiOnly ? null : getNextPlanByTier(currentUser.tier)
 

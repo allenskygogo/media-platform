@@ -7,7 +7,7 @@ const BOSS_AGENT_PASSWORD = '0910858551'
 const AGENT_UNLOCK_KEY = 'tlt_ai_agents_unlocked'
 
 const FEATURE_OPTIONS = [
-  { key: 'topics', label: '爆款選題腳本' },
+  { key: 'topics', label: '爆款腳本' },
   { key: 'material', label: '素材靈感' },
   { key: 'social', label: '社群貼文' },
   { key: 'trending', label: '流量熱點' },

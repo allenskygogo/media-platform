@@ -20,16 +20,19 @@ import {
 // ══════════════════════════════════════════════════════
 
 const NAV_TOOLS = [
-  { id: 'topics',     label: '爆款選題腳本', Icon: TrendingUp },
+  { id: 'planning',   label: '企劃定位', Icon: Target     },
+  { id: 'topics',     label: '爆款腳本', Icon: TrendingUp },
   { id: 'material',   label: '素材靈感', Icon: Bookmark   },
   { id: 'social',     label: '社群貼文', Icon: Share2     },
-  { id: 'trending',   label: '流量熱點', Icon: Flame      },
-  { id: 'planning',   label: '企劃定位', Icon: Target     },
-  { id: 'analysis',   label: '爆款解析', Icon: Search     },
-  { id: 'livestream', label: '直播話術', Icon: Mic        },
-  { id: 'chat',       label: '頂流助理', Icon: Bot        },
-  { id: 'benchmark',  label: '對標分析', Icon: BarChart2  },
+  { id: 'trending',   label: '流量熱點', Icon: Flame, hidden: true },
+  { id: 'analysis',   label: '爆款解析', Icon: Search, hidden: true },
+  { id: 'livestream', label: '直播話術', Icon: Mic, hidden: true },
+  { id: 'chat',       label: '頂流助理', Icon: Bot, hidden: true },
+  { id: 'benchmark',  label: '對標分析', Icon: BarChart2, hidden: true },
 ]
+
+// Keep unfinished tools and their implementations available for later release.
+const VISIBLE_NAV_TOOLS = NAV_TOOLS.filter(tool => !tool.hidden)
 
 const SAVED_TOPICS_FALLBACK_KEY = 'mp_saved_topics'
 const PRACTICE_FALLBACK_KEY = 'mp_topic_practices'
@@ -246,8 +249,8 @@ function ComingSoonLabel() {
 function getAITierInfo(user) {
   if (isAIOnly(user)) return {
     name: 'AI 會員',
-    count: 4, total: NAV_TOOLS.length,
-    summary: '目前開放爆款選題腳本、素材靈感、社群貼文與企劃定位。企劃定位可直接在站內對話。',
+    count: 4, total: VISIBLE_NAV_TOOLS.length,
+    summary: '目前開放企劃定位、爆款腳本、素材靈感與社群貼文。企劃定位可直接在站內對話。',
     next: user.expiresAt ? `AI 使用期限：${user.expiresAt}` : '免費使用中，未設定到期日。',
   }
   const tier = deriveAITier(user)
@@ -255,16 +258,16 @@ function getAITierInfo(user) {
     return {
       name: '體驗學生',
       count: 2,
-      total: NAV_TOOLS.length,
-      summary: '目前開放爆款選題與企劃定位。腳本內容僅可預覽前兩行，完整腳本需升級頂流達人。',
+      total: VISIBLE_NAV_TOOLS.length,
+      summary: '目前開放企劃定位與爆款腳本。腳本內容僅可預覽前兩行，完整腳本需升級頂流達人。',
       next: '升級頂流達人可解鎖完整腳本、素材靈感與社群貼文。',
     }
   }
   const base = {
     count: 4,
-    total: NAV_TOOLS.length,
-    summary: '目前開放爆款選題腳本、素材靈感、社群貼文與企劃定位。',
-    next: '流量熱點、爆款解析、直播話術、頂流助理與對標分析即將開放。',
+    total: VISIBLE_NAV_TOOLS.length,
+    summary: '目前開放企劃定位、爆款腳本、素材靈感與社群貼文。',
+    next: '選擇工具即可開始使用。',
   }
   if (tier === 'advanced') {
     return {
@@ -2577,7 +2580,7 @@ function CopyPage() {
   return (
     <>
       <div>
-        <h1 className="ait-tool-title">爆款選題腳本</h1>
+        <h1 className="ait-tool-title">爆款腳本</h1>
         <p className="ait-tool-desc">先產出爆款選題，再完成腳本練習；AI 判斷符合課程句式後才可下載</p>
       </div>
 
@@ -4892,7 +4895,7 @@ function PlanningPage() {
 
 export default function AITools() {
   const { currentUser } = useAuth()
-  const [activeId, setActiveId] = useState('topics')
+  const [activeId, setActiveId] = useState('planning')
 
   return (
     <div className="ait-page">
@@ -4903,7 +4906,7 @@ export default function AITools() {
         <nav className="ait-nav">
           <div className="ait-nav-header">AI 工具箱</div>
           <div className="ait-nav-list">
-            {NAV_TOOLS.map(({ id, label, Icon }) => {
+            {VISIBLE_NAV_TOOLS.map(({ id, label, Icon }) => {
               const locked = !canUseAITool(id, currentUser)
               return (
               <button
