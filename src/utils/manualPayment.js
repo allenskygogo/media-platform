@@ -1,4 +1,4 @@
-export const LINE_OFFICIAL_URL = import.meta.env.VITE_LINE_OFFICIAL_URL || 'https://lin.ee/VALNYlg'
+export const LINE_OFFICIAL_URL = import.meta.env.VITE_LINE_OFFICIAL_URL || 'https://lin.ee/ryvCgrs'
 
 export function buildManualPaymentMessage({ planName, amount, orderNumber, name, email, phone }) {
   const rawAmount = String(amount || '').trim()
