@@ -631,7 +631,7 @@ export async function callAI(feature, input, userPlan = 'free', userId = null, o
     appendAIUsage({ user_id: userId, feature, industry: input, plan: userPlan, provider: 'openai' })
     return result
   } catch (error) {
-    if (options.allowMockFallback === false) throw error
+    if (!import.meta.env.DEV || options.allowMockFallback === false || [401, 403].includes(error.status)) throw error
     if (import.meta.env.DEV) console.warn('AI API unavailable, using mock fallback:', error)
   }
 
@@ -644,15 +644,19 @@ export async function callAI(feature, input, userPlan = 'free', userId = null, o
 async function callWorkerAI(feature, input, userPlan) {
   if (!WORKER_URL) throw new Error('Worker URL is not configured')
 
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData?.session?.access_token
   const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/ai`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ feature, input, userPlan }),
   })
 
   const data = await response.json().catch(() => ({}))
   if (!response.ok || data.success === false) {
-    throw new Error(data.error || 'AI worker request failed')
+    const error = new Error(data.error || 'AI worker request failed')
+    error.status = response.status
+    throw error
   }
 
   return data.result

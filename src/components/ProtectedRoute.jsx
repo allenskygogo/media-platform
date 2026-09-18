@@ -1,4 +1,5 @@
-import { canAccessStudentPath, memberHome, isAIOnly } from '../../shared/memberAccess'
+import { useEffect, useState } from 'react'
+import { canAccessStudentPath, memberHome, isAIOnly, needsAIReview } from '../../shared/memberAccess'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -9,9 +10,18 @@ const Loading = () => (
 export default function ProtectedRoute({ children, requireAdmin = false, requireManaged = false, requireTier = null }) {
   const { currentUser, loading } = useAuth()
   const location = useLocation()
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    if (!isAIOnly(currentUser) || !currentUser.expiresAt) return
+    const remaining = new Date(currentUser.expiresAt).getTime() - Date.now()
+    const timer = setTimeout(() => setTick(tick => tick + 1), Math.max(0, Math.min(remaining, 2147483647)))
+    return () => clearTimeout(timer)
+  }, [currentUser?.expiresAt, location.pathname])
 
   if (loading) return <Loading />
   if (!currentUser) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />
+
+  if (needsAIReview(currentUser)) return <Navigate to="/ai-access" replace />
 
   const isAdmin   = currentUser.role === 'admin'
   const isManaged = currentUser.tier === 'managed'

@@ -36,10 +36,10 @@ export function AIEntryPage() {
       <section className="entry-intro">
         <p className="entry-eyebrow">AI 工具</p>
         <h1>把想法變成企劃與內容</h1>
-        <p>做企劃、寫腳本、找靈感、產生社群貼文。只想使用 AI，也可以獨立申請，不必先購買課程。</p>
+        <p>做企劃、寫腳本、找靈感、產生社群貼文。自行註冊並通過審核後，即可免費使用 AI 7 天，不必先購買課程。</p>
         <div className="entry-actions">
           <Link className="sp2-btn sp2-btn-primary sp2-btn-lg" to={aiDestination}>{currentUser ? '進入 AI 工具' : '登入使用 AI'}</Link>
-          {!currentUser && <Link className="sp2-btn sp2-btn-outline sp2-btn-lg" to="/register?intent=ai">申請 AI 使用</Link>}
+          {!currentUser && <Link className="sp2-btn sp2-btn-outline sp2-btn-lg" to="/register?intent=ai">註冊申請 7 天 AI</Link>}
         </div>
         <p className="entry-note">已有課程帳號？使用同一組帳號登入，依原方案使用 AI。</p>
       </section>

@@ -36,3 +36,9 @@
   .entry-actions { flex-direction: column; }
   .entry-actions .sp2-btn { white-space: normal; }
 }
+.entry-registration { max-width: 760px; }
+.entry-register-form { display: flex; flex-direction: column; gap: 10px; }
+.entry-register-form label { margin-top: 12px; font-size: 14px; color: #e7e3f5; }
+.entry-register-form input, .entry-register-form textarea { width: 100%; padding: 12px 14px; border-radius: 8px; background: #0f0d18; color: #fff; border: 1px solid #524b6b; font: inherit; }
+.entry-register-form input:focus, .entry-register-form textarea:focus { outline: 2px solid #a99fff; outline-offset: 2px; }
+.entry-page button:disabled { opacity: .55; cursor: wait; }

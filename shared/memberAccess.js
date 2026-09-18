@@ -6,13 +6,21 @@ export function isAIOnly(user) {
     AI_ONLY_PLANS.includes(user.planId || user.plan_id || user.tier))
 }
 
+export function needsAIReview(user, now = Date.now()) {
+  return user?.role !== 'admin' && isAIOnly(user) && Boolean(
+    (user.accessStatus && user.accessStatus !== 'active') ||
+    (user.expiresAt && new Date(user.expiresAt).getTime() <= now))
+}
+
 export function memberHome(user) {
   if (user?.role === 'admin') return '/admin'
   if (user?.tier === 'managed') return '/managed'
+  if (needsAIReview(user)) return '/ai-access'
   return isAIOnly(user) ? '/dashboard/ai-tools' : '/dashboard'
 }
 
 export function canAccessStudentPath(user, pathname) {
+  if (needsAIReview(user)) return false
   if (!isAIOnly(user)) return true
   return ['/dashboard/ai-tools', '/dashboard/profile'].some(path =>
     pathname === path || pathname.startsWith(`${path}/`))
@@ -27,6 +35,7 @@ export function hasActiveCourseMembership(membership, now = Date.now()) {
 // Login destinations are explicit internal routes; never follow arbitrary URLs.
 export function loginDestination(user, next) {
   if (user?.role === 'admin' || user?.tier === 'managed') return memberHome(user)
+  if (needsAIReview(user)) return '/ai-access'
   if (next === '/dashboard/ai-tools') return next
   if (next === '/dashboard/courses' && !isAIOnly(user)) return next
   if (['/dashboard/profile?upgrade=creator', '/dashboard/profile?upgrade=master'].includes(next)) return next

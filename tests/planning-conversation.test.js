@@ -53,7 +53,7 @@ test('planning conversation authenticates membership and passes owner instructio
   outputStatus = 'incomplete'
   assert.equal((await request(first)).status, 502)
   const generic = await worker.fetch(new Request('https://worker.test/api/ai', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feature: 'planning', input: 'hello' }),
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer session' }, body: JSON.stringify({ feature: 'planning', input: 'hello' }),
   }), env)
   assert.equal(generic.status, 400)
   assert.equal(aiCalls, 2)

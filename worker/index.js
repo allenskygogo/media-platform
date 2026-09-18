@@ -836,6 +836,24 @@ export default {
     const path = url.pathname
 
     try {
+      if (path === '/api/auth/register-ai' && request.method === 'POST') return await handleRegisterAI(request, env)
+      if (path === '/api/auth/renew-ai' && request.method === 'POST') {
+        let user
+        try { user = await requireUser(request, env) } catch (_) { return err('請先登入', 401) }
+        return await callAccessRPC(env, 'renew_ai_application', { p_user_id: user.id })
+      }
+      const reviewMatch = path.match(/^\/api\/admin\/ai-applications\/([0-9a-f-]{36})\/review$/i)
+      if (reviewMatch && request.method === 'POST') {
+        let admin
+        try { admin = await requireAdmin(request, env) } catch (_) { return err('需要管理員權限', 403) }
+        const body = await request.json().catch(() => ({}))
+        if (!['approve', 'reject'].includes(body.action)) return err('無效的審核操作', 400)
+        return await callAccessRPC(env, 'review_ai_application', { p_user_id: reviewMatch[1], p_admin_id: admin.id, p_action: body.action })
+      }
+      if (['/api/ai', '/api/ai/writing/evaluate'].includes(path) && request.method === 'POST') {
+        const denied = await checkAIAccess(request, env)
+        if (denied) return denied
+      }
       const courseResource = path === '/api/course-catalog' || path === '/api/course-progress' ||
         path.startsWith('/api/token/') || path === '/api/videos' || path.startsWith('/api/videos/')
       if (courseResource) {
@@ -1911,19 +1929,8 @@ async function handleToken(request, videoUid, env) {
 }
 
 async function handlePlanningConversation(request, env) {
-  let user
-  try { user = await requireUser(request, env) }
-  catch (_) { return err('請重新登入後再使用企劃定位。', 401) }
-  const profile = await getProfileById(env, user.id)
-  if (profile.status !== 'active') return err('帳號未啟用。', 403)
-  if (profile.role !== 'admin') {
-    const membership = await getLatestActiveMembership(env, user.id)
-    if (!membership || membership.status !== 'active' ||
-        !Object.hasOwn(PLAN_TO_LEGACY_TIER, membership.plan_id) ||
-        (membership.expires_at && !(new Date(membership.expires_at).getTime() > Date.now()))) {
-      return err('AI 使用權限已到期或尚未開通，請聯繫客服。', 403)
-    }
-  }
+  const denied = await checkAIAccess(request, env)
+  if (denied) return denied
 
   const body = await request.json().catch(() => ({}))
   const messages = body.messages
@@ -2431,6 +2438,76 @@ async function handleAIKnowledgeSync(request, env) {
   }
 }
 
+async function checkAIAccess(request, env) {
+  let user
+  try { user = await requireUser(request, env) }
+  catch (_) { return err('請重新登入後再使用 AI。', 401) }
+  const profile = await getProfileById(env, user.id)
+  if (profile.status !== 'active') return err('帳號未啟用。', 403)
+  if (profile.role === 'admin') return null
+  const membership = await getLatestActiveMembership(env, user.id)
+  if (!membership || membership.status !== 'active' || !Object.hasOwn(PLAN_TO_LEGACY_TIER, membership.plan_id) ||
+      (membership.starts_at && new Date(membership.starts_at).getTime() > Date.now()) ||
+      (membership.expires_at && !(new Date(membership.expires_at).getTime() > Date.now()))) {
+    return err('AI 權限尚未核准或已到期，請到申請狀態頁查看。', 403)
+  }
+  return null
+}
+
+async function callAccessRPC(env, name, payload) {
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/rpc/${name}`, {
+    method: 'POST', headers: supabaseServiceHeaders(env, { 'Content-Type': 'application/json' }), body: JSON.stringify(payload),
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) return err(data?.message || '申請處理失敗，請稍後再試', 409)
+  return json({ success: true, ...data })
+}
+
+async function listAIApplications(env) {
+  const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/ai_access_applications?select=*&order=submitted_at.desc`, {
+    headers: supabaseServiceHeaders(env),
+  })
+  const data = await response.json()
+  if (!response.ok) throw new Error('讀取 AI 申請失敗')
+  return data
+}
+
+async function handleRegisterAI(request, env) {
+  if (!env.AI_REGISTRATION_LIMITER || !env.SUPABASE_SERVICE_ROLE_KEY) return err('註冊服務尚未就緒，請稍後再試', 503)
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
+  const { success } = await env.AI_REGISTRATION_LIMITER.limit({ key: `ai-signup:${ip}` })
+  if (!success) return err('申請過於頻繁，請稍候一分鐘再試', 429)
+  const raw = await request.text()
+  if (raw.length > 8192) return err('資料過長', 400)
+  let body
+  try { body = JSON.parse(raw) } catch (_) { return err('資料格式不正確', 400) }
+  const name = String(body?.name || '').trim()
+  const email = String(body?.email || '').trim().toLowerCase()
+  const password = typeof body?.password === 'string' ? body.password : ''
+  const industry = String(body?.industry || '').trim()
+  const purpose = String(body?.purpose || '').trim()
+  if (!name || name.length > 80 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      password.length < 8 || password.length > 128 || !industry || industry.length > 100 || !purpose || purpose.length > 1000) {
+    return err('請填寫姓名、有效 Email、8～128 碼密碼、行業與使用目的', 400)
+  }
+  // Creation only: never reset credentials or change permissions on an existing account.
+  let user
+  try {
+    user = await createSupabaseAuthUser(env, { email, password, email_confirm: true, user_metadata: { display_name: name } })
+  } catch (_) {
+    return err('無法建立帳號；若此 Email 已註冊，請直接登入或聯絡課程顧問', 409)
+  }
+  if (!user?.id) return err('註冊失敗，請稍後再試', 503)
+  try {
+    const result = await callAccessRPC(env, 'register_ai_application', { p_user_id: user.id, p_name: name, p_email: email, p_industry: industry, p_purpose: purpose })
+    if (!result.ok) throw new Error('Application creation failed')
+  } catch (_) {
+    await deleteSupabaseAuthUser(env, user.id)
+    return err('申請未完成，請稍後重新註冊', 503)
+  }
+  return json({ success: true, status: 'pending' })
+}
+
 async function handleProvisionStudent(request, env) {
   if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
     return err('Supabase service key is not configured', 503)
@@ -2927,6 +3004,8 @@ async function handleListStudents(request, env) {
   const profiles = await listStudentProfiles(env)
   const memberships = await listLatestActiveMemberships(env, profiles.map(profile => profile.id))
   const membershipByUserId = Object.fromEntries(memberships.map(item => [item.user_id, item]))
+  const applications = await listAIApplications(env)
+  const applicationByUserId = Object.fromEntries(applications.map(item => [item.user_id, item]))
   const contracts = await listContractsByUserIds(env, profiles.map(profile => profile.id)).catch(error => {
     if (isMissingContractsTable(error)) return []
     throw error
@@ -2945,6 +3024,7 @@ async function handleListStudents(request, env) {
     success: true,
     students: profiles.map(profile => {
       const membership = membershipByUserId[profile.id] || null
+      const application = applicationByUserId[profile.id] || null
       const authUser = authUserById[profile.id] || null
       const contract = latestContractByUserId[profile.id] || null
       const name = profile.display_name || profile.email?.split('@')[0] || '學員'
@@ -2959,7 +3039,8 @@ async function handleListStudents(request, env) {
         lastLoginAt: authUser?.last_sign_in_at || profile.last_login_at || null,
         planId: membership?.plan_id || null,
         legacyTier: membership?.legacy_tier || null,
-        tier: membership?.plan_id ? planToLegacyTier(membership.plan_id) : membership?.legacy_tier || 'basic',
+        tier: membership?.plan_id ? planToLegacyTier(membership.plan_id) : application ? 'ai_free' : membership?.legacy_tier || 'basic',
+        aiApplication: application,
         expiresAt: membership?.expires_at || null,
         trialCompletedAt: membership?.trial_completed_at || null,
         latestContract: contract ? mapContractSignature(contract) : null,

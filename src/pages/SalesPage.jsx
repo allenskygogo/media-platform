@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext'
 import BrandLogo from '../components/BrandLogo'
 import { memberHome } from '../../shared/memberAccess'
 import { initPixel, fbq } from '../utils/fbPixel'
-import { callAI } from '../services/aiService'
 
 const TRIAL_PRICE = 980
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
@@ -390,8 +389,7 @@ export default function SalesPage() {
   const scrollRef = useRef(false)
   const [showCheckout, setShowCheckout] = useState(false)
   const [industry, setIndustry] = useState('健身')
-  const [topics, setTopics] = useState(() => makeTopics('健身'))
-  const [generatingTopics, setGeneratingTopics] = useState(false)
+  const topics = makeTopics(industry)
 
 
   useEffect(() => {
@@ -418,18 +416,7 @@ export default function SalesPage() {
     navigate(currentUser && currentUser.role !== 'admin' && currentUser.tier !== 'managed' ? '/dashboard/ai-tools' : '/ai')
   }
 
-  const handleGenerate = async () => {
-    if (generatingTopics) return
-    setGeneratingTopics(true)
-    try {
-      const result = await callAI('topics', industry, 'free', null)
-      setTopics(normalizeSalesTopics(result, industry))
-    } catch (_) {
-      setTopics(makeTopics(industry))
-    } finally {
-      setGeneratingTopics(false)
-    }
-  }
+  const handleGenerate = () => navigate(currentUser ? '/dashboard/ai-tools' : '/register?intent=ai')
 
   const handlePurchaseClick = () => {
     if (currentUser) { navigate('/courses'); return }
@@ -681,7 +668,7 @@ export default function SalesPage() {
               subtitle={(
                 <>
                   <span>不是普通 AI，是爆款大數據選題引擎。</span>
-                  <span>輸入行業，8 大元素同步運算，不再缺選題。</span>
+                  <span>註冊並通過審核後，即可免費使用 AI 7 天。</span>
                 </>
               )}
             />
@@ -690,7 +677,7 @@ export default function SalesPage() {
 
             <div className="sp2-try-divider">
               <span />
-              <strong>馬上試試 AI 出選題</strong>
+              <strong>選題方向範例</strong>
               <span />
             </div>
 
@@ -707,8 +694,8 @@ export default function SalesPage() {
                   onKeyDown={e => e.key === 'Enter' && handleGenerate()}
                   placeholder="例：美食、健身、親子、美妝、餐飲..."
                 />
-                <button className="sp2-btn sp2-btn-primary" onClick={handleGenerate} disabled={generatingTopics}>
-                  {generatingTopics ? '生成中...' : '立即生成'}
+                <button className="sp2-btn sp2-btn-primary" onClick={handleGenerate}>
+                  {currentUser ? '進入 AI 生成' : '註冊申請 7 天 AI'}
                 </button>
               </div>
 

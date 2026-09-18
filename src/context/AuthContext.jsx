@@ -1,3 +1,4 @@
+import { isAIOnly } from '../../shared/memberAccess'
 import { createContext, useContext, useState, useEffect } from 'react'
 import {
   initMockData, getUsers, saveUsers, addDays, TIER_META,
@@ -46,7 +47,7 @@ const buildUserFromSupabase = (profile, membership) => {
     createdAt: toDateString(profile.created_at) || '',
     status: profile.status,
     lastLoginAt: profile.last_login_at || null,
-    expiresAt: toDateString(membership?.expires_at),
+    expiresAt: membership?.expires_at || null,
     startsAt: membership?.starts_at || null,
     trialCompletedAt: membership?.trial_completed_at || null,
     courseCompletedAt: null,
@@ -123,9 +124,20 @@ export function AuthProvider({ children }) {
       .maybeSingle()
 
     if (membershipError) throw membershipError
-    if (profile.role === 'student' && !membership) throw new Error('會員尚未開通，請聯絡管理員')
+    let application = null
+    if (profile.role === 'student' && (!membership || isAIOnly({ plan_id: membership.plan_id }))) {
+      const result = await supabase.from('ai_access_applications').select('status,submitted_at,reviewed_at').eq('user_id', userId).maybeSingle()
+      if (result.error) throw result.error
+      application = result.data
+    }
+    if (profile.role === 'student' && !membership && !application) throw new Error('會員尚未開通，請聯絡管理員')
     const activeMembership = await startMembershipIfNeeded(membership)
-    if (activeMembership?.expires_at && new Date(activeMembership.expires_at).getTime() < Date.now()) {
+    if (application) {
+      const active = activeMembership && (!activeMembership.expires_at || new Date(activeMembership.expires_at).getTime() > Date.now())
+      return { ...buildUserFromSupabase(profile, activeMembership || { plan_id: 'ai_free' }),
+        aiApplication: application, accessStatus: active ? 'active' : application.status === 'approved' ? 'expired' : application.status }
+    }
+    if (activeMembership?.expires_at && new Date(activeMembership.expires_at).getTime() <= Date.now()) {
       throw new Error('會員效期已到期，請聯絡管理員續約')
     }
     return buildUserFromSupabase(profile, activeMembership)
@@ -247,21 +259,18 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('mp_current_user')
   }
 
-  const register = (name, email, password, tier = 'basic') => {
-    const users = getUsers()
-    if (users.find(u => u.email === email)) throw new Error('此電子郵件已被使用')
-    const today = new Date().toISOString().split('T')[0]
-    const newUser = {
-      id: Date.now(), name, email, password,
-      role: 'student', tier,
-      avatar: name.charAt(0),
-      createdAt: today,
-      status: 'active',
-      // basic tier: expiresAt starts as null — only set after completing the trial session
-      expiresAt: (tier === 'basic') ? null : (TIER_META[tier]?.days ? addDays(today, TIER_META[tier].days) : null),
-    }
-    saveUsers([...users, newUser])
-    return persist(newUser)
+  const register = async (form) => {
+    const response = await fetch(`${WORKER_URL.replace(/\/$/, '')}/api/auth/register-ai`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !data.success) throw new Error(data.error || '註冊失敗，請稍後再試')
+    return data
+  }
+
+  const refreshCurrentUser = async () => {
+    if (!currentUser || !hasSupabase) return currentUser
+    return persist(await fetchSupabaseUser(currentUser.id))
   }
 
   const updateCurrentUser = (updates) => {
@@ -308,7 +317,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ currentUser, login, logout, register, updateCurrentUser, updatePassword, loading }}>
+    <AuthContext.Provider value={{ currentUser, login, logout, register, refreshCurrentUser, updateCurrentUser, updatePassword, loading }}>
       {children}
     </AuthContext.Provider>
   )

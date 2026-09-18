@@ -12,6 +12,7 @@ import { AIEntryPage, CourseEntryPage } from './pages/EntryPages'
 import CheckoutResult  from './pages/CheckoutResult'
 import Login           from './pages/Login'
 import Register        from './pages/Register'
+import AIAccessStatus from './pages/AIAccessStatus'
 import Pricing         from './pages/Pricing'
 import TrialAutoLogin  from './pages/TrialAutoLogin'
 
@@ -108,6 +109,7 @@ export default function App() {
           <Route path="/checkout/result" element={<CheckoutResult />} />
           <Route path="/login"        element={<Login />} />
           <Route path="/register"     element={<Register />} />
+          <Route path="/ai-access" element={<AIAccessStatus />} />
           <Route path="/pricing"      element={<Pricing />} />
           <Route path="/trial-login"  element={<TrialAutoLogin />} />
           <Route path="/beta"         element={<BetaSignupPage />} />

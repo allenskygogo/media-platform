@@ -45,9 +45,10 @@ export default function UsersAdmin() {
   const [msg, setMsg]           = useState('')
   const [err, setErr]           = useState('')
 
+  const pendingApplications = users.filter(u => u.aiApplication?.status === 'pending')
   const filtered = users.filter(u => {
     const matchSearch = u.name.includes(search) || u.email.includes(search)
-    const matchTier   = filterTier === 'all' || u.tier === filterTier
+    const matchTier   = filterTier === 'all' || (filterTier === 'pending' ? u.aiApplication?.status === 'pending' : u.tier === filterTier)
     return matchSearch && matchTier
   })
 
@@ -170,6 +171,19 @@ export default function UsersAdmin() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const reviewApplication = async (user, action) => {
+    if (updatingId) return
+    setUpdatingId(user.id)
+    try {
+      await workerJson(`/api/admin/ai-applications/${encodeURIComponent(user.id)}/review`, {
+        method: 'POST', body: JSON.stringify({ action }),
+      })
+      await loadStudents()
+      flash(action === 'approve' ? `已核准 ${user.name}，AI 權限從現在起開通 7 天。` : `已將 ${user.name} 的申請標記為未通過。`)
+    } catch (error) { flashError(error.message) }
+    finally { setUpdatingId('') }
   }
 
   const openEdit = (user) => {
@@ -496,7 +510,22 @@ export default function UsersAdmin() {
       {msg && <div className="auth-alert success" style={{ marginBottom: 16 }}>{msg}</div>}
       {err && <div className="auth-alert error" style={{ marginBottom: 16 }}>{err}</div>}
 
+      <section className="card" style={{ marginBottom: 24, padding: 24 }} aria-label="AI 註冊審核">
+        <div className="page-actions"><div><h2>AI 註冊審核 · 待審核 {pendingApplications.length} 位</h2><p>確認資料後按「核准 7 天」。從核准時間起算，到期自動停止使用；再次申請仍需審核。</p></div>
+          <button className="btn btn-secondary" onClick={loadStudents} disabled={loading}>重新整理</button></div>
+        {pendingApplications.length === 0 && <p style={{ color: 'var(--gray-500)' }}>目前沒有待審核申請。</p>}
+        {pendingApplications.map(user => <article key={user.id} style={{ padding: '20px 0', borderTop: '1px solid var(--gray-200)' }}>
+          <h3>{user.name}</h3><p>{user.email} · {formatDateTime(user.aiApplication.submitted_at)}</p>
+          <p><strong>行業：</strong>{user.aiApplication.industry}</p>
+          <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}><strong>使用目的：</strong>{user.aiApplication.purpose}</p>
+          <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+            <button className="btn btn-primary" disabled={Boolean(updatingId) || user.status !== 'active'} onClick={() => reviewApplication(user, 'approve')}>{updatingId === user.id ? '處理中…' : '核准 7 天'}</button>
+            <button className="btn btn-secondary" disabled={Boolean(updatingId) || user.status !== 'active'} onClick={() => reviewApplication(user, 'reject')}>不通過</button>
+          </div>
+        </article>)}
+      </section>
       <div className="filter-bar" style={{ marginBottom: 20 }}>
+        <button className={`filter-chip ${filterTier === 'pending' ? 'active' : ''}`} onClick={() => setFilterTier('pending')}>待審核 {pendingApplications.length}</button>
         <input className="form-input" placeholder="搜尋姓名、電子郵件…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 280 }} />
         {['all', ...TIERS].map(t => (
           <button key={t} className={`filter-chip ${filterTier === t ? 'active' : ''}`} onClick={() => setFilterTier(t)}>
@@ -539,7 +568,7 @@ export default function UsersAdmin() {
                   </td>
                   <td className="student-email">{user.email}</td>
                   <td className="tier-cell">
-                    <select value={user.tier || 'basic'} onChange={e => changeTier(user, e.target.value)} disabled={updatingId === user.id}
+                    <select value={user.tier || 'basic'} onChange={e => changeTier(user, e.target.value)} disabled={updatingId === user.id || user.aiApplication?.status === 'pending'}
                       className="student-tier-select"
                       style={{
                         background: user.tier === 'basic' ? 'var(--basic-light)' : user.tier === 'standard' ? 'var(--standard-light)' : 'var(--advanced-light)',
@@ -548,7 +577,7 @@ export default function UsersAdmin() {
                     </select>
                   </td>
                   <td className={user.expiresAt && new Date(user.expiresAt) < new Date() ? 'date-cell expired' : 'date-cell'}>
-                    {isAIOnly(user) && !user.expiresAt ? '免費使用中' : formatDateOnly(user.expiresAt)}
+                    {user.aiApplication?.status === 'pending' ? '核准後起算 7 天' : isAIOnly(user) && !user.expiresAt ? (user.aiApplication ? '尚未開通' : '免費使用中') : user.aiApplication ? formatDateTime(user.expiresAt) : formatDateOnly(user.expiresAt)}
                   </td>
                   <td className="contract-cell">
                     {user.latestContract ? (
@@ -566,10 +595,10 @@ export default function UsersAdmin() {
                   <td className={user.lastLoginAt ? 'date-cell' : 'date-cell empty'}>
                     {formatDateTime(user.lastLoginAt)}
                   </td>
-                  <td><span className={`badge badge-${user.status}`}>{user.status === 'active' ? '啟用' : '停用'}</span></td>
+                  <td><span className={`badge badge-${user.status}`}>{user.status !== 'active' ? '停用' : user.aiApplication?.status === 'pending' ? '待審核' : user.aiApplication?.status === 'rejected' ? '未通過' : user.expiresAt && new Date(user.expiresAt).getTime() <= Date.now() ? '已到期' : '啟用'}</span></td>
                   <td className="actions-cell">
                     <div className="student-row-actions">
-                      <button className="btn btn-secondary btn-sm" onClick={() => openEdit(user)} disabled={updatingId === user.id}>編輯</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openEdit(user)} disabled={updatingId === user.id || user.aiApplication?.status === 'pending'}>編輯</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => openResetPassword(user)} disabled={updatingId === user.id}>
                         重設密碼
                       </button>

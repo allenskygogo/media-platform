@@ -57,7 +57,7 @@ export default function Login() {
         </form>
 
         <p className="auth-divider" style={{ marginTop: 20 }}>
-          還沒有帳號？<Link to="/register?intent=ai" className="auth-link">申請 AI 使用</Link>
+          還沒有帳號？<Link to="/register?intent=ai" className="auth-link">註冊申請 AI</Link>
           &nbsp;·&nbsp;<Link to="/courses" className="auth-link">查看線上課程</Link>
         </p>
 
