@@ -1,3 +1,4 @@
+import { shouldForceFirstWatch } from '../../shared/coursePlayback'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   getLessonProgress,
@@ -40,12 +41,13 @@ function exitFullscreen() {
   if (document.webkitExitFullscreen) return document.webkitExitFullscreen()
 }
 
-export default function LessonPlayer({ lesson, courseId, userId, initialProgress, onProgressChange, onComplete, onClose }) {
+export default function LessonPlayer({ lesson, courseId, userId, allowFreePlayback = false, initialProgress, onProgressChange, onComplete, onClose }) {
   // ── If a real Cloudflare video is assigned, delegate to StreamPlayer ────
   const cfVideoUid = getVideoForLesson(lesson.id)
   const cfVideo    = cfVideoUid ? getCFVideos().find(v => v.uid === cfVideoUid) : null
   const savedProg  = initialProgress || getLessonProgress(userId, courseId, lesson.id)
   const isFirstWatch = !savedProg?.completed
+  const isForced = shouldForceFirstWatch(allowFreePlayback, savedProg)
   const startSecond = savedProg?.completed ? 0 : (savedProg?.currentSecond || 0)
 
   if (cfVideo) {
@@ -53,7 +55,7 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
     return (
       <StreamPlayer
         videoUid={cfVideoUid}
-        isForced={isFirstWatch}
+        isForced={isForced}
         expiresInSeconds={(pricing.tokenExpiryHours || 3) * 3600}
         userId={userId}
         courseId={courseId}
@@ -148,11 +150,11 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
 
   // Prevent context menu in forced mode
   useEffect(() => {
-    if (!isFirstWatch) return
+    if (!isForced) return
     const block = e => e.preventDefault()
     document.addEventListener('contextmenu', block)
     return () => document.removeEventListener('contextmenu', block)
-  }, [isFirstWatch])
+  }, [isForced])
 
   useEffect(() => {
     const sync = () => {
@@ -202,7 +204,7 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
 
   // Free-mode seek: click on progress track
   const handleSeek = (e) => {
-    if (isFirstWatch) return
+    if (isForced) return
     const rect = e.currentTarget.getBoundingClientRect()
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
     const newSec = Math.floor(ratio * totalSec)
@@ -215,13 +217,13 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
       {/* Top bar */}
       <div className="lesson-player-topbar">
         <div className="lesson-player-status-row">
-          {isFirstWatch ? (
+          {isForced ? (
             <span className="lesson-player-status lesson-player-status-locked">
               🔒 首次觀看 · 可暫停，不可快轉
             </span>
           ) : (
             <span className="lesson-player-status lesson-player-status-replay">
-              ✅ 重播模式 · 可自由暫停快轉
+              ▶ 自由觀看 · 可暫停、快轉與倒轉
             </span>
           )}
           <span style={{ fontSize:11, color:'var(--gray-400)' }}>（示範速度 {LESSON_DEMO_SPEED}×）</span>
@@ -247,7 +249,7 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
       <div className="lesson-player-outer" ref={playerOuterRef}>
         {/* Video area */}
         <div className="lesson-video-area" style={{ background: bgColor }}
-          onContextMenu={isFirstWatch ? e => e.preventDefault() : undefined}>
+          onContextMenu={isForced ? e => e.preventDefault() : undefined}>
           <div className="lesson-video-text">{lesson.title}</div>
         </div>
 
@@ -256,7 +258,7 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
           {/* Progress track */}
           <div
             className="lesson-progress-track"
-            style={{ cursor: isFirstWatch ? 'not-allowed' : 'pointer' }}
+            style={{ cursor: isForced ? 'not-allowed' : 'pointer' }}
             onClick={handleSeek}
           >
             <div className="lesson-progress-fill" style={{ width:`${progress}%` }} />
@@ -264,7 +266,7 @@ export default function LessonPlayer({ lesson, courseId, userId, initialProgress
 
           <div className="lesson-controls-row">
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-              {isFirstWatch ? (
+              {isForced ? (
                 <>
                   <button
                     style={{ background:'none', border:'none', color:'#fff', fontSize:18, cursor:'pointer', padding:'0 4px' }}
