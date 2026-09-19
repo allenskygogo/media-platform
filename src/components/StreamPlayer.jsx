@@ -53,7 +53,7 @@ function StatusPill({ forced }) {
       background: 'var(--success-light)', color: 'var(--success)', borderRadius: 999,
       padding: '4px 14px', fontSize: 12, fontWeight: 700, flexShrink: 0,
     }}>
-      ✅ 重播模式 · 可自由暫停快轉
+      ▶ 自由觀看 · 可暫停、快轉與倒轉
     </span>
   )
 }

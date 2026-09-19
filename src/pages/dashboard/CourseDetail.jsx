@@ -1,3 +1,4 @@
+import { hasFreeCoursePlayback } from '../../../shared/coursePlayback'
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
@@ -17,14 +18,8 @@ const ACCESS_LEVEL_LABEL = { trial: '體驗', standard: '達人', advanced: '私
 const ACCESS_LEVEL_ORDER = ['trial', 'standard', 'advanced']
 const COURSE_RESUME_KEY = 'mp_course_resume_targets'
 
-// Only standard/advanced tier students get the forced-watch + homework system
+// Course members can still submit homework without a playback prerequisite.
 const NEEDS_HOMEWORK = ['standard', 'advanced']
-const NEEDS_SEQUENTIAL_WATCH = ['basic']
-const FULL_COURSE_UNLOCK_EMAILS = new Set(['allen@xgfx-tw.com'])
-
-function hasFullCourseUnlock(user) {
-  return FULL_COURSE_UNLOCK_EMAILS.has(String(user?.email || '').trim().toLowerCase())
-}
 
 function mapProgress(records) {
   return records.reduce((acc, record) => {
@@ -215,8 +210,8 @@ export default function CourseDetail() {
         setActiveLessonId(current => current || resumeLessonId || nextLessonFromProgress(
           course.lessons,
           nextProgressByLesson,
-          courseNeedsSequentialWatch(course),
-          courseNeedsHomework(course, currentUser.tier),
+          !hasFreeCoursePlayback(currentUser) && courseNeedsSequentialWatch(course),
+          !hasFreeCoursePlayback(currentUser) && courseNeedsHomework(course, currentUser.tier),
         ))
         setProgressLoadError('')
       })
@@ -246,8 +241,9 @@ export default function CourseDetail() {
   )
 
   const ok = canAccessCourse(currentUser.tier, courseAccessLevels(course))
-  const fullCourseUnlock = hasFullCourseUnlock(currentUser)
-  const needsHomework = !fullCourseUnlock && courseNeedsHomework(course, currentUser.tier)
+  const fullCourseUnlock = hasFreeCoursePlayback(currentUser)
+  const showHomework = courseNeedsHomework(course, currentUser.tier)
+  const needsHomework = !fullCourseUnlock && showHomework
   const needsSequentialWatch = !fullCourseUnlock && courseNeedsSequentialWatch(course)
   const activeLesson  = course.lessons.find(l => l.id === activeLessonId) || null
 
@@ -399,7 +395,9 @@ export default function CourseDetail() {
             <div style={{ marginBottom:24 }}>
               {ok ? (
                 <LessonPlayer
+                  key={activeLesson.id}
                   lesson={activeLesson}
+                  allowFreePlayback={fullCourseUnlock}
                   courseId={course.id}
                   userId={currentUser.id}
                   initialProgress={progressByLesson[activeLesson.id]}
@@ -508,7 +506,7 @@ export default function CourseDetail() {
               </div>
 
               {/* Homework tab for active lesson */}
-              {activeLesson && needsHomework && (
+              {activeLesson && ok && showHomework && (
                 <div style={{ padding:'12px 16px', borderTop:'1px solid var(--gray-200)' }}>
                   <button
                     className="btn btn-outline btn-sm"
