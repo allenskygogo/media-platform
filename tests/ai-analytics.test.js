@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import worker from '../worker/index.js'
-import { questionExcerpt, questionTopics, newestUsageFirst } from '../shared/aiUsage.js'
+import { questionExcerpt, questionTopics, newestUsageFirst, usageSummary } from '../shared/aiUsage.js'
 const env = { SUPABASE_URL: 'https://db.test', SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'service' }
 const alice = '00000000-0000-0000-0000-000000000001'
 const bob = '00000000-0000-0000-0000-000000000002'
@@ -62,4 +62,11 @@ test('chronological sort handles unsorted sources without reversing or mutating 
   const records = [{ id: 'a', created_at: '2026-09-19T01:00:00Z' }, { id: 'b', created_at: '2026-09-20T01:00:00Z' }, { id: 'c', created_at: '2026-09-18T01:00:00Z' }]
   assert.deepEqual(newestUsageFirst(records).map(row => row.id), ['b', 'a', 'c'])
   assert.deepEqual(records.map(row => row.id), ['a', 'b', 'c'])
+})
+
+test('older social usage displays only a bounded source excerpt, never messages', () => {
+  const record = usageSummary({ feature: 'social', industry: null, input_payload: { source: '餐飲行銷文案'.repeat(50), messages: ['PRIVATE'] } })
+  assert.ok(record.question_summary.startsWith('餐飲行銷文案'))
+  assert.ok(record.question_summary.length <= 161)
+  assert.ok(!record.question_summary.includes('PRIVATE'))
 })

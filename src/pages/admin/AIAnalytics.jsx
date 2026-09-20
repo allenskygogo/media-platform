@@ -18,7 +18,7 @@ function Ranking({ title, rows }) {
   const max = Math.max(1, ...rows.map(([, count]) => count))
   return <div className="admin-card"><div className="admin-card-header">{title}</div><div className="admin-card-body">
     {!rows.length && <p className="ai-empty">尚無資料</p>}
-    {rows.map(([label, count]) => <div className="ai-bar-row" key={label}><span className="ai-bar-label">{label}</span><div className="ai-bar-track"><div className="ai-bar-fill" style={{ width: `${count / max * 100}%`, background: 'var(--grad-blue)' }} /></div><span className="ai-bar-count">{count}</span></div>)}
+    {rows.map(([label, count]) => <div className="ai-bar-row" key={label}><span className="ai-bar-label" title={label}>{label}</span><div className="ai-bar-track"><div className="ai-bar-fill" style={{ width: `${count / max * 100}%`, background: 'var(--grad-blue)' }} /></div><span className="ai-bar-count">{count}</span></div>)}
   </div></div>
 }
 
@@ -58,6 +58,7 @@ export default function AIAnalytics() {
   }, [logs, range, feature, search])
   const features = ['planning', ...new Set(logs.map(log => log.feature).filter(value => value !== 'planning'))]
   const topicRanks = rank(filtered.flatMap(log => [...new Set(log.topics || [])])).slice(0, 10)
+  const keywordRanks = rank(filtered.map(log => log.question_summary).filter(Boolean)).slice(0, 10)
   const featureRanks = rank(filtered.map(log => AI_FEATURE_LABELS[log.feature] || log.feature))
   const planRanks = rank(filtered.map(log => PLAN_LABELS[log.plan] || log.plan))
   const planningCount = filtered.filter(log => log.feature === 'planning').length
@@ -83,6 +84,7 @@ export default function AIAnalytics() {
       <Ranking title="最近在問什麼 · 主題 Top 10" rows={topicRanks} />
       <Ranking title="各功能使用次數" rows={featureRanks} />
       <Ranking title="各會員方案使用次數" rows={planRanks} />
+      <Ranking title="常見提問／關鍵字 Top 10" rows={keywordRanks} />
       <div className="admin-card ai-analytics-wide"><div className="admin-card-header"><span>最近使用紀錄 · 最新在前</span><span style={{ fontSize: 12 }}>共 {filtered.length} 筆</span></div>
         <div className="admin-card-body" style={{ padding: 0 }}><div style={{ overflowX: 'auto' }}><table className="admin-table">
           <thead><tr><th>時間（台灣）</th><th>使用者</th><th>功能</th><th>提問摘要／關鍵字</th><th>方案</th></tr></thead>

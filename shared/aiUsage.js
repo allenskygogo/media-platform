@@ -30,7 +30,7 @@ export function newestUsageFirst(records) {
 }
 
 export function usageSummary(record) {
-  const summary = questionExcerpt(record.question_summary || record.input_payload?.question_summary || record.industry)
+  const summary = questionExcerpt(record.question_summary || record.input_payload?.question_summary || record.industry || record.input_payload?.source || record.input_payload?.topicText || record.input_payload?.idea || record.input_payload?.text)
   return { ...record, question_summary: summary,
     topics: questionTopics(summary, record.feature),
     plan: record.input_payload?.membership_plan || record.plan }
