@@ -1,3 +1,4 @@
+import { newestUsageFirst, usageSummary } from '../../shared/aiUsage'
 // ══════════════════════════════════════════════════════
 //  AI Service — unified callAI wrapper
 //  All AI calls go through this file.
@@ -23,14 +24,15 @@ function getIndustryLabel(input) {
   return input.industry || input.idea || input.topicText || input.text || input.scriptType || ''
 }
 export async function fetchAIUsageLogs(limit = 1000) {
-  if (!hasSupabase || !supabase) return getAIUsageLogs()
-  const { data, error } = await supabase
-    .from('ai_usage_logs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit)
-  if (error) throw error
-  return Array.isArray(data) ? data : []
+  if (!hasSupabase || !supabase) return newestUsageFirst(getAIUsageLogs().map(usageSummary))
+  const { data } = await supabase.auth.getSession()
+  if (!data.session?.access_token) throw new Error('請重新登入管理員帳號')
+  const response = await fetch(`${WORKER_URL}/api/admin/ai-usage?limit=${limit}`, {
+    headers: { Authorization: `Bearer ${data.session.access_token}` },
+  })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok || !payload.success) throw new Error(payload.error || 'AI 統計讀取失敗')
+  return newestUsageFirst(payload.logs || [])
 }
 function appendAIUsage(record) {
   const normalized = {

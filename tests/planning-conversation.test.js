@@ -9,6 +9,7 @@ test('planning conversation authenticates membership and passes owner instructio
   let configured = true
   let aiCalls = 0
   let sent
+  const usage = []
   let outputStatus = 'completed'
   t.mock.method(globalThis, 'fetch', async (input, options = {}) => {
     const url = new URL(input)
@@ -16,6 +17,7 @@ test('planning conversation authenticates membership and passes owner instructio
     if (url.pathname === '/rest/v1/profiles') return Response.json([{ id: 'student', status, role: 'student' }])
     if (url.pathname === '/rest/v1/memberships') return Response.json([{ plan_id: 'ai_free', status: 'active', expires_at: expiry }])
     if (url.pathname === '/rest/v1/ai_agents') return Response.json(configured ? [{ feature_key: 'planning', system_prompt: 'Owner instructions', model: 'gpt-4.1-mini', vector_store_id: 'vs-test' }] : [])
+    if (url.pathname === '/rest/v1/ai_usage_logs') { usage.push(JSON.parse(options.body)); return new Response(null, { status: 201 }) }
     if (url.pathname === '/v1/responses') {
       aiCalls++
       sent = JSON.parse(options.body)
@@ -50,6 +52,13 @@ test('planning conversation authenticates membership and passes owner instructio
   assert.equal(sent.model, 'gpt-4.1-mini')
   assert.equal(sent.temperature, 0.4)
   assert.equal(aiCalls, 1)
+  assert.equal(usage.length, 1)
+  assert.equal(usage[0].user_id, 'student')
+  assert.equal(usage[0].feature, 'planning')
+  assert.equal(usage[0].industry, 'Local clients')
+  assert.equal(usage[0].input_payload.membership_plan, 'ai_free')
+  assert.ok(!JSON.stringify(usage).includes('What is your audience'))
+  assert.ok(!JSON.stringify(usage).includes('Help plan my business'))
   outputStatus = 'incomplete'
   assert.equal((await request(first)).status, 502)
   const generic = await worker.fetch(new Request('https://worker.test/api/ai', {
@@ -57,4 +66,5 @@ test('planning conversation authenticates membership and passes owner instructio
   }), env)
   assert.equal(generic.status, 400)
   assert.equal(aiCalls, 2)
+  assert.equal(usage.length, 1)
 })
