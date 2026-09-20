@@ -1,3 +1,4 @@
+import { questionExcerpt, questionTopics, usageSummary, newestUsageFirst } from '../shared/aiUsage.js'
 import { AI_ONLY_PLANS, hasActiveCourseMembership } from '../shared/memberAccess.js'
 /**
  * Cloudflare Worker — Media Platform API
@@ -865,6 +866,8 @@ export default {
       if (path === '/api/upload/start' && request.method === 'POST') {
         return await handleUploadStart(request, env)
       }
+
+      if (path === '/api/admin/ai-usage' && request.method === 'GET') return await handleAIUsageAnalytics(request, url, env)
 
       // GET /api/course-catalog → shared course catalog for students/admin
       if (path === '/api/course-catalog' && request.method === 'GET') {
@@ -1929,8 +1932,22 @@ async function handleToken(request, videoUid, env) {
 }
 
 async function handlePlanningConversation(request, env) {
-  const denied = await checkAIAccess(request, env)
-  if (denied) return denied
+  let user
+  try { user = await requireUser(request, env) }
+  catch (_) { return err('請重新登入後再使用企劃定位。', 401) }
+  const profile = await getProfileById(env, user.id)
+  if (profile.status !== 'active') return err('帳號未啟用。', 403)
+  let membership = null
+  if (profile.role !== 'admin') {
+    membership = await getLatestActiveMembership(env, user.id)
+    if (!membership || membership.status !== 'active' ||
+        !Object.hasOwn(PLAN_TO_LEGACY_TIER, membership.plan_id) ||
+        (membership.starts_at && new Date(membership.starts_at).getTime() > Date.now()) ||
+        (membership.expires_at && !(new Date(membership.expires_at).getTime() > Date.now()))) {
+      return err('AI 使用權限已到期或尚未開通，請聯繫客服。', 403)
+    }
+  }
+
 
   const body = await request.json().catch(() => ({}))
   const messages = body.messages
@@ -1966,7 +1983,60 @@ async function handlePlanningConversation(request, env) {
   if (!response.ok) return err('企劃師暫時無法回覆，請稍後重試。', 502)
   const reply = extractOpenAIText(data)
   if (!reply?.trim() || data.status === 'incomplete') return err('回覆未完成，請縮小問題範圍後重試。', 502)
+  await recordPlanningUsage(env, user.id, membership, messages[messages.length - 1].content)
   return json({ success: true, reply })
+}
+
+async function recordPlanningUsage(env, userId, membership, question) {
+  const summary = questionExcerpt(question)
+  const membershipPlan = membership?.plan_id || 'admin'
+  const payload = {
+    id: crypto.randomUUID(), user_id: userId, feature: 'planning', industry: summary,
+    // The existing table uses legacy plan names. Keep the actual plan separately.
+    plan: ({ creator: 'standard', master: 'advanced', trial: 'trial', managed: 'managed' })[membershipPlan] || 'free',
+    provider: 'worker', input_payload: { question_summary: summary, topics: questionTopics(summary, 'planning'), membership_plan: membershipPlan },
+  }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/ai_usage_logs?on_conflict=id`, {
+        method: 'POST', headers: supabaseServiceHeaders(env, { 'Content-Type': 'application/json', Prefer: 'resolution=ignore-duplicates,return=minimal' }),
+        body: JSON.stringify(payload),
+      })
+      if (response.ok) return
+    } catch (_) { /* Retry using the same id so a lost response cannot double-count. */ }
+  }
+  console.error('Planning usage logging failed')
+}
+
+async function handleAIUsageAnalytics(request, url, env) {
+  try { await requireAdmin(request, env) } catch (_) { return err('需要管理員權限', 403) }
+  const limit = Math.min(1000, Math.max(1, Number.parseInt(url.searchParams.get('limit'), 10) || 1000))
+  const usageURL = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/ai_usage_logs`)
+  usageURL.searchParams.set('select', 'id,user_id,feature,industry,plan,provider,input_payload,created_at')
+  usageURL.searchParams.set('order', 'created_at.desc,id.desc')
+  usageURL.searchParams.set('limit', String(limit))
+  const response = await fetch(usageURL, { headers: supabaseServiceHeaders(env) })
+  if (!response.ok) return err('AI 統計讀取失敗，請稍後重試', 502)
+  const records = newestUsageFirst(await response.json())
+  const ids = [...new Set(records.map(row => row.user_id).filter(id => /^[0-9a-f-]{36}$/i.test(id)))]
+  const profileById = {}
+  for (let start = 0; start < ids.length; start += 100) {
+    const profileURL = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/profiles`)
+    profileURL.searchParams.set('id', `in.(${ids.slice(start, start + 100).join(',')})`)
+    profileURL.searchParams.set('select', 'id,display_name,email')
+    const profilesResponse = await fetch(profileURL, { headers: supabaseServiceHeaders(env) })
+    if (!profilesResponse.ok) return err('使用者資料讀取失敗，請稍後重試', 502)
+    for (const profile of await profilesResponse.json()) profileById[profile.id] = profile
+  }
+  return json({ success: true, limit, logs: records.map(record => {
+    const summary = usageSummary(record)
+    const profile = profileById[record.user_id]
+    // Do not return historical raw input payloads to the analytics page.
+    return { id: record.id, user_id: record.user_id, feature: record.feature, created_at: record.created_at,
+      plan: summary.plan, provider: record.provider, question_summary: summary.question_summary, topics: summary.topics,
+      user_name: profile?.display_name || (profile?.email ? profile.email.split('@')[0] : record.user_id ? '帳號已刪除或無姓名資料' : '訪客（未登入）'),
+      user_email: profile?.email || null }
+  }) })
 }
 
 async function handleAI(request, env) {
