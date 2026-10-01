@@ -29,8 +29,8 @@ begin
   exception when raise_exception then
     if sqlerrm <> '自助註冊試用不可重新申請，請聯絡課程顧問' then raise; end if;
   end;
-  update public.memberships set status = 'inactive' where id = membership_id;
-  assert public.start_self_service_ai_trial(applicant_id)->'membership' = 'null'::jsonb, 'inactive trial cannot be reactivated';
+  update public.memberships set status = 'cancelled' where id = membership_id;
+  assert public.start_self_service_ai_trial(applicant_id)->'membership' = 'null'::jsonb, 'cancelled trial cannot be reactivated';
   delete from public.memberships where id = membership_id;
   assert public.start_self_service_ai_trial(applicant_id)->'membership' = 'null'::jsonb, 'deleted trial cannot be restarted';
   assert not exists(select 1 from public.memberships where user_id = applicant_id), 'no replacement trial';
