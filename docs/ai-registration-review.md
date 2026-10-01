@@ -1,6 +1,6 @@
 # AI 線上註冊與自動 7 天試用
 
-## 現行變更（2026-10-01，尚待部署）
+## 現行變更（2026-10-01，已部署）
 
 - `/register?intent=ai` 填姓名、Email、台灣手機、密碼、行業及使用目的即可建立帳號，不需人工審核。
 - 註冊完成後提供登入入口；第一次登入自動建立 `ai_free` 會員，直接進入 `/dashboard/ai-tools`。
@@ -27,3 +27,10 @@
 - 一般 AI、企劃定位與寫作評估均檢查登入、有效會員與精確效期。
 - Node 測試：`node --test tests/*.test.js`。
 - 資料庫測試：依序套用上述 migrations，再執行 `tests/ai-review-db.sql` 與 `tests/ai-self-service-db.sql`；兩者均 rollback。
+
+## 正式驗證紀錄（2026-10-01）
+
+- 兩份 migrations 已於正式 Supabase 套用。新自助試用與舊人工審核交易測試均通過並 rollback，未留下測試會員。
+- Worker 版本 `302df1c2-985c-4d34-8b36-e4f91c58f7a3`；GitHub main 包含功能提交 `9623493`。
+- Vercel 正式資產 `index-757tn15p.js` 已確認包含新註冊文案、手機欄位與公開登入設定；正式註冊頁瀏覽器驗證通過。
+- 正式 API 無效手機回傳 400，未登入試用開通與 AI 生成回傳 401；未使用真實帳號執行完整註冊／登入或付費 AI 生成。

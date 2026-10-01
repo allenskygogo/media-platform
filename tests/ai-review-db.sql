@@ -9,7 +9,7 @@ declare
   result jsonb;
 begin
   insert into auth.users(id,email) values(admin_id,'review-admin@example.test'),(applicant_id,'review-applicant@example.test');
-  insert into public.profiles(id,email,role,status) values(admin_id,'review-admin@example.test','admin','active');
+  insert into public.profiles(id,display_name,email,role,status) values(admin_id,'Review Test Admin','review-admin@example.test','admin','active');
   perform public.register_ai_application(applicant_id,'Test','review-applicant@example.test','健身','企劃');
   assert (select status = 'pending' from public.ai_access_applications where user_id = applicant_id), 'registration must be pending';
   assert not exists(select 1 from public.memberships where user_id = applicant_id), 'registration must not grant membership';
