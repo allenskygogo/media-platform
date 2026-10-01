@@ -511,7 +511,7 @@ export default function UsersAdmin() {
       {err && <div className="auth-alert error" style={{ marginBottom: 16 }}>{err}</div>}
 
       <section className="card" style={{ marginBottom: 24, padding: 24 }} aria-label="AI 註冊審核">
-        <div className="page-actions"><div><h2>AI 註冊審核 · 待審核 {pendingApplications.length} 位</h2><p>確認資料後按「核准 7 天」。從核准時間起算，到期自動停止使用；再次申請仍需審核。</p></div>
+        <div className="page-actions"><div><h2>AI 會員申請 · 舊申請待審核 {pendingApplications.length} 位</h2><p>新註冊會員免審核，第一次登入自動開始 7 天試用。下方僅列出舊的待審核申請。</p></div>
           <button className="btn btn-secondary" onClick={loadStudents} disabled={loading}>重新整理</button></div>
         {pendingApplications.length === 0 && <p style={{ color: 'var(--gray-500)' }}>目前沒有待審核申請。</p>}
         {pendingApplications.map(user => <article key={user.id} style={{ padding: '20px 0', borderTop: '1px solid var(--gray-200)' }}>
@@ -566,7 +566,7 @@ export default function UsersAdmin() {
                       <span className="student-name">{user.name}</span>
                     </div>
                   </td>
-                  <td className="student-email">{user.email}</td>
+                  <td className="student-email">{user.email}{user.aiApplication?.phone && <div style={{ marginTop: 4 }}>{user.aiApplication.phone}</div>}</td>
                   <td className="tier-cell">
                     <select value={user.tier || 'basic'} onChange={e => changeTier(user, e.target.value)} disabled={updatingId === user.id || user.aiApplication?.status === 'pending'}
                       className="student-tier-select"
@@ -577,7 +577,7 @@ export default function UsersAdmin() {
                     </select>
                   </td>
                   <td className={user.expiresAt && new Date(user.expiresAt) < new Date() ? 'date-cell expired' : 'date-cell'}>
-                    {user.aiApplication?.status === 'pending' ? '核准後起算 7 天' : isAIOnly(user) && !user.expiresAt ? (user.aiApplication ? '尚未開通' : '免費使用中') : user.aiApplication ? formatDateTime(user.expiresAt) : formatDateOnly(user.expiresAt)}
+                    {user.aiApplication?.status === 'pending' ? '核准後起算 7 天' : isAIOnly(user) && !user.expiresAt ? (user.aiApplication?.registration_mode === 'self_service' ? '首次登入起算 7 天' : user.aiApplication ? '尚未開通' : '免費使用中') : user.aiApplication ? formatDateTime(user.expiresAt) : formatDateOnly(user.expiresAt)}
                   </td>
                   <td className="contract-cell">
                     {user.latestContract ? (

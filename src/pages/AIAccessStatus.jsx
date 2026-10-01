@@ -37,15 +37,16 @@ export default function AIAccessStatus() {
   if (!currentUser) return <Navigate to="/login?next=%2Fai-access" replace />
   if (!needsAIReview(currentUser)) return <Navigate to={memberHome(currentUser)} replace />
   const state = currentUser.accessStatus === 'pending' || currentUser.accessStatus === 'rejected' ? currentUser.accessStatus : 'expired'
-  const labels = { pending: ['申請已送出，等待審核', '核准後即可使用 AI 7 天，等待審核的時間不會計入。此頁每 30 秒更新審核狀態。'], rejected: ['申請未通過', '如需了解申請狀況，請聯絡課程顧問。'], expired: ['AI 使用權限已到期', '目前無法繼續使用 AI；再次申請並經審核核准後，可開通新的 7 天。'] }
+  const labels = { pending: ['申請已送出，等待審核', '核准後即可使用 AI 7 天，等待審核的時間不會計入。此頁每 30 秒更新使用狀態。'], rejected: ['申請未通過', '如需了解申請狀況，請聯絡課程顧問。'], expired: ['AI 使用權限已到期', '目前無法繼續使用 AI；再次申請並經審核核准後，可開通新的 7 天。'] }
+  if (currentUser.aiApplication?.registration_mode === 'self_service') labels.expired = ['7 天 AI 試用已到期', '感謝你的體驗。試用到期後不會自動扣款，如需繼續使用，請聯絡課程顧問。']
   return <div className="entry-page"><PublicEntryHeader /><main className="entry-main entry-registration">
     <section className="entry-intro"><p className="entry-eyebrow">AI 申請狀態</p><h1>{labels[state][0]}</h1><p>{labels[state][1]}</p></section>
     <section className="entry-card"><p>{currentUser.name} · {currentUser.email}</p>
       {currentUser.expiresAt && <p>上次使用期限：{new Date(currentUser.expiresAt).toLocaleString('zh-TW')}</p>}
       {error && <div className="auth-alert error" role="alert">{error}</div>}
       <div className="entry-actions">
-        {state === 'expired' && currentUser.aiApplication && <button className="sp2-btn sp2-btn-primary" disabled={busy} onClick={renew}>申請再開通 7 天</button>}
-        <button className="sp2-btn sp2-btn-outline" disabled={busy} onClick={refresh}>{busy ? '更新中…' : '更新審核狀態'}</button>
+        {state === 'expired' && currentUser.aiApplication && currentUser.aiApplication.registration_mode !== 'self_service' && <button className="sp2-btn sp2-btn-primary" disabled={busy} onClick={renew}>申請再開通 7 天</button>}
+        <button className="sp2-btn sp2-btn-outline" disabled={busy} onClick={refresh}>{busy ? '更新中…' : '更新使用狀態'}</button>
         {state !== 'pending' && <a className="sp2-btn sp2-btn-outline" href={LINE_OFFICIAL_URL} target="_blank" rel="noopener noreferrer">聯絡課程顧問</a>}
         <button className="sp2-btn sp2-btn-outline" onClick={logout}>登出</button>
       </div>

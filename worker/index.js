@@ -2556,9 +2556,10 @@ async function handleRegisterAI(request, env) {
   const password = typeof body?.password === 'string' ? body.password : ''
   const industry = String(body?.industry || '').trim()
   const purpose = String(body?.purpose || '').trim()
+  const phone = normalizeTaiwanMobilePhone(body?.phone)
   if (!name || name.length > 80 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-      password.length < 8 || password.length > 128 || !industry || industry.length > 100 || !purpose || purpose.length > 1000) {
-    return err('請填寫姓名、有效 Email、8～128 碼密碼、行業與使用目的', 400)
+      password.length < 8 || password.length > 128 || !phone || !industry || industry.length > 100 || !purpose || purpose.length > 1000) {
+    return err('請填寫姓名、有效 Email、台灣手機、8～128 碼密碼、行業與使用目的', 400)
   }
   // Creation only: never reset credentials or change permissions on an existing account.
   let user
@@ -2569,13 +2570,13 @@ async function handleRegisterAI(request, env) {
   }
   if (!user?.id) return err('註冊失敗，請稍後再試', 503)
   try {
-    const result = await callAccessRPC(env, 'register_ai_application', { p_user_id: user.id, p_name: name, p_email: email, p_industry: industry, p_purpose: purpose })
+    const result = await callAccessRPC(env, 'register_self_service_ai', { p_user_id: user.id, p_name: name, p_email: email, p_phone: phone, p_industry: industry, p_purpose: purpose })
     if (!result.ok) throw new Error('Application creation failed')
   } catch (_) {
     await deleteSupabaseAuthUser(env, user.id)
     return err('申請未完成，請稍後重新註冊', 503)
   }
-  return json({ success: true, status: 'pending' })
+  return json({ success: true, status: 'ready', trialDays: 7 })
 }
 
 async function handleProvisionStudent(request, env) {
@@ -3284,9 +3285,22 @@ async function handleStartMembership(request, env) {
     return err('Supabase service key is not configured', 503)
   }
 
+  if (!request.headers.get('Authorization')?.startsWith('Bearer ')) return err('請先登入', 401)
   const user = await requireUser(request, env)
   const membership = await getLatestActiveMembership(env, user.id)
-  if (!membership) return err('Active membership not found', 404)
+  if (!membership) {
+    // The RPC locks the profile and grants this self-service trial at most once.
+    const result = await callAccessRPC(env, 'start_self_service_ai_trial', { p_user_id: user.id })
+    if (!result.ok) return result
+    const data = await result.json()
+    if (!data.membership) return err('Active membership not found', 404)
+    const trial = data.membership
+    return json({ success: true, membership: {
+      planId: trial.plan_id, legacyTier: trial.legacy_tier,
+      startsAt: trial.starts_at, expiresAt: trial.expires_at,
+      trialCompletedAt: trial.trial_completed_at || null,
+    } })
+  }
 
   if (membership.expires_at) {
     return json({

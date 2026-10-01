@@ -114,7 +114,7 @@ export function AuthProvider({ children }) {
     if (!profile) throw new Error('找不到會員資料，請聯絡管理員')
     if (profile.status === 'inactive') throw new Error('帳號已停用，請聯絡管理員')
 
-    const { data: membership, error: membershipError } = await supabase
+    let { data: membership, error: membershipError } = await supabase
       .from('memberships')
       .select('plan_id, legacy_tier, status, starts_at, expires_at, trial_completed_at')
       .eq('user_id', userId)
@@ -124,14 +124,15 @@ export function AuthProvider({ children }) {
       .maybeSingle()
 
     if (membershipError) throw membershipError
+    if (!membership && profile.role === 'student') membership = await startMembershipIfNeeded(null)
     let application = null
     if (profile.role === 'student' && (!membership || isAIOnly({ plan_id: membership.plan_id }))) {
-      const result = await supabase.from('ai_access_applications').select('status,submitted_at,reviewed_at').eq('user_id', userId).maybeSingle()
+      const result = await supabase.from('ai_access_applications').select('status,submitted_at,reviewed_at,registration_mode').eq('user_id', userId).maybeSingle()
       if (result.error) throw result.error
       application = result.data
     }
     if (profile.role === 'student' && !membership && !application) throw new Error('會員尚未開通，請聯絡管理員')
-    const activeMembership = await startMembershipIfNeeded(membership)
+    const activeMembership = membership ? await startMembershipIfNeeded(membership) : null
     if (application) {
       const active = activeMembership && (!activeMembership.expires_at || new Date(activeMembership.expires_at).getTime() > Date.now())
       return { ...buildUserFromSupabase(profile, activeMembership || { plan_id: 'ai_free' }),
@@ -160,7 +161,7 @@ export function AuthProvider({ children }) {
   }
 
   const startMembershipIfNeeded = async (membership) => {
-    if (!membership || membership.expires_at || membership.plan_id === 'managed') return membership
+    if (membership?.expires_at || membership?.plan_id === 'managed') return membership
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token
@@ -170,15 +171,22 @@ export function AuthProvider({ children }) {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok || data.success === false || !data.membership) return membership
+      if (!response.ok || data.success === false || !data.membership) {
+        if (!membership && response.status !== 404) throw new Error(data.error || '試用開通失敗，請稍後重新登入')
+        return membership
+      }
       return {
         ...membership,
-        starts_at: data.membership.startsAt || membership.starts_at,
-        expires_at: data.membership.expiresAt || membership.expires_at,
-        trial_completed_at: data.membership.trialCompletedAt || membership.trial_completed_at,
+        plan_id: data.membership.planId || membership?.plan_id,
+        legacy_tier: data.membership.legacyTier || membership?.legacy_tier,
+        status: 'active',
+        starts_at: data.membership.startsAt || membership?.starts_at,
+        expires_at: data.membership.expiresAt || membership?.expires_at,
+        trial_completed_at: data.membership.trialCompletedAt || membership?.trial_completed_at,
       }
     } catch (error) {
       console.error('Membership start failed:', error)
+      if (!membership) throw error
       return membership
     }
   }
