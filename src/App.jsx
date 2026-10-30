@@ -1,6 +1,6 @@
-import { isAIOnly } from '../shared/memberAccess'
+import { isAIOnly, isSigningPath } from '../shared/memberAccess'
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Header from './components/Header'
@@ -98,6 +98,12 @@ function SocialPublisherGate({ managed = false }) {
   return <SocialPublisher />
 }
 
+function ProfileRoute() {
+  const location = useLocation()
+  const signingOnly = isSigningPath(location.pathname + location.search)
+  return <ProtectedRoute>{signingOnly ? <Profile /> : <StudentShell><Profile /></StudentShell>}</ProtectedRoute>
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -120,7 +126,7 @@ export default function App() {
           <Route path="/dashboard" element={<ProtectedRoute><StudentShell><DashboardHome /></StudentShell></ProtectedRoute>} />
           <Route path="/dashboard/courses" element={<ProtectedRoute><StudentShell><CoursesPage /></StudentShell></ProtectedRoute>} />
           <Route path="/dashboard/courses/:id" element={<ProtectedRoute><StudentShell><CourseDetail /></StudentShell></ProtectedRoute>} />
-          <Route path="/dashboard/profile"  element={<ProtectedRoute><StudentShell><Profile /></StudentShell></ProtectedRoute>} />
+          <Route path="/dashboard/profile"  element={<ProfileRoute />} />
           <Route path="/dashboard/trial"        element={<ProtectedRoute><StudentShell><Trial /></StudentShell></ProtectedRoute>} />
           <Route path="/dashboard/trial-player" element={<ProtectedRoute><StudentShell><TrialPlayer /></StudentShell></ProtectedRoute>} />
           <Route path="/dashboard/ai-tools" element={<ProtectedRoute requireTier="basic"><StudentShell><AITools /></StudentShell></ProtectedRoute>} />

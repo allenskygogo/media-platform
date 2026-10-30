@@ -4055,6 +4055,41 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   scroll-margin-top: 18px;
 }
 
+.signing-document-page {
+  min-height: 100dvh;
+  padding: 24px 12px;
+  background: #0c0e14;
+}
+
+.signing-document-content {
+  max-width: 1080px;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.signing-document-head {
+  margin-bottom: 20px;
+  letter-spacing: 0;
+}
+
+.signing-document-head p {
+  margin: 0 0 8px;
+  color: #aab1c2;
+  font-size: 12px;
+}
+
+.signing-document-head h1 {
+  margin: 0;
+  color: #f4f5f8;
+  font-size: 24px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.signing-document-page .plan-checkout-panel {
+  border-radius: 8px;
+}
+
 .checkout-panel-head {
   display: flex;
   align-items: center;

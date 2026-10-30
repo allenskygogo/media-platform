@@ -33,9 +33,9 @@
   color: #f4f5f8;
 }
 
-.signing-demo-head select {
-  width: 220px;
-  max-width: 100%;
+.signing-demo-plan {
+  color: #b6ead9;
+  font-size: 16px;
 }
 
 .signing-demo-notice {

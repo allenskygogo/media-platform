@@ -1,6 +1,6 @@
 import { isAIOnly } from '../../../shared/memberAccess'
-import { signingPath } from '../../../shared/memberAccess'
-import { Copy } from 'lucide-react'
+import { Copy, Eye } from 'lucide-react'
+import { studentSigningPlan, studentSigningLinks } from '../../utils/studentSigning'
 import { useEffect, useState } from 'react'
 import { getUsers, saveUsers, TIER_META } from '../../data/mockData'
 import { hasSupabase, supabase, allowLocalFallback } from '../../lib/supabase'
@@ -39,6 +39,7 @@ export default function UsersAdmin() {
   const [filterTier, setFilterTier] = useState('all')
   const [signatureFilter, setSignatureFilter] = useState('all')
   const [signaturePlans, setSignaturePlans] = useState({})
+  const [manualSigningLinks, setManualSigningLinks] = useState({})
   const [editUser, setEditUser] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [editError, setEditError] = useState('')
@@ -64,12 +65,13 @@ export default function UsersAdmin() {
 
   const flash = (t) => { setErr(''); setMsg(t); setTimeout(() => setMsg(''), 3000) }
   const flashError = (t) => { setMsg(''); setErr(t); setTimeout(() => setErr(''), 5000) }
+  const syncSigningPlan = (userId, tier) => {
+    setSignaturePlans(previous => ({ ...previous, [userId]: studentSigningPlan({ tier }).id }))
+  }
   const copySigningLink = async user => {
-    const currentPlanId = user.planId || TIER_TO_PLAN_ID[user.tier]
-    const planId = signaturePlans[user.id] || (SIGNABLE_PLANS.includes(currentPlanId) ? currentPlanId : 'online')
-    const url = `${window.location.origin}${signingPath(planId, user.id)}`
-    try { await navigator.clipboard.writeText(url); flash(`已複製 ${user.name} 的${planId === 'online' ? '線上會員' : planId === 'creator' ? '達人班' : '私塾'}簽署連結`) }
-    catch (_) { flashError('無法寫入剪貼簿，請從下方欄位複製連結。'); setSignaturePlans(previous => ({ ...previous, [user.id]: planId, [`${user.id}-url`]: url })) }
+    const { plan, signing } = studentSigningLinks(window.location.origin, user, signaturePlans[user.id])
+    try { await navigator.clipboard.writeText(signing); flash(`已複製 ${user.name} 的${plan.name}簽署連結`) }
+    catch (_) { flashError('無法寫入剪貼簿，請從下方欄位複製連結。'); setManualSigningLinks(previous => ({ ...previous, [user.id]: true })) }
   }
   const selectedUsers = users.filter(user => selectedIds.includes(user.id))
   const allFilteredSelected = filtered.length > 0 && filtered.every(user => selectedIds.includes(user.id))
@@ -229,6 +231,7 @@ export default function UsersAdmin() {
           }),
         })
         await loadStudents()
+        if (values.tier !== editUser.tier) syncSigningPlan(editUser.id, values.tier)
         setEditUser(null)
         flash('正式會員資料已更新')
       } catch (error) {
@@ -252,6 +255,7 @@ export default function UsersAdmin() {
     }
     saveUsers(all)
     setUsers(all.filter(u => u.role === 'student' && u.tier !== 'managed'))
+    if (values.tier !== editUser.tier) syncSigningPlan(editUser.id, values.tier)
     setEditUser(null)
     flash('學員資料已更新')
   }
@@ -344,6 +348,7 @@ export default function UsersAdmin() {
           }),
         })
         await loadStudents()
+        syncSigningPlan(user.id, tier)
         flash(`${user.name} 已變更為 ${TIER_META[tier]?.label}`)
       } catch (error) {
         flashError(error.message || '更新會員方案失敗')
@@ -360,6 +365,7 @@ export default function UsersAdmin() {
     all[idx].expiresAt = null
     saveUsers(all)
     setUsers(all.filter(u => u.role === 'student' && u.tier !== 'managed'))
+    syncSigningPlan(user.id, tier)
     flash(`${user.name} 已變更為 ${TIER_META[tier]?.label}`)
   }
 
@@ -612,11 +618,12 @@ export default function UsersAdmin() {
                       <span className="badge badge-unsigned">未簽署</span>
                     )}
                     <div className="contract-stack" style={{ marginTop: 8 }}>
-                      <select className="form-input" aria-label={`${user.name}的簽署方案`} value={signaturePlans[user.id] || (SIGNABLE_PLANS.includes(user.planId || TIER_TO_PLAN_ID[user.tier]) ? user.planId || TIER_TO_PLAN_ID[user.tier] : 'online')} onChange={event => setSignaturePlans(previous => ({ ...previous, [user.id]: event.target.value }))}>
+                      <select className="form-input" aria-label={`${user.name}的簽署方案`} value={studentSigningPlan(user, signaturePlans[user.id]).id} onChange={event => setSignaturePlans(previous => ({ ...previous, [user.id]: event.target.value }))}>
                         <option value="online">線上會員 NT$6,800</option><option value="creator">頂流達人</option><option value="master">頂流私塾</option>
                       </select>
                       <button type="button" className="btn btn-secondary btn-sm" title="複製此學員的線上簽署連結" onClick={() => copySigningLink(user)}><Copy size={14} />複製簽署連結</button>
-                      {signaturePlans[`${user.id}-url`] && <input aria-label="簽署連結" className="form-input" readOnly value={signaturePlans[`${user.id}-url`]} onFocus={event => event.target.select()} />}
+                      <a className="btn btn-secondary btn-sm" href={studentSigningLinks(window.location.origin, user, signaturePlans[user.id]).preview} target="_blank" rel="noreferrer" title={`預覽${studentSigningPlan(user, signaturePlans[user.id]).name}的測試簽署頁`}><Eye size={14} />預覽此方案</a>
+                      {manualSigningLinks[user.id] && <input aria-label="簽署連結" className="form-input" readOnly value={studentSigningLinks(window.location.origin, user, signaturePlans[user.id]).signing} onFocus={event => event.target.select()} />}
                     </div>
                   </td>
                   <td className={user.lastLoginAt ? 'date-cell' : 'date-cell empty'}>

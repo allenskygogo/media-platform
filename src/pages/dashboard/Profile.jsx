@@ -1168,7 +1168,7 @@ export function PlanCheckoutPreview({
         <div className="checkout-preview-card success">
           <h4>{previewOnly ? '測試預覽完成' : '已完成電子簽署'}</h4>
           <p>{previewOnly ? '本次僅測試畫面，沒有送出簽名、建立合約或訂單，也沒有變更任何學員權限。' : `${message || '文件已留存，客服可於後台下載。'} 簽署本身不會扣款或變更會員權限。`}</p>
-          <button type="button" className="checkout-next-btn" onClick={onClose}>{previewOnly ? '重新預覽' : '回到方案比較'}</button>
+          <button type="button" className="checkout-next-btn" onClick={onClose}>{previewOnly ? '重新預覽' : signingOnly ? '完成' : '回到方案比較'}</button>
         </div>
       )}
 
@@ -1574,6 +1574,36 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose,
   )
 }
 
+export function StudentSigningDocument({ currentUser, plan, signingUserId }) {
+  const [acceptedContract, setAcceptedContract] = useState(false)
+  const [checkoutStep, setCheckoutStep] = useState(1)
+  const [closed, setClosed] = useState(false)
+
+  return <main className="signing-document-page">
+    <div className="signing-document-content">
+      <header className="signing-document-head">
+        <p>TOP LEVEL TRAFFIC</p>
+        <h1>{plan.name}線上簽署</h1>
+      </header>
+      {closed ? <section className="checkout-preview-card">
+        <h2>{checkoutStep === 3 ? `${plan.name}簽署已完成` : `${plan.name}簽署文件已關閉`}</h2>
+        {checkoutStep !== 3 && <button type="button" className="checkout-next-btn" onClick={() => setClosed(false)}>繼續簽署{plan.name}</button>}
+      </section> : <PlanCheckoutPreview
+        plan={plan}
+        currentUser={currentUser}
+        billingCycle="annual"
+        acceptedContract={acceptedContract}
+        setAcceptedContract={setAcceptedContract}
+        checkoutStep={checkoutStep}
+        setCheckoutStep={setCheckoutStep}
+        onClose={() => setClosed(true)}
+        signingOnly
+        signingUserId={signingUserId}
+      />}
+    </div>
+  </main>
+}
+
 export default function Profile() {
   const { currentUser, updateCurrentUser, updatePassword } = useAuth()
   const location = useLocation()
@@ -1635,10 +1665,11 @@ export default function Profile() {
     : null
 
   useEffect(() => {
-    if (upgradePlanId || signingPlanId) setShowPlanModal(true)
-  }, [upgradePlanId, signingPlanId])
+    if (upgradePlanId) setShowPlanModal(true)
+  }, [upgradePlanId])
 
   if (signingOnly && signingUserId !== currentUser.id) return <div className="page-content"><h1>請登入簽署連結指定的學員帳號</h1><p>此連結屬於另一位學員，請先登出並使用本人帳號登入。</p><a href="/dashboard/profile">回到個人資料</a></div>
+  if (signingOnly) return <StudentSigningDocument key={`${signingPlanId}-${signingUserId}`} currentUser={currentUser} plan={plans.find(plan => plan.id === signingPlanId)} signingUserId={signingUserId} />
 
   return (
     <div className="page-content">

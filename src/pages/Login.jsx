@@ -1,12 +1,14 @@
-import { loginDestination } from '../../shared/memberAccess'
+import { isSigningPath, loginDestination } from '../../shared/memberAccess'
 import { useState } from 'react'
 import { useNavigate, useSearchParams, Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { plans } from '../data/plans'
 
 export default function Login() {
   const { login, currentUser, loading: authLoading } = useAuth()
   const [searchParams] = useSearchParams()
   const next = searchParams.get('next')
+  const signingPlan = isSigningPath(next) ? plans.find(plan => plan.id === new URL(next, 'https://toplevel-tw.com').searchParams.get('sign')) : null
   const aiIntent = next === '/dashboard/ai-tools'
   const navigate  = useNavigate()
   const [form, setForm]     = useState({ email: '', password: '' })
@@ -33,10 +35,10 @@ export default function Login() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-logo">TOP LEVEL TRAFFIC</div>
-        <p className="auth-subtitle">{aiIntent ? '登入後，直接使用 AI 工具' : next === '/dashboard/courses' ? '登入後，前往我的課程' : '會員登入｜AI 與課程共用同一個帳號'}</p>
-        <p className="auth-divider" style={{ marginBottom: 18 }}>
+        <p className="auth-subtitle">{signingPlan ? `${signingPlan.name}線上簽署｜請使用本人學員帳號登入` : aiIntent ? '登入後，直接使用 AI 工具' : next === '/dashboard/courses' ? '登入後，前往我的課程' : '會員登入｜AI 與課程共用同一個帳號'}</p>
+        {!signingPlan && <p className="auth-divider" style={{ marginBottom: 18 }}>
           <Link to="/" className="auth-link">回到首頁</Link>
-        </p>
+        </p>}
 
         {error && <div className="auth-alert error" style={{ marginBottom: 16 }}>{error}</div>}
 
@@ -56,10 +58,10 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="auth-divider" style={{ marginTop: 20 }}>
+        {!signingPlan && <p className="auth-divider" style={{ marginTop: 20 }}>
           還沒有帳號？<Link to="/register?intent=ai" className="auth-link">註冊申請 AI</Link>
           &nbsp;·&nbsp;<Link to="/courses" className="auth-link">查看線上課程</Link>
-        </p>
+        </p>}
 
       </div>
     </div>

@@ -34,8 +34,8 @@ function PreviewForm({ plan }) {
 }
 
 export default function ContractSigningPreview() {
-  const [params, setParams] = useSearchParams()
-  const plan = previewPlans.find(item => item.id === params.get('plan')) || previewPlans.find(item => item.id === 'creator')
+  const [params] = useSearchParams()
+  const plan = params.getAll('plan').length === 1 ? previewPlans.find(item => item.id === params.get('plan')) : null
 
   useEffect(() => {
     const robots = document.createElement('meta')
@@ -52,15 +52,13 @@ export default function ContractSigningPreview() {
           <p>TOP LEVEL TRAFFIC</p>
           <h1>線上簽署測試預覽</h1>
         </div>
-        <select className="form-input" aria-label="預覽方案" value={plan.id} onChange={event => setParams({ plan: event.target.value }, { replace: true })}>
-          {previewPlans.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
+        {plan && <strong className="signing-demo-plan">{plan.name}</strong>}
       </header>
       <div className="signing-demo-notice" role="note">
         <ShieldCheck size={22} aria-hidden="true" />
         <p>僅供測試，不代表正式簽署。姓名與電話皆為範例，請勿填入真實個資；此頁不會送出簽名、扣款或開通會員。</p>
       </div>
-      <PreviewForm key={plan.id} plan={plan} />
+      {plan ? <PreviewForm key={plan.id} plan={plan} /> : <p className="auth-alert error">簽署方案無效，請從後台重新複製對應方案的連結。</p>}
     </div>
   </main>
 }
