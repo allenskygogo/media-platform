@@ -15,6 +15,16 @@ const signature = 'data:image/png;base64,aGVsbG8='
 const request = (path, body, method = 'POST') => new Request(`https://worker.test${path}`, { method, headers: { Authorization: 'Bearer test-session', 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) })
 const form = { planId: 'online', billingCycle: 'annual', signerName: '測試學員', signerEmail: 'student@example.test', signerPhone: '0912345678', signerSignatureDataUrl: signature, acceptedContract: true, signingUserId: userId }
 
+test('unsigned sessions receive login-required status before accessing signatures or student data', async t => {
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('Must reject before reading private data') })
+  t.mock.method(console, 'error', () => {})
+  for (const [path, method] of [['/api/admin/students', 'GET'], ['/api/contracts/sign', 'POST']]) {
+    const response = await worker.fetch(new Request(`https://worker.test${path}`, { method }), env)
+    assert.equal(response.status, 401)
+    assert.equal((await response.json()).error, 'Missing authorization token')
+  }
+})
+
 test('online members keep all video courses after annual AI expires, without offline booking', () => {
   const membership = { plan_id: 'online', status: 'active', expires_at: '2000-01-01' }
   const user = { tier: 'online', planId: 'online', expiresAt: membership.expires_at }

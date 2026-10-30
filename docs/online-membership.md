@@ -28,10 +28,12 @@ The SQL query tool required unavailable approval. The structured schema and migr
 
 Vercel team access was authorized by the user on 2026-10-30. Deployment uses the connected Vercel project `prj_dL2B0uqjISaxRSwI3uNgvA9270Ea` in team `team_PO16bt4IiFXYHeWrKkfjmRtO`, with Cloudflare Worker `media-platform-api`.
 
+The production frontend release `f0f6eb69b03286d09ff7c01ae9820d5a8e8204bd` reached READY as `dpl_8D339YMdsvHXHTpZUVcNefnJcWfK` and is assigned to `toplevel-tw.com` and `www.toplevel-tw.com`. The live quotation download matches the original XLSX by SHA-256. The deployed frontend also passed anonymous login-redirect checks and browser-intercepted student/admin flow checks without creating production student records.
+
 ## Verification
 
 `node --test tests/*.test.js` covers access boundaries, signature prerequisites, server-owned price/timestamp, quote ownership, document contents, current-plan status and manual payment activation. The ten quotation notes were compared with the source XLSX text. Local mocked browser checks cover a mobile drawn signature, required consent, signature-only completion, copied admin links, unsigned filtering, and purchase layout at 390px and 1440px.
 
-Thirty tests, the production frontend build and a Wrangler Worker dry-run bundle passed. Database schema changes were applied; no student contract, order, membership row or charge was created as part of verification.
+Thirty-one tests, the production frontend build and a Wrangler Worker bundle passed. Database schema changes were applied; no student contract, order, membership row or charge was created as part of verification. Missing/invalid session tokens are returned as HTTP 401 so the signing flow can prompt or refresh login correctly.
 
 Existing database advisor notices were recorded without modifying unrelated functions: [function search paths](https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable), [anonymous SECURITY DEFINER calls](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable), [authenticated SECURITY DEFINER calls](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable), and [leaked password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection). The changed tables retain RLS.

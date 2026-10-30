@@ -1134,7 +1134,8 @@ export default {
       return err('Not found', 404)
     } catch (e) {
       console.error(e)
-      return err(e.message, 500)
+      const needsLogin = ['Missing authorization token', 'Invalid authorization token'].includes(e.message)
+      return err(e.message, needsLogin ? 401 : 500)
     }
   },
 }
