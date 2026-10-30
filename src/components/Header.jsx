@@ -1,4 +1,4 @@
-import { isAIOnly, memberHome } from '../../shared/memberAccess'
+import { isAIOnly, memberHome, canAccessStudentPath } from '../../shared/memberAccess'
 import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -67,7 +67,7 @@ export default function Header() {
           {!aiOnly && nl('/dashboard/courses', '我的課程')}
           {nl('/dashboard/ai-tools', '✨ AI 工具')}
           {showSocialPublisher && nl('/dashboard/publisher', '一鍵發布')}
-          {!aiOnly && nl('/dashboard/booking', '預約一對一')}
+          {!aiOnly && canAccessStudentPath(currentUser, '/dashboard/booking') && nl('/dashboard/booking', '預約一對一')}
           {nl('/dashboard/profile', '個人資料')}
         </nav>
       )}

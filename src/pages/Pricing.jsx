@@ -28,8 +28,7 @@ export default function Pricing() {
           <p className="sp2-eyebrow">PLAN SYSTEM</p>
           <h1>選擇你的成長路徑</h1>
           <p>
-            從體驗課開始，逐步升級到系統學習、一對一陪跑與代操服務。
-            目前方案內容仍在測試整理中，正式價格與金流會在後續階段上線。
+            線上會員可使用平台 AI 與全部線上影片教學，達人班提供額外線下實體課程。
           </p>
         </section>
 
@@ -45,6 +44,7 @@ export default function Pricing() {
                 <span>模式：{plan.learningMode}</span>
                 <span>成果：{plan.coreOutcome}</span>
               </div>
+              {plan.id === 'online' && <button className="sp2-btn sp2-btn-primary" onClick={() => navigate('/login?next=' + encodeURIComponent('/dashboard/profile?upgrade=online'))}>加入線上會員 NT$6,800／年</button>}
             </article>
           ))}
         </section>
@@ -80,9 +80,6 @@ export default function Pricing() {
           </div>
         </section>
 
-        <p className="plan-page-note">
-          這個頁面目前只用於測試版方案內容確認，尚未接正式金流與會員升級流程。
-        </p>
       </main>
     </div>
   )

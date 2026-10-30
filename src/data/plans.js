@@ -24,9 +24,25 @@ export const plans = [
     coreOutcome: '理解自身產業的內容切入角度',
   },
   {
+    id: 'online', name: '線上會員', level: 2,
+    positioning: '年度線上會員 NT$6,800',
+    coreValue: '平台 AI 與全部線上影片教學',
+    bestFor: '想隨時線上學習與使用 AI 的創作者',
+    learningMode: '線上隨到隨學', physicalCourse: '無', physicalOneOnOne: '無',
+    courseAccess: '全部線上影片教學，購買範圍永久觀看',
+    aiTools: '平台已開放 AI 工具，使用 1 年',
+    accountPositioning: '線上課程與 AI 企劃定位',
+    topicAbility: '每週選題靈感與拆解', scriptAbility: '線上腳本教學與 AI 腳本',
+    filmingAbility: '線上拍攝教學', dataAbility: '線上數據分析教學',
+    personalIP: '線上個人 IP 教學', privateTrafficSales: '線上課程學習',
+    communitySupport: '每月內部直播閉門課、365 天群組實操指導',
+    practiceOpportunity: '8 套 SOP 工具包', serviceDepth: '線上學習與群組指導',
+    coreOutcome: '建立內容方法並使用 AI 協助實作',
+  },
+  {
     id: 'creator',
     name: '頂流達人',
-    level: 2,
+    level: 3,
     positioning: '自媒體獲客系統課',
     coreValue: '系統建立自媒體獲客方法',
     bestFor: '準備系統建立自媒體獲客能力',
@@ -50,7 +66,7 @@ export const plans = [
   {
     id: 'master',
     name: '頂流私塾',
-    level: 3,
+    level: 4,
     positioning: '高階一對一實戰陪跑',
     coreValue: '專屬一對一策略陪跑，協助帳號方向、內容主軸與拍攝執行優化',
     bestFor: '需要策略陪跑與執行品質優化',
@@ -74,7 +90,7 @@ export const plans = [
   {
     id: 'managed',
     name: '頂流代操',
-    level: 4,
+    level: 5,
     positioning: '帳號全權管理服務',
     coreValue: '團隊協助帳號營運、拍攝統籌、內容安排與數據更新',
     bestFor: '適合需要團隊協助帳號營運、內容交付與數據追蹤的進階需求',
@@ -98,6 +114,7 @@ export const plans = [
 ]
 
 export const PLAN_NAME_MAP = {
+  online: '線上會員',
   trial: '體驗課',
   basic: '體驗課',
   creator: '頂流達人',
@@ -113,6 +130,7 @@ export const PLAN_NAME_MAP = {
 }
 
 export const LEGACY_TIER_TO_PLAN_ID = {
+  online: 'online',
   basic: 'trial',
   trial: 'trial',
   standard: 'creator',
@@ -127,7 +145,7 @@ export const LEGACY_TIER_TO_PLAN_ID = {
   'done-for-you': 'managed',
 }
 
-export const PLAN_ORDER = ['trial', 'creator', 'master', 'managed']
+export const PLAN_ORDER = ['trial', 'online', 'creator', 'master', 'managed']
 
 export function getPlanName(key) {
   return PLAN_NAME_MAP[key] || key || ''

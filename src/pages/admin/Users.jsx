@@ -1,15 +1,18 @@
 import { isAIOnly } from '../../../shared/memberAccess'
+import { signingPath } from '../../../shared/memberAccess'
+import { Copy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { getUsers, saveUsers, TIER_META } from '../../data/mockData'
 import { hasSupabase, supabase, allowLocalFallback } from '../../lib/supabase'
 
-const TIERS = ['ai_free', 'basic', 'standard', 'advanced']
-const TIER_MARK = { ai_free: '', basic: '體驗', standard: '達人', advanced: '進階' }
+const TIERS = ['ai_free', 'basic', 'online', 'standard', 'advanced']
+const TIER_MARK = { ai_free: '', basic: '體驗', online: '', standard: '達人', advanced: '進階' }
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const PROVISION_TIERS = [
   { tier: 'ai_free', planId: 'ai_free', label: 'AI 會員（僅 AI 工具）' },
   { tier: 'basic', planId: 'trial', label: '體驗課' },
+  { tier: 'online', planId: 'online', label: '線上會員（AI＋全部線上影片）' },
   { tier: 'standard', planId: 'creator', label: '頂流達人' },
   { tier: 'advanced', planId: 'master', label: '頂流私塾' },
 ]
@@ -24,12 +27,18 @@ const emptyProvisionForm = {
   expiresAt: '',
 }
 
+const SIGNABLE_PLANS = ['online', 'creator', 'master']
+const currentContractFor = user => user.currentContract ||
+  (user.latestContract && (user.latestContract.planId === (user.planId || TIER_TO_PLAN_ID[user.tier]) || !SIGNABLE_PLANS.includes(user.planId || TIER_TO_PLAN_ID[user.tier])) ? user.latestContract : null)
+
 export default function UsersAdmin() {
   const [users, setUsers]       = useState(() => getUsers().filter(u => u.role === 'student' && u.tier !== 'managed'))
   const [loading, setLoading]   = useState(false)
   const [updatingId, setUpdatingId] = useState('')
   const [search, setSearch]     = useState('')
   const [filterTier, setFilterTier] = useState('all')
+  const [signatureFilter, setSignatureFilter] = useState('all')
+  const [signaturePlans, setSignaturePlans] = useState({})
   const [editUser, setEditUser] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [editError, setEditError] = useState('')
@@ -49,11 +58,19 @@ export default function UsersAdmin() {
   const filtered = users.filter(u => {
     const matchSearch = u.name.includes(search) || u.email.includes(search)
     const matchTier   = filterTier === 'all' || (filterTier === 'pending' ? u.aiApplication?.status === 'pending' : u.tier === filterTier)
-    return matchSearch && matchTier
+    const signed = Boolean(currentContractFor(u))
+    return matchSearch && matchTier && (signatureFilter === 'all' || (signatureFilter === 'signed' ? signed : !signed))
   })
 
   const flash = (t) => { setErr(''); setMsg(t); setTimeout(() => setMsg(''), 3000) }
   const flashError = (t) => { setMsg(''); setErr(t); setTimeout(() => setErr(''), 5000) }
+  const copySigningLink = async user => {
+    const currentPlanId = user.planId || TIER_TO_PLAN_ID[user.tier]
+    const planId = signaturePlans[user.id] || (SIGNABLE_PLANS.includes(currentPlanId) ? currentPlanId : 'online')
+    const url = `${window.location.origin}${signingPath(planId, user.id)}`
+    try { await navigator.clipboard.writeText(url); flash(`已複製 ${user.name} 的${planId === 'online' ? '線上會員' : planId === 'creator' ? '達人班' : '私塾'}簽署連結`) }
+    catch (_) { flashError('無法寫入剪貼簿，請從下方欄位複製連結。'); setSignaturePlans(previous => ({ ...previous, [user.id]: planId, [`${user.id}-url`]: url })) }
+  }
   const selectedUsers = users.filter(user => selectedIds.includes(user.id))
   const allFilteredSelected = filtered.length > 0 && filtered.every(user => selectedIds.includes(user.id))
 
@@ -145,7 +162,7 @@ export default function UsersAdmin() {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `頂級流量_${contract.planName || contract.planId}_合作協議書_${contract.signerName || '學員'}_${String(contract.signedAt || '').slice(0, 10)}.html`
+      link.download = `頂級流量_${contract.planName || contract.planId}_${contract.planId === 'online' ? '簽署報價單' : '合作協議書'}_${contract.signerName || '學員'}_${String(contract.signedAt || '').slice(0, 10)}.html`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -525,6 +542,9 @@ export default function UsersAdmin() {
         </article>)}
       </section>
       <div className="filter-bar" style={{ marginBottom: 20 }}>
+        <select className="form-input" aria-label="簽署狀態" value={signatureFilter} onChange={event => setSignatureFilter(event.target.value)} style={{ width: 150 }}>
+          <option value="all">全部簽署狀態</option><option value="unsigned">未簽署（{users.filter(user => !currentContractFor(user)).length}）</option><option value="signed">已簽署</option>
+        </select>
         <button className={`filter-chip ${filterTier === 'pending' ? 'active' : ''}`} onClick={() => setFilterTier('pending')}>待審核 {pendingApplications.length}</button>
         <input className="form-input" placeholder="搜尋姓名、電子郵件…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 280 }} />
         {['all', ...TIERS].map(t => (
@@ -580,17 +600,24 @@ export default function UsersAdmin() {
                     {user.aiApplication?.status === 'pending' ? '核准後起算 7 天' : isAIOnly(user) && !user.expiresAt ? (user.aiApplication?.registration_mode === 'self_service' ? '首次登入起算 7 天' : user.aiApplication ? '尚未開通' : '免費使用中') : user.aiApplication ? formatDateTime(user.expiresAt) : formatDateOnly(user.expiresAt)}
                   </td>
                   <td className="contract-cell">
-                    {user.latestContract ? (
+                    {currentContractFor(user) ? (
                       <div className="contract-stack">
                         <span className="badge badge-active">已簽署</span>
-                        <span>{formatDateTime(user.latestContract.signedAt)}</span>
-                        <button className="btn btn-secondary btn-sm" onClick={() => downloadContract(user.latestContract)}>
-                          {user.latestContract.billingCycle === 'monthly' ? '下載合約/報價' : '下載合約'}
+                        <span>{formatDateTime(currentContractFor(user).signedAt)}</span>
+                        <button className="btn btn-secondary btn-sm" onClick={() => downloadContract(currentContractFor(user))}>
+                          {user.planId === 'online' ? '下載簽署報價單' : currentContractFor(user).billingCycle === 'monthly' ? '下載合約/報價' : '下載合約'}
                         </button>
                       </div>
                     ) : (
-                      <span style={{ color: 'var(--gray-400)' }}>未簽署</span>
+                      <span className="badge badge-unsigned">未簽署</span>
                     )}
+                    <div className="contract-stack" style={{ marginTop: 8 }}>
+                      <select className="form-input" aria-label={`${user.name}的簽署方案`} value={signaturePlans[user.id] || (SIGNABLE_PLANS.includes(user.planId || TIER_TO_PLAN_ID[user.tier]) ? user.planId || TIER_TO_PLAN_ID[user.tier] : 'online')} onChange={event => setSignaturePlans(previous => ({ ...previous, [user.id]: event.target.value }))}>
+                        <option value="online">線上會員 NT$6,800</option><option value="creator">頂流達人</option><option value="master">頂流私塾</option>
+                      </select>
+                      <button type="button" className="btn btn-secondary btn-sm" title="複製此學員的線上簽署連結" onClick={() => copySigningLink(user)}><Copy size={14} />複製簽署連結</button>
+                      {signaturePlans[`${user.id}-url`] && <input aria-label="簽署連結" className="form-input" readOnly value={signaturePlans[`${user.id}-url`]} onFocus={event => event.target.select()} />}
+                    </div>
                   </td>
                   <td className={user.lastLoginAt ? 'date-cell' : 'date-cell empty'}>
                     {formatDateTime(user.lastLoginAt)}

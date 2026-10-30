@@ -1,4 +1,5 @@
 import { isAIOnly } from '../../../shared/memberAccess'
+import { isOnlineMember, onlineAnnualAccessExpired } from '../../../shared/onlineMembership'
 import PlanningAgentChat from './PlanningAgentChat'
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
@@ -247,6 +248,11 @@ function ComingSoonLabel() {
 }
 
 function getAITierInfo(user) {
+  if (isOnlineMember(user)) return {
+    name: '線上會員', count: onlineAnnualAccessExpired(user) ? 0 : 4, total: VISIBLE_NAV_TOOLS.length,
+    summary: onlineAnnualAccessExpired(user) ? 'AI 與年度服務已到期，線上影片教學仍可觀看。' : '可使用平台已開放 AI 工具，並觀看全部線上影片教學。',
+    next: user.expiresAt ? `AI 與年度服務效期：${new Date(user.expiresAt).toLocaleDateString('zh-TW')}` : 'AI 使用權 1 年，線上影片永久觀看。',
+  }
   if (isAIOnly(user)) return {
     name: 'AI 會員',
     count: 4, total: VISIBLE_NAV_TOOLS.length,
@@ -1459,7 +1465,7 @@ function deriveAITier(user) {
   if (hasFullAITestAccess(user)) return 'advanced'
   const tier = user?.tier || 'basic'
   if (tier === 'advanced' || tier === 'managed') return 'advanced'
-  if (tier === 'standard') return 'standard'
+  if (tier === 'standard' || tier === 'online') return 'standard'
   return 'trial'
 }
 
@@ -4896,6 +4902,15 @@ function PlanningPage() {
 export default function AITools() {
   const { currentUser } = useAuth()
   const [activeId, setActiveId] = useState('planning')
+
+  if (onlineAnnualAccessExpired(currentUser)) return (
+    <div className="page-content">
+      <h1>AI 年度使用權已到期</h1>
+      <p>你的線上影片教學仍可永久觀看。續約後即可繼續使用平台 AI 與年度服務。</p>
+      <a className="btn btn-primary" href="/dashboard/profile?upgrade=online">續約線上會員</a>
+      <a className="btn btn-secondary" href="/dashboard/courses">前往線上課程</a>
+    </div>
+  )
 
   return (
     <div className="ait-page">

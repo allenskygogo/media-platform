@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { canAccessStudentPath, memberHome, isAIOnly, needsAIReview } from '../../shared/memberAccess'
+import { canAccessStudentPath, memberHome, isAIOnly, needsAIReview, isSigningPath } from '../../shared/memberAccess'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -21,7 +21,8 @@ export default function ProtectedRoute({ children, requireAdmin = false, require
   if (loading) return <Loading />
   if (!currentUser) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />
 
-  if (needsAIReview(currentUser)) return <Navigate to="/ai-access" replace />
+  const onSigningRoute = isSigningPath(location.pathname + location.search)
+  if (needsAIReview(currentUser) && !onSigningRoute) return <Navigate to="/ai-access" replace />
 
   const isAdmin   = currentUser.role === 'admin'
   const isManaged = currentUser.tier === 'managed'
@@ -40,7 +41,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, require
   if (isAdmin)   return <Navigate to="/admin"   replace />
   if (isManaged) return <Navigate to="/managed" replace />
 
-  if (!canAccessStudentPath(currentUser, location.pathname)) {
+  if (!onSigningRoute && !canAccessStudentPath(currentUser, location.pathname)) {
     return <Navigate to={memberHome(currentUser)} replace />
   }
 
@@ -54,7 +55,7 @@ export default function ProtectedRoute({ children, requireAdmin = false, require
   }
 
   if (requireTier && !isAIOnly(currentUser)) {
-    const ORDER = { basic: 1, standard: 2, advanced: 3 }
+    const ORDER = { basic: 1, online: 2, standard: 2, advanced: 3 }
     if ((ORDER[currentUser.tier] || 0) < ORDER[requireTier]) {
       return <Navigate to="/dashboard" replace />
     }

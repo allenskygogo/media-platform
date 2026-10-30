@@ -1,4 +1,4 @@
-import { isAIOnly } from '../../shared/memberAccess'
+import { isAIOnly, canAccessStudentPath } from '../../shared/memberAccess'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { canUseSocialPublisher } from '../utils/socialPublisherAccess'
@@ -30,7 +30,7 @@ export default function MobileTabBar() {
 
   return (
     <nav className="mobile-tab-bar" aria-label="底部導覽">
-      {tabs.map(({ to, label, Icon, end }) => (
+      {tabs.filter(item => canAccessStudentPath(currentUser, item.to)).map(({ to, label, Icon, end }) => (
         <NavLink
           key={to}
           to={to}

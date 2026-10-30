@@ -55,7 +55,7 @@ import { canUseSocialPublisher } from './utils/socialPublisherAccess'
 function StudentShell({ children }) {
   const { currentUser } = useAuth()
   useEffect(() => {
-    const tier = isAIOnly(currentUser) ? 'standard' : currentUser?.tier || 'basic'
+    const tier = isAIOnly(currentUser) || currentUser?.tier === 'online' ? 'standard' : currentUser?.tier || 'basic'
     const cls  = `tier-${tier}`
     document.body.classList.add(cls)
     return () => document.body.classList.remove(cls)

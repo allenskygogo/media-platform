@@ -3744,7 +3744,7 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
 .plan-aligned-grid,
 .comparison-row {
   display: grid;
-  grid-template-columns: 180px repeat(4, minmax(0, 1fr));
+  grid-template-columns: 140px repeat(5, minmax(0, 1fr));
   align-items: stretch;
 }
 
@@ -4666,7 +4666,7 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
 
 .plan-full-grid {
   min-width: 1120px;
-  grid-template-columns: 180px repeat(4, minmax(0, 1fr));
+  grid-template-columns: 160px repeat(5, minmax(0, 1fr));
 }
 
 .plan-full-grid.comparison-head > div {
@@ -6914,7 +6914,7 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
 
   .mobile-plan-steps {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
     position: relative;
     padding-bottom: 16px;
@@ -7578,8 +7578,8 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   }
 
   .plan-full-grid {
-    min-width: 960px;
-    grid-template-columns: 160px repeat(4, minmax(0, 1fr));
+    min-width: 1160px;
+    grid-template-columns: 160px repeat(5, minmax(0, 1fr));
   }
 
   .plan-full-compare-wrap {
@@ -13923,3 +13923,12 @@ tbody td { padding: 13px 16px; font-size: 14px; color: rgba(232,238,255,0.78); }
   font-weight: 900;
   letter-spacing: 0.1em;
 }
+
+.online-membership-quote table { width: 100%; border-collapse: collapse; table-layout: fixed; margin: 16px 0; }
+.online-membership-quote th, .online-membership-quote td { padding: 10px; border: 1px solid rgba(255,255,255,0.18); text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.online-membership-quote th:first-child, .online-membership-quote td:first-child { width: 45px; }
+.online-membership-quote h6 { margin: 14px 0 6px; font-size: 15px; }
+.online-membership-quote a { color: #93c5fd; }
+.admin-students-table .col-contract { min-width: 180px; }
+.admin-students-table .contract-cell .form-input { width: 100%; min-width: 155px; font-size: 12px; }
+.badge-unsigned { color: #fdba74; background: rgba(180,83,9,0.2); border: 1px solid rgba(251,146,60,0.35); }

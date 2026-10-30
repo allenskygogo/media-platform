@@ -10,6 +10,7 @@ const AuthContext = createContext(null)
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const PLAN_TO_TIER = {
+  online: 'online',
   ai_free: 'ai_free',
   ai_trial: 'ai_free',
   ai_subscription: 'ai_free',
@@ -20,6 +21,7 @@ const PLAN_TO_TIER = {
 }
 
 const LEGACY_TO_TIER = {
+  online: 'online',
   basic: 'basic',
   standard: 'standard',
   advanced: 'advanced',
@@ -138,9 +140,8 @@ export function AuthProvider({ children }) {
       return { ...buildUserFromSupabase(profile, activeMembership || { plan_id: 'ai_free' }),
         aiApplication: application, accessStatus: active ? 'active' : application.status === 'approved' ? 'expired' : application.status }
     }
-    if (activeMembership?.expires_at && new Date(activeMembership.expires_at).getTime() <= Date.now()) {
-      throw new Error('會員效期已到期，請聯絡管理員續約')
-    }
+    // Expired course members can still sign documents or renew from their profile.
+    // ProtectedRoute and the Worker continue to enforce course and AI expiry.
     return buildUserFromSupabase(profile, activeMembership)
   }
 

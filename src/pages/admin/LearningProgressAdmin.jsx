@@ -9,7 +9,7 @@ import {
 import { hasSupabase, supabase } from '../../lib/supabase'
 
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
-const TIER_MARK = { basic: '體驗課', standard: '頂流達人', advanced: '頂流私塾', managed: '頂流代操' }
+const TIER_MARK = { basic: '體驗課', online: '線上會員', standard: '頂流達人', advanced: '頂流私塾', managed: '頂流代操' }
 const REMINDER_KEY = 'mp_learning_reminders'
 const DEFAULT_MESSAGE = '提醒你回來完成課程進度，有問題可以私訊官方客服 @xgfx。'
 const DEFAULT_SUBJECT = '頂級流量課程進度提醒'
@@ -325,7 +325,7 @@ export default function LearningProgressAdmin() {
 
       <div className="filter-bar" style={{ marginBottom: 20 }}>
         <input className="form-input" placeholder="搜尋姓名、Email、最近觀看課程..." value={search} onChange={event => setSearch(event.target.value)} style={{ maxWidth: 320 }} />
-        {['all', 'basic', 'standard', 'advanced'].map(item => (
+        {['all', 'basic', 'online', 'standard', 'advanced'].map(item => (
           <button key={item} className={`filter-chip ${tier === item ? 'active' : ''}`} onClick={() => setTier(item)}>
             {item === 'all' ? '全部' : TIER_MARK[item]}
           </button>

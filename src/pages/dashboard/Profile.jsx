@@ -1,4 +1,6 @@
-import { isAIOnly } from '../../../shared/memberAccess'
+import { isAIOnly, isSigningPath } from '../../../shared/memberAccess'
+import { isOnlineMember, onlineAnnualAccessExpired, ONLINE_QUOTE_CONSENT } from '../../../shared/onlineMembership'
+import OnlineMembershipQuote from '../../components/OnlineMembershipQuote'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { BarChart3, CheckCircle2, ChevronRight, Crown, Headphones, LockKeyhole, Menu, Rocket, ShieldCheck, Star, TrendingUp, UserRoundCheck } from 'lucide-react'
@@ -12,6 +14,7 @@ import ManualPaymentModal from '../../components/ManualPaymentModal'
 const WORKER_URL = import.meta.env.VITE_WORKER_URL || 'https://media-platform-api.allen-a76.workers.dev'
 
 const TIER_PERKS = {
+  online: { perks: ['全部線上影片教學永久觀看', '平台 AI 使用權 1 年', '每週選題靈感與拆解', '每月內部直播閉門課', '365 天群組實操指導', '8 套 SOP 工具包'], locked: ['線下實體課程', '到場陪拍', '一對一顧問'] },
   basic: {
     perks:  ['爆款選題 AI', '體驗課內容', '三個月使用期限'],
     locked: ['爆款文案 AI', '社群貼文 AI', '老師批改作業', '一對一策略輔導', '實體拍攝訓練'],
@@ -34,6 +37,7 @@ const planSummaryRows = [
   {
     label: '學習深度',
     trial: '體驗',
+    online: '線上學習',
     creator: '系統學習',
     master: '一對一陪跑',
     managed: '團隊執行',
@@ -41,6 +45,7 @@ const planSummaryRows = [
   {
     label: '實體資源',
     trial: '無',
+    online: '無',
     creator: '實體課',
     master: '實體課＋實體一對一',
     managed: '依方案安排',
@@ -48,6 +53,7 @@ const planSummaryRows = [
   {
     label: '最終得到',
     trial: '掌握內容起步方法',
+    online: 'AI 與全部線上影片教學',
     creator: '建立自媒體獲客系統',
     master: '提升內容品質與執行穩定度',
     managed: '團隊協助營運與內容交付',
@@ -55,6 +61,7 @@ const planSummaryRows = [
 ]
 
 const planPriceDetails = {
+  online: { kind: 'annual', annual: '年付 NT$6,800／年', note: '含稅優惠總額，一次付清；線上影片永久觀看' },
   trial: {
     kind: 'single',
     primary: 'NT$980',
@@ -84,6 +91,7 @@ const planPriceDetails = {
 }
 
 const mobilePlanVisuals = {
+  online: { icon: Headphones, tone: 'blue', subtitle: '年度線上學習', description: '使用平台 AI，隨時觀看全部線上影片', bullets: ['線上影片永久觀看', 'AI 與年度服務 1 年', '8 套 SOP 工具包'], cta: '加入線上會員' },
   trial: {
     icon: Rocket,
     tone: 'blue',
@@ -126,6 +134,9 @@ const mobilePlanMatrixRows = [
     icon: Rocket,
     tone: 'neutral',
     values: ['無', '無', '掌握內容起步方法'],
+  },
+  {
+    id: 'online', name: '線上會員', icon: Headphones, tone: 'blue', values: ['線上隨到隨學', '無', 'AI 與全部線上影片教學'],
   },
   {
     id: 'creator',
@@ -542,11 +553,11 @@ function PlanPriceBlock({ plan }) {
       <div className="plan-price-block has-discount">
         <span className="annual-recommend-badge">推薦年付</span>
         <div className="plan-annual-price">{price.annual}</div>
-        <div className="plan-monthly-price">{price.monthly}</div>
-        <div className="plan-discount-row">
+        <div className="plan-monthly-price">{price.monthly || price.note}</div>
+        {price.save && <div className="plan-discount-row">
           <span className="discount-pill save">{price.save}</span>
           <span className="discount-pill off">{price.off}</span>
-        </div>
+        </div>}
       </div>
     )
   }
@@ -613,6 +624,8 @@ function PlanCheckoutPreview({
   checkoutStep,
   setCheckoutStep,
   onClose,
+  signingOnly = false,
+  signingUserId = '',
 }) {
   const [contractName, setContractName] = useState(currentUser?.name || '')
   const [phone, setPhone] = useState('')
@@ -624,6 +637,7 @@ function PlanCheckoutPreview({
   const [signatureDataUrl, setSignatureDataUrl] = useState('')
   const [pendingSignatureAction, setPendingSignatureAction] = useState('')
   const [monthlyContractReady, setMonthlyContractReady] = useState(false)
+  const [signedContract, setSignedContract] = useState(null)
   const price = planPriceDetails[plan.id]
   const contractDefinition = getContractDefinition(plan.id)
   const isQuote = price?.kind === 'quote'
@@ -632,6 +646,8 @@ function PlanCheckoutPreview({
   const monthlyAmount = price?.monthly?.replace(/^月付\s*/, '') || ''
   const isMonthlyCheckout = isAnnualPlan && billingCycle === 'monthly'
   const shouldAttachCreatorQuote = isMonthlyCheckout && plan.id === 'creator'
+  const isOnlinePlan = plan.id === 'online'
+  const consentText = isOnlinePlan ? ONLINE_QUOTE_CONSENT : '我已閱讀並同意本合作協議書內容，確認以上資料為本人真實資料，並同意以線上點擊確認作為簽署意思表示。'
   const normalizedContractName = String(contractName || '').trim()
   const normalizedContractPhone = normalizeTaiwanMobilePhone(phone)
   const canProceedToPayment = Boolean(acceptedContract && signatureDataUrl && normalizedContractName.length >= 2 && normalizedContractPhone)
@@ -641,6 +657,8 @@ function PlanCheckoutPreview({
     !signatureDataUrl ? '完成電子簽名' : '',
     !acceptedContract ? '勾選同意合約' : '',
   ].filter(Boolean)
+
+  useEffect(() => { setSignedContract(null) }, [contractName, phone, signatureDataUrl, acceptedContract, billingCycle])
 
   useEffect(() => {
     if (!manualMonthlyOpen) return
@@ -674,6 +692,8 @@ function PlanCheckoutPreview({
       signerEmail: currentUser?.email,
       signerPhone: normalizedPhone,
       signerSignatureDataUrl: signatureDataUrl,
+      acceptedContract,
+      signingUserId,
       includeQuotation: cycle === 'monthly' && plan.id === 'creator',
       quotationFileName: cycle === 'monthly' && plan.id === 'creator' ? 'creator-quote-39800.pdf' : '',
     }
@@ -709,7 +729,7 @@ function PlanCheckoutPreview({
     return data.contract
   }
 
-  const createUpgradeOrder = async ({ normalizedPhone }) => {
+  const createUpgradeOrder = async ({ normalizedPhone, contractId }) => {
     const token = await getAccessToken()
     if (!token) throw new Error('登入狀態已過期，請重新登入後再升級。')
 
@@ -724,6 +744,7 @@ function PlanCheckoutPreview({
         planId: plan.id,
         phone: normalizedPhone,
         billingCycle,
+        contractId,
       }),
     })
     const data = await response.json().catch(() => ({}))
@@ -750,6 +771,7 @@ function PlanCheckoutPreview({
 
   const startUpgradePayment = async () => {
     if (loading) return
+    if (!canProceedToPayment) { setError('請完成姓名、手機、電子簽名與同意勾選。'); return }
     const normalizedPhone = normalizeTaiwanMobilePhone(phone)
     const normalizedName = String(contractName || '').trim()
     if (normalizedName.length < 2) {
@@ -772,8 +794,9 @@ function PlanCheckoutPreview({
     setMessage('')
 
     try {
-      await signContract({ cycle: billingCycle, signerPhone: normalizedPhone })
-      const data = await createUpgradeOrder({ normalizedPhone })
+      const contract = signedContract || await signContract({ cycle: billingCycle, signerPhone: normalizedPhone })
+      setSignedContract(contract)
+      const data = await createUpgradeOrder({ normalizedPhone, contractId: contract.id })
       setMessage(`升級訂單已建立：${data.order.orderNumber}。正在前往付款頁...`)
       submitPaymentCheckout(data.ecpay || data.payment || data.newebpay)
     } catch (err) {
@@ -783,6 +806,7 @@ function PlanCheckoutPreview({
   }
 
   const handleContractNext = () => {
+    if (loading) return
     const normalizedPhone = normalizeTaiwanMobilePhone(phone)
     const normalizedName = String(contractName || '').trim()
     if (normalizedName.length < 2) {
@@ -804,6 +828,19 @@ function PlanCheckoutPreview({
       return
     }
     setError('')
+    if (signingOnly || isOnlinePlan) {
+      setLoading(true)
+      ;(async () => {
+        try {
+          const contract = await signContract({ signerName: normalizedName, signerPhone: normalizedPhone })
+          setSignedContract(contract)
+          if (signingOnly) { setMessage('簽署已完成，文件已留存，客服可於後台下載。'); setCheckoutStep(3) }
+          else setCheckoutStep(2)
+        } catch (err) { setError(err.message || '簽署失敗，請稍後再試。') }
+        finally { setLoading(false) }
+      })()
+      return
+    }
     if (isMonthlyCheckout) {
       setLoading(true)
       ;(async () => {
@@ -858,19 +895,19 @@ function PlanCheckoutPreview({
     <section className="plan-checkout-panel">
       <div className="checkout-panel-head">
         <div>
-          <p>升級流程</p>
+          <p>{signingOnly ? '線上簽署' : '升級流程'}</p>
           <h3>{plan.name}</h3>
         </div>
         <button type="button" onClick={onClose}>關閉</button>
       </div>
 
-      <div className="checkout-steps" aria-label="升級流程">
+      {!signingOnly && <div className="checkout-steps" aria-label="升級流程">
         {(isMonthlyCheckout ? ['選擇月付', '簽署資料', '通知客服'] : ['選擇付款', '確認資料', '前往付款']).map((step, index) => (
           <span key={step} className={checkoutStep === index ? 'active' : checkoutStep > index ? 'done' : ''}>
             {step}
           </span>
         ))}
-      </div>
+      </div>}
 
       {checkoutStep === 0 && (
         <div className="checkout-preview-card">
@@ -887,21 +924,21 @@ function PlanCheckoutPreview({
             )}
             {isAnnualPlan && (
               <>
-                <button
+                {price.monthly && <button
                   type="button"
                   className={`billing-option ${billingCycle === 'monthly' ? 'active' : ''}`}
                   onClick={handleMonthlyClick}
                 >
                   <strong>{price.monthly}</strong>
                   <span>先簽署合約與報價單，再前往官方 Line@ 通知客服</span>
-                </button>
+                </button>}
                 <button
                   type="button"
                   className={`billing-option highlight ${billingCycle === 'annual' ? 'active' : ''}`}
                   onClick={() => setBillingCycle('annual')}
                 >
                   <strong>{price.annual}</strong>
-                  <span>{price.save}，{price.off}</span>
+                  <span>{price.save ? `${price.save}，${price.off}` : price.note}</span>
                 </button>
               </>
             )}
@@ -933,7 +970,7 @@ function PlanCheckoutPreview({
             <div className="contract-preview-head">
               <div>
                 <span>線上簽署合約</span>
-                <strong>{plan.name}合作協議書</strong>
+                <strong>{isOnlinePlan ? '年度線上會員報價單' : `${plan.name}合作協議書`}</strong>
               </div>
               <em>簽署後後台可下載</em>
             </div>
@@ -946,6 +983,7 @@ function PlanCheckoutPreview({
               {shouldAttachCreatorQuote && <p><span>報價單</span>一年陪跑達人班簽署版報價單 NT$39,800</p>}
             </div>
             <div className="contract-preview-scroll">
+              {isOnlinePlan ? <OnlineMembershipQuote name={contractName} email={currentUser?.email} phone={phone} signature={signatureDataUrl} signedAt={signedContract?.signedAt} /> : <>
               <h5>{contractDefinition.title}</h5>
               <p>（線上簽署版）</p>
               <p>{contractDefinition.intro}</p>
@@ -1009,6 +1047,7 @@ function PlanCheckoutPreview({
                 </div>
               </div>
               <p className="contract-company-line">遐光映畫工作室｜高雄市苓雅區中山二路 412 號 11 樓之 5｜TEL: 07-2367660｜E-mail: xgfxstudio.ks01@gmail.com｜統一編號：71622113｜負責人：張峻翔</p>
+              </>}
             </div>
           </div>
           <div className="signature-status-card">
@@ -1061,21 +1100,21 @@ function PlanCheckoutPreview({
               checked={acceptedContract}
               onChange={event => setAcceptedContract(event.target.checked)}
             />
-            <span>我已閱讀並同意本合作協議書內容，確認以上資料為本人真實資料，並同意以線上點擊確認作為簽署意思表示。</span>
+            <span>{consentText}</span>
           </label>
           {!canProceedToPayment && (
             <p className="contract-next-hint">完成以下項目後才能下一步：{missingContractItems.join('、')}</p>
           )}
           {error && <div className="auth-alert error" style={{ marginTop: 14 }}>{error}</div>}
           <div className="checkout-actions">
-            <button type="button" className="checkout-back-btn" onClick={() => setCheckoutStep(0)}>上一步</button>
+            {!signingOnly && <button type="button" className="checkout-back-btn" onClick={() => setCheckoutStep(0)}>上一步</button>}
             <button
               type="button"
               className="checkout-next-btn"
               disabled={!canProceedToPayment || loading}
               onClick={handleContractNext}
             >
-              {loading ? '送出中...' : isMonthlyCheckout ? '送出並通知客服' : '下一步，確認付款'}
+              {loading ? '送出中...' : signingOnly ? '確認並完成簽署' : isMonthlyCheckout ? '送出並通知客服' : '下一步，確認付款'}
             </button>
           </div>
         </div>
@@ -1117,8 +1156,8 @@ function PlanCheckoutPreview({
 
       {checkoutStep === 3 && (
         <div className="checkout-preview-card success">
-          <h4>流程預覽完成</h4>
-          <p>正式版會在付款成功後自動升級為 {plan.name}。目前是前端預覽，因此沒有扣款，也沒有修改會員資料。</p>
+          <h4>已完成電子簽署</h4>
+          <p>{message || '文件已留存，客服可於後台下載。'} 簽署本身不會扣款或變更會員權限。</p>
           <button type="button" className="checkout-next-btn" onClick={onClose}>回到方案比較</button>
         </div>
       )}
@@ -1164,7 +1203,7 @@ function PlanCheckoutPreview({
   )
 }
 
-function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose }) {
+function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose, signingOnly = false, signingUserId = '' }) {
   const [showFullComparison, setShowFullComparison] = useState(false)
   const [checkoutPlan, setCheckoutPlan] = useState(null)
   const [billingCycle, setBillingCycle] = useState('annual')
@@ -1192,7 +1231,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
     setCheckoutPlan(plan)
     setBillingCycle(planPriceDetails[plan.id]?.kind === 'annual' ? 'annual' : 'single')
     setAcceptedContract(false)
-    setCheckoutStep(0)
+    setCheckoutStep(signingOnly ? 1 : 0)
   }
 
   const closeCheckout = () => {
@@ -1217,14 +1256,14 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
     const plan = plans.find(item => item.id === initialPlanId)
     if (!plan) return
     const action = getUpgradeAction(plan)
-    if (action.disabled) return
+    if (action.disabled && !signingOnly) return
     startCheckout(plan)
     setAutoStartedPlanId(initialPlanId)
   }, [initialPlanId, autoStartedPlanId])
 
   const getUpgradeAction = (plan) => {
     if (isAIOnly(currentUser) && plan.id === 'trial') return { label: '請洽客服', disabled: true }
-    if (currentPlan?.id === plan.id) return { label: '目前方案', disabled: true }
+    if (currentPlan?.id === plan.id) return plan.id === 'online' && onlineAnnualAccessExpired(currentUser) ? { label: '續約線上會員', disabled: false } : { label: '目前方案', disabled: true }
     if (currentPlan && plan.level < currentPlan.level) return { label: '已包含', disabled: true }
     if (plan.id === 'managed') return { label: '聯繫官方帳號', disabled: true }
     if (currentPlan && plan.level <= currentPlan.level) return { label: '已包含', disabled: true }
@@ -1237,7 +1276,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
     if (price.kind === 'annual') {
       return {
         primary: price.annual.replace('年付 ', ''),
-        secondary: price.monthly,
+        secondary: price.monthly || price.note,
         saving: price.save,
       }
     }
@@ -1260,7 +1299,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
       <div className="modal plan-comparison-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <h2 className="modal-title">方案比較</h2>
+            <h2 className="modal-title">{signingOnly ? '線上簽署' : '方案比較'}</h2>
             <p className="plan-modal-subtitle">
               目前方案：{currentPlan?.name || (isAIOnly(currentUser) ? 'AI 會員' : '未設定')}
             </p>
@@ -1268,7 +1307,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
           <button className="modal-close" onClick={onClose} aria-label="關閉">✕</button>
         </div>
         <div className="modal-body">
-          <div className="mobile-plan-showcase">
+          {!signingOnly && <><div className="mobile-plan-showcase">
             <div className="mobile-plan-showcase-head">
               <div>
                 <h3>頂流方案比較</h3>
@@ -1423,9 +1462,11 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
             ))}
           </div>
 
+          </>}
           {checkoutPlan && (
             <div ref={checkoutSectionRef} className="plan-checkout-anchor">
               <PlanCheckoutPreview
+                key={`${checkoutPlan.id}-${signingOnly}`}
                 plan={checkoutPlan}
                 currentUser={currentUser}
                 billingCycle={billingCycle}
@@ -1434,12 +1475,14 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
                 setAcceptedContract={setAcceptedContract}
                 checkoutStep={checkoutStep}
                 setCheckoutStep={setCheckoutStep}
-                onClose={closeCheckout}
+                onClose={signingOnly ? onClose : closeCheckout}
+                signingOnly={signingOnly}
+                signingUserId={signingUserId}
               />
             </div>
           )}
 
-          <section className={`plan-summary-box ${showFullComparison ? 'mobile-table-open' : ''}`}>
+          {!signingOnly && <><section className={`plan-summary-box ${showFullComparison ? 'mobile-table-open' : ''}`}>
             <div className="plan-summary-desktop">
               <div className="comparison-row comparison-head">
                 <div className="comparison-label">升級重點</div>
@@ -1510,6 +1553,7 @@ function PlanComparisonModal({ currentPlan, currentUser, initialPlanId, onClose 
               </div>
             </div>
           )}
+          </>}
         </div>
         <div className="modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>關閉</button>
@@ -1529,7 +1573,11 @@ export default function Profile() {
   const [passwordErr, setPasswordErr] = useState('')
   const [msg, setMsg] = useState('')
   const [showPlanModal, setShowPlanModal] = useState(false)
-  const upgradePlanId = new URLSearchParams(location.search).get('upgrade') || ''
+  const params = new URLSearchParams(location.search)
+  const upgradePlanId = params.get('upgrade') || ''
+  const signingOnly = isSigningPath(location.pathname + location.search)
+  const signingPlanId = signingOnly ? params.get('sign') : ''
+  const signingUserId = signingOnly ? params.get('student') : ''
 
   const aiOnly = isAIOnly(currentUser)
   const meta = TIER_META[currentUser.tier] || {}
@@ -1576,8 +1624,10 @@ export default function Profile() {
     : null
 
   useEffect(() => {
-    if (upgradePlanId) setShowPlanModal(true)
-  }, [upgradePlanId])
+    if (upgradePlanId || signingPlanId) setShowPlanModal(true)
+  }, [upgradePlanId, signingPlanId])
+
+  if (signingOnly && signingUserId !== currentUser.id) return <div className="page-content"><h1>請登入簽署連結指定的學員帳號</h1><p>此連結屬於另一位學員，請先登出並使用本人帳號登入。</p><a href="/dashboard/profile">回到個人資料</a></div>
 
   return (
     <div className="page-content">
@@ -1591,7 +1641,7 @@ export default function Profile() {
             <span className={`tier-name ${meta.color}`}>目前方案：{currentPlan?.name || meta.label}</span>
             {daysLeft !== null && (
               <span style={{ fontSize: 13, color: 'var(--gray-600)', background: 'rgba(255,255,255,0.6)', borderRadius: 999, padding: '2px 10px' }}>
-                {daysLeft > 0 ? `剩餘 ${daysLeft} 天` : '已過期'}
+                {daysLeft > 0 ? `${isOnlineMember(currentUser) ? 'AI 與年度服務' : ''}剩餘 ${daysLeft} 天` : isOnlineMember(currentUser) ? '年度服務已到期；線上影片仍可觀看' : '已過期'}
               </span>
             )}
             <ul className="tier-perks">
@@ -1643,7 +1693,7 @@ export default function Profile() {
                     { label: '姓名',     value: currentUser.name },
                     { label: '電子郵件', value: currentUser.email },
                     { label: '加入日期', value: currentUser.createdAt },
-                    { label: '方案效期', value: currentUser.expiresAt ? `${currentUser.expiresAt}${daysLeft !== null ? `（剩 ${daysLeft} 天）` : ''}` : (aiOnly ? '免費使用中，未設定到期日' : '依合約') },
+                    { label: isOnlineMember(currentUser) ? 'AI 與年度服務效期' : '方案效期', value: currentUser.expiresAt ? `${new Date(currentUser.expiresAt).toLocaleDateString('zh-TW')}${daysLeft !== null ? `（剩 ${Math.max(0, daysLeft)} 天）` : ''}` : (aiOnly ? '免費使用中，未設定到期日' : '依合約') },
                     { label: '帳號狀態', value: currentUser.status === 'active' ? '正常' : '停用' },
                   ].map(({ label, value }) => (
                     <div key={label} style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--gray-100)' }}>
@@ -1710,7 +1760,7 @@ export default function Profile() {
           </div>}
         </div>
       </div>
-      {showPlanModal && <PlanComparisonModal currentPlan={currentPlan} currentUser={currentUser} initialPlanId={upgradePlanId} onClose={() => setShowPlanModal(false)} />}
+      {showPlanModal && <PlanComparisonModal currentPlan={currentPlan} currentUser={currentUser} initialPlanId={signingPlanId || upgradePlanId} signingOnly={signingOnly} signingUserId={signingUserId} onClose={() => setShowPlanModal(false)} />}
     </div>
   )
 }

@@ -1,5 +1,7 @@
 import { questionExcerpt, questionTopics, usageSummary, newestUsageFirst } from '../shared/aiUsage.js'
 import { AI_ONLY_PLANS, hasActiveCourseMembership } from '../shared/memberAccess.js'
+import { ONLINE_MEMBERSHIP_AMOUNT, ONLINE_QUOTE_VERSION, ONLINE_QUOTE_CONSENT, onlineServiceDates } from '../shared/onlineMembership.js'
+import { renderOnlineQuoteHtml } from '../shared/onlineQuoteHtml.js'
 /**
  * Cloudflare Worker — Media Platform API
  *
@@ -43,6 +45,7 @@ const BOOKING_TIME_SLOTS = ['12:00', '13:00', '14:00', '15:00', '16:00', '17:00'
 const DEFAULT_BOOKING_DURATION_MINUTES = 180
 const TAIPEI_OFFSET = '+08:00'
 const PLAN_TO_LEGACY_TIER = {
+  online: 'online',
   ai_free: 'ai_free',
   trial: 'basic',
   creator: 'standard',
@@ -50,17 +53,20 @@ const PLAN_TO_LEGACY_TIER = {
   managed: 'managed',
 }
 const PLAN_DURATION_DAYS = {
+  online: 365,
   trial: 90,
   creator: 365,
   master: 365,
   managed: null,
 }
 const PLAN_AMOUNT = {
+  online: ONLINE_MEMBERSHIP_AMOUNT,
   trial: 980,
   creator: 39800,
   master: 129800,
 }
 const PLAN_LABELS = {
+  online: '線上會員',
   ai_free: 'AI 會員',
   trial: '自媒體獲客-定位體驗課',
   creator: '頂流達人',
@@ -1993,7 +1999,7 @@ async function recordPlanningUsage(env, userId, membership, question) {
   const payload = {
     id: crypto.randomUUID(), user_id: userId, feature: 'planning', industry: summary,
     // The existing table uses legacy plan names. Keep the actual plan separately.
-    plan: ({ creator: 'standard', master: 'advanced', trial: 'trial', managed: 'managed' })[membershipPlan] || 'free',
+    plan: ({ online: 'standard', creator: 'standard', master: 'advanced', trial: 'trial', managed: 'managed' })[membershipPlan] || 'free',
     provider: 'worker', input_payload: { question_summary: summary, topics: questionTopics(summary, 'planning'), membership_plan: membershipPlan },
   }
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -2737,7 +2743,7 @@ async function handleCreateUpgradeOrder(request, env) {
   const legacyTier = planToLegacyTier(planId)
   const amount = PLAN_AMOUNT[planId]
 
-  if (!amount || !['creator', 'master'].includes(planId)) return err('Invalid upgrade plan', 400)
+  if (!amount || !['online', 'creator', 'master'].includes(planId)) return err('Invalid upgrade plan', 400)
   if (!phone) return err('請輸入有效的台灣手機號碼（例：0912-345-678）', 400)
 
   const profile = await getProfileById(env, user.id)
@@ -2745,15 +2751,25 @@ async function handleCreateUpgradeOrder(request, env) {
 
   const currentMembership = await getLatestActiveMembership(env, user.id)
   const currentPlanId = currentMembership?.plan_id || tierToPlanId(currentMembership?.legacy_tier || '') || 'trial'
-  const levelByPlan = { trial: 1, creator: 2, master: 3, managed: 4 }
-  if ((levelByPlan[planId] || 0) <= (levelByPlan[currentPlanId] || 0)) {
+  const levelByPlan = { trial: 1, online: 2, creator: 3, master: 4, managed: 5 }
+  const onlineRenewal = planId === 'online' && currentPlanId === 'online' && currentMembership.expires_at && new Date(currentMembership.expires_at).getTime() <= Date.now()
+  if (!onlineRenewal && (levelByPlan[planId] || 0) <= (levelByPlan[currentPlanId] || 0)) {
     return err('此方案已包含在目前會員權限內。', 409)
+  }
+
+  let signedQuote = null
+  if (planId === 'online') {
+    const contractId = String(body.contractId || '')
+    if (!/^[0-9a-f-]{36}$/i.test(contractId)) return err('請先完成線上會員報價單簽署。', 400)
+    signedQuote = await getContractById(env, contractId)
+    if (!signedQuote || signedQuote.user_id !== user.id || signedQuote.plan_id !== 'online' || signedQuote.status !== 'signed' || signedQuote.contract_version !== ONLINE_QUOTE_VERSION || signedQuote.amount !== ONLINE_MEMBERSHIP_AMOUNT || !normalizeSignatureDataUrl(signedQuote.signer_signature_data_url) || signedQuote.consent_text !== ONLINE_QUOTE_CONSENT || signedQuote.signer_phone !== phone) return err('簽署報價單不符合本次購買方案。', 403)
+    if (signedQuote.order_id) return err('此簽署文件已建立訂單，請至付款紀錄確認或聯絡客服。', 409)
   }
 
   const order = await insertOrder(env, {
     order_number: makeOrderNumber(),
     user_id: user.id,
-    customer_name: profile.display_name || user.user_metadata?.display_name || profile.email?.split('@')[0] || '學員',
+    customer_name: signedQuote?.signer_name || profile.display_name || user.user_metadata?.display_name || profile.email?.split('@')[0] || '學員',
     customer_email: profile.email || user.email,
     customer_phone: phone,
     plan_id: planId,
@@ -2761,9 +2777,11 @@ async function handleCreateUpgradeOrder(request, env) {
     amount,
     currency: 'TWD',
     status: 'pending',
+    ...(signedQuote ? { signed_contract_id: signedQuote.id } : {}),
     provider: ecpayConfigured(env) ? 'ecpay' : 'manual',
     notes: `Created from profile upgrade. Previous plan: ${currentPlanId}`,
   })
+  if (signedQuote) await linkContractOrder(env, signedQuote.id, order.id)
   const payment = await buildEcpayCheckout(order, env)
 
   return json({
@@ -2798,22 +2816,26 @@ async function handleSignContract(request, env) {
   const signerEmail = String(body.signerEmail || body.email || profile.email || user.email || '').trim().toLowerCase()
   const signerPhone = normalizeTaiwanMobilePhone(body.signerPhone || body.phone) || String(body.signerPhone || body.phone || '').trim()
   const signerSignatureDataUrl = normalizeSignatureDataUrl(body.signerSignatureDataUrl || body.signatureDataUrl)
-  const amount = Number(body.amount || contractAmountFor(planId, billingCycle) || 0)
-  const amountLabel = String(body.amountLabel || formatContractAmount(planId, billingCycle, amount)).trim()
+  const amount = contractAmountFor(planId, billingCycle)
+  const amountLabel = planId === 'online' ? 'NT$6,800／年（含稅優惠總額）' : formatContractAmount(planId, billingCycle, amount)
   const orderId = String(body.orderId || '').trim()
   const contractDefinition = getContractDefinition(planId)
 
-  if (!['creator', 'master'].includes(planId)) return err('Invalid contract plan', 400)
+  if (!['online', 'creator', 'master'].includes(planId)) return err('Invalid contract plan', 400)
+  if (body.signingUserId && body.signingUserId !== user.id) return err('請登入簽署連結指定的學員帳號。', 403)
   if (!['annual', 'monthly'].includes(billingCycle)) return err('Invalid billing cycle', 400)
+  if (planId === 'online' && billingCycle !== 'annual') return err('線上會員採年度一次付清。', 400)
+  if (body.acceptedContract !== true) return err('請先勾選同意簽署文件。', 400)
   if (!signerName || signerName.length < 2) return err('請填寫真實姓名。', 400)
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) return err('Email 格式不正確。', 400)
   if (!signerPhone || signerPhone.length < 8) return err('請填寫聯絡電話。', 400)
+  if (planId === 'online' && !normalizeTaiwanMobilePhone(signerPhone)) return err('請填寫有效的台灣手機號碼。', 400)
   if (!signerSignatureDataUrl) return err('請完成電子簽名。', 400)
 
   const contract = await insertContractSignature(env, {
     user_id: user.id,
-    order_id: /^[0-9a-f-]{36}$/i.test(orderId) ? orderId : null,
-    contract_version: contractDefinition.version,
+    order_id: planId !== 'online' && /^[0-9a-f-]{36}$/i.test(orderId) ? orderId : null,
+    contract_version: planId === 'online' ? ONLINE_QUOTE_VERSION : contractDefinition.version,
     plan_id: planId,
     legacy_tier: planToLegacyTier(planId),
     billing_cycle: billingCycle,
@@ -2827,7 +2849,7 @@ async function handleSignContract(request, env) {
     signer_address: String(body.signerAddress || '').trim() || null,
     line_id: String(body.lineId || '').trim() || null,
     signer_signature_data_url: signerSignatureDataUrl,
-    consent_text: CONTRACT_CONSENT_TEXT,
+    consent_text: planId === 'online' ? ONLINE_QUOTE_CONSENT : CONTRACT_CONSENT_TEXT,
     ip_address: request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || '',
     user_agent: request.headers.get('User-Agent') || '',
     status: 'signed',
@@ -2860,7 +2882,7 @@ async function handleDownloadContract(request, contractId, env) {
   if (!contract) return err('Contract not found', 404)
 
   const html = renderContractHtml(contract, env)
-  const filename = encodeURIComponent(`頂級流量_${PLAN_LABELS[contract.plan_id] || contract.plan_id}_合作協議書_${contract.signer_name}_${String(contract.signed_at || '').slice(0, 10)}.html`)
+  const filename = encodeURIComponent(`頂級流量_${PLAN_LABELS[contract.plan_id] || contract.plan_id}_${contract.plan_id === 'online' ? '簽署報價單' : '合作協議書'}_${contract.signer_name}_${String(contract.signed_at || '').slice(0, 10)}.html`)
   return new Response(html, {
     status: 200,
     headers: {
@@ -3098,6 +3120,8 @@ async function handleListStudents(request, env) {
       const application = applicationByUserId[profile.id] || null
       const authUser = authUserById[profile.id] || null
       const contract = latestContractByUserId[profile.id] || null
+      const currentContract = contracts.find(item => item.user_id === profile.id && item.status === 'signed' &&
+        (!['online', 'creator', 'master'].includes(membership?.plan_id) || item.plan_id === membership.plan_id)) || null
       const name = profile.display_name || profile.email?.split('@')[0] || '學員'
       return {
         id: profile.id,
@@ -3115,6 +3139,7 @@ async function handleListStudents(request, env) {
         expiresAt: membership?.expires_at || null,
         trialCompletedAt: membership?.trial_completed_at || null,
         latestContract: contract ? mapContractSignature(contract) : null,
+        currentContract: currentContract ? mapContractSignature(currentContract) : null,
         source: 'supabase',
       }
     }),
@@ -3159,7 +3184,7 @@ async function handleLearningProgress(request, env) {
       const rows = progressByUser[profile.id] || []
       const visibleCourses = courses.filter(course => {
         const accessLevels = getCourseAccessLevels(course)
-        return accessLevels.map(courseAccessLevelToTier).includes(tier)
+        return tier === 'online' || accessLevels.map(courseAccessLevelToTier).includes(tier)
       })
       const visibleCourseIds = new Set(visibleCourses.map(course => progressStorageId(course.id)))
       const visibleRows = rows.filter(row => visibleCourseIds.has(Number(row.course_id)))
@@ -3798,6 +3823,7 @@ function renderContractClausesHtml(clauses = CONTRACT_CLAUSES) {
 }
 
 function renderContractHtml(contract, env = {}) {
+  if (contract.plan_id === 'online') return renderOnlineQuoteHtml(contract, env.PUBLIC_APP_URL || 'https://toplevel-tw.com')
   const planName = PLAN_LABELS[contract.plan_id] || contract.plan_id
   const contractDefinition = getContractDefinition(contract.plan_id)
   const billing = BILLING_CYCLE_LABELS[contract.billing_cycle] || contract.billing_cycle
@@ -4152,6 +4178,7 @@ async function buildEcpayCheckout(order, env) {
 }
 
 function planItemName(planId) {
+  if (planId === 'online') return '頂級流量年度線上會員'
   if (planId === 'trial') return '自媒體獲客-定位體驗課'
   if (planId === 'creator') return '頂流達人'
   if (planId === 'master') return '頂流私塾'
@@ -4936,6 +4963,13 @@ async function insertContractSignature(env, payload) {
   return Array.isArray(data) ? data[0] : data
 }
 
+async function linkContractOrder(env, contractId, orderId) {
+  const url = new URL(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/contract_signatures`)
+  url.searchParams.set('id', `eq.${contractId}`)
+  const response = await fetch(url, { method: 'PATCH', headers: supabaseServiceHeaders(env, { 'Content-Type': 'application/json' }), body: JSON.stringify({ order_id: orderId }) })
+  if (!response.ok) throw new Error('訂單已建立，但簽署文件關聯失敗，請聯絡客服確認。')
+}
+
 async function listContractsByUserIds(env, userIds = []) {
   const ids = userIds.filter(Boolean)
   if (!ids.length) return []
@@ -5004,6 +5038,10 @@ function isMissingColumn(data, column) {
 }
 
 async function insertMembership(env, payload) {
+  if (payload.plan_id === 'online' && !payload.expires_at) {
+    const activatedAt = new Date().toISOString()
+    payload = { ...payload, starts_at: activatedAt, expires_at: onlineServiceDates(activatedAt).expiresAt }
+  }
   const response = await fetch(`${env.SUPABASE_URL.replace(/\/$/, '')}/rest/v1/memberships`, {
     method: 'POST',
     headers: supabaseServiceHeaders(env, {
@@ -5221,7 +5259,7 @@ async function withCourseStudentCounts(env, courses) {
       const allowedTiers = accessLevels.map(courseAccessLevelToTier).filter(Boolean)
       return {
         ...course,
-        students: students.filter(student => allowedTiers.includes(student.tier)).length,
+        students: students.filter(student => student.tier === 'online' || allowedTiers.includes(student.tier)).length,
       }
     })
   } catch (error) {

@@ -6,6 +6,6 @@ import PremiumHome  from './PremiumHome'
 export default function DashboardHome() {
   const { currentUser } = useAuth()
   if (currentUser.tier === 'basic')    return <TrialHome />
-  if (currentUser.tier === 'standard') return <StandardHome />
+  if (['standard', 'online'].includes(currentUser.tier)) return <StandardHome />
   return <PremiumHome />  // advanced (managed users have their own layout)
 }

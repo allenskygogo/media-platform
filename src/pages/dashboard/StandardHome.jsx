@@ -55,7 +55,8 @@ export default function StandardHome() {
           <p className="sh2-eyebrow">WELCOME BACK</p>
           <h1 className="sh2-name">你好，{currentUser.name}！</h1>
           <span className="sh2-badge">{meta?.label}</span>
-          {currentUser.expiresAt && <p className="sh2-date">效期至 {currentUser.expiresAt}</p>}
+          {currentUser.expiresAt && <p className="sh2-date">{currentUser.tier === 'online' ? 'AI 與年度服務效期至 ' : '效期至 '}{new Date(currentUser.expiresAt).toLocaleDateString('zh-TW')}</p>}
+          {currentUser.tier === 'online' && <p className="sh2-date">線上影片教學永久觀看</p>}
           <div className="sh2-progress-wrap">
             <div className="sh2-progress-header">
               <span>課程完成進度</span>

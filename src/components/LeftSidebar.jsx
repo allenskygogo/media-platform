@@ -1,4 +1,4 @@
-import { isAIOnly } from '../../shared/memberAccess'
+import { isAIOnly, canAccessStudentPath } from '../../shared/memberAccess'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { canUseSocialPublisher } from '../utils/socialPublisherAccess'
@@ -39,7 +39,7 @@ export default function LeftSidebar() {
     : baseNav
   return (
     <aside className="left-sidebar">
-      {nav.map(({ Icon, to, label, end }) => (
+      {nav.filter(item => canAccessStudentPath(currentUser, item.to)).map(({ Icon, to, label, end }) => (
         <NavLink key={to} to={to} end={end} className="ls-link" title={label}>
           {({ isActive }) => (
             <div className={`ls-item${isActive ? ' active' : ''}`}>

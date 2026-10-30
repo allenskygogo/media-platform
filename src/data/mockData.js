@@ -277,6 +277,7 @@ const TIER_ORDER = { basic: 1, standard: 2, advanced: 3, managed: 0 }
 const ACCESS_ORDER = { trial: 1, standard: 2, advanced: 3 }
 
 export function canAccessCourse(userTier, courseAccessLevel) {
+  if (userTier === 'online') return true
   if (Array.isArray(courseAccessLevel)) {
     return courseAccessLevel.includes(COURSE_TIER_TO_ACCESS[userTier])
   }
@@ -296,6 +297,7 @@ export function addDays(dateStr, days) {
 }
 
 export const TIER_META = {
+  online: { label: '線上會員', emoji: '', color: 'standard', duration: 'AI 與年度服務 1 年；線上影片永久觀看', days: 365 },
   ai_free: { label: 'AI 會員', emoji: '', color: 'standard', duration: '免費使用中', days: null },
   basic:    { label: '體驗課',    emoji: '', color: 'basic',    duration: '3 個月',  days: 90  },
   standard: { label: '頂流達人',  emoji: '', color: 'standard', duration: '1 年',    days: 365 },

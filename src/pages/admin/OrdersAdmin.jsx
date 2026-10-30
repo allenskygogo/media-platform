@@ -10,6 +10,7 @@ const STATUS_LABEL = {
 }
 
 const PLAN_LABEL = {
+  online: '線上會員',
   trial: '自媒體獲客-定位體驗課',
   creator: '頂流達人',
   master: '頂流私塾',
