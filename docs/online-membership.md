@@ -32,6 +32,12 @@ The production frontend release `f0f6eb69b03286d09ff7c01ae9820d5a8e8204bd` reach
 
 ## Verification
 
+### Non-Binding Signature Preview
+
+`/preview/signing?plan=creator` (also `online` or `master`) renders the same contract form with synthetic name, phone and `example.test` email, without requiring a student password. It ignores student/name/email URL parameters and does not load a target student's record. Preview consent is explicitly non-binding; the completion handler only changes local component state. Signing and checkout helpers also reject preview calls, and the LINE payment dialog is disabled in preview mode. Resetting, changing plans or reloading clears the test signature. The production `/dashboard/profile?sign=...&student=...` authentication and ownership checks are unchanged.
+
+The full test suite now has 32 passing tests, including anonymous SSR checks for all three preview documents, fallback handling, synthetic identity and disabled completion before required fields. The frontend build passes. Browser interaction checks for this preview were not run because local browser access was declined; no alternate browser surface was used.
+
 `node --test tests/*.test.js` covers access boundaries, signature prerequisites, server-owned price/timestamp, quote ownership, document contents, current-plan status and manual payment activation. The ten quotation notes were compared with the source XLSX text. Local mocked browser checks cover a mobile drawn signature, required consent, signature-only completion, copied admin links, unsigned filtering, and purchase layout at 390px and 1440px.
 
 Thirty-one tests, the production frontend build and a Wrangler Worker bundle passed. Database schema changes were applied; no student contract, order, membership row or charge was created as part of verification. Missing/invalid session tokens are returned as HTTP 401 so the signing flow can prompt or refresh login correctly.

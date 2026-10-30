@@ -15,6 +15,7 @@ import Register        from './pages/Register'
 import AIAccessStatus from './pages/AIAccessStatus'
 import Pricing         from './pages/Pricing'
 import TrialAutoLogin  from './pages/TrialAutoLogin'
+import ContractSigningPreview from './pages/ContractSigningPreview'
 
 import DashboardHome      from './pages/dashboard/Home'
 import CoursesPage        from './pages/dashboard/Courses'
@@ -112,6 +113,7 @@ export default function App() {
           <Route path="/ai-access" element={<AIAccessStatus />} />
           <Route path="/pricing"      element={<Pricing />} />
           <Route path="/trial-login"  element={<TrialAutoLogin />} />
+          <Route path="/preview/signing" element={<ContractSigningPreview />} />
           <Route path="/beta"         element={<BetaSignupPage />} />
 
           {/* ── Student routes ── */}

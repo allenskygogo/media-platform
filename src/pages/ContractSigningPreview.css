@@ -1,0 +1,75 @@
+.signing-demo-page {
+  min-height: 100dvh;
+  padding: 32px 16px;
+  background: #0c0e14;
+  letter-spacing: 0;
+}
+
+.signing-demo-content {
+  max-width: 1080px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.signing-demo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.signing-demo-head p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #aab1c2;
+}
+
+.signing-demo-head h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.4;
+  color: #f4f5f8;
+}
+
+.signing-demo-head select {
+  width: 220px;
+  max-width: 100%;
+}
+
+.signing-demo-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid #287c67;
+  border-radius: 6px;
+  background: #102820;
+  color: #b6ead9;
+}
+
+.signing-demo-notice svg {
+  flex-shrink: 0;
+}
+
+.signing-demo-notice p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.signing-demo-page .plan-checkout-panel {
+  border-radius: 8px;
+}
+
+@media (max-width: 600px) {
+  .signing-demo-page {
+    padding: 20px 12px;
+  }
+
+  .signing-demo-head h1 {
+    font-size: 22px;
+  }
+}

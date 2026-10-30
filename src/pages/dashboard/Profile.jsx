@@ -415,7 +415,7 @@ function getContractDefinition(planId) {
   }
 }
 
-function SignaturePadModal({ onClose, onSave, existingSignature = '' }) {
+function SignaturePadModal({ onClose, onSave, existingSignature = '', previewOnly = false }) {
   const canvasRef = useRef(null)
   const drawingRef = useRef(false)
   const hasStrokeRef = useRef(false)
@@ -520,7 +520,7 @@ function SignaturePadModal({ onClose, onSave, existingSignature = '' }) {
           <button className="modal-close" onClick={onClose} aria-label="關閉電子簽名視窗">✕</button>
         </div>
         <div className="modal-body">
-          <p className="signature-modal-note">請用滑鼠、觸控板或手機手寫電子簽名。完成後，簽名會顯示在甲方簽署欄，系統會把簽名、日期與合約一起保存，後台可下載。</p>
+          <p className="signature-modal-note">{previewOnly ? '測試預覽：請隨意試畫，不必簽真實姓名。筆跡只會顯示在此頁，重新整理後即清除，不會建立正式簽署紀錄。' : '請用滑鼠、觸控板或手機手寫電子簽名。完成後，簽名會顯示在甲方簽署欄，系統會把簽名、日期與合約一起保存，後台可下載。'}</p>
           <canvas
             ref={canvasRef}
             className="signature-pad"
@@ -614,7 +614,7 @@ function submitPaymentCheckout(payment) {
   formEl.submit()
 }
 
-function PlanCheckoutPreview({
+export function PlanCheckoutPreview({
   plan,
   currentUser,
   billingCycle,
@@ -626,9 +626,10 @@ function PlanCheckoutPreview({
   onClose,
   signingOnly = false,
   signingUserId = '',
+  previewOnly = false,
 }) {
   const [contractName, setContractName] = useState(currentUser?.name || '')
-  const [phone, setPhone] = useState('')
+  const [phone, setPhone] = useState(previewOnly ? '0900000000' : '')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -647,7 +648,7 @@ function PlanCheckoutPreview({
   const isMonthlyCheckout = isAnnualPlan && billingCycle === 'monthly'
   const shouldAttachCreatorQuote = isMonthlyCheckout && plan.id === 'creator'
   const isOnlinePlan = plan.id === 'online'
-  const consentText = isOnlinePlan ? ONLINE_QUOTE_CONSENT : '我已閱讀並同意本合作協議書內容，確認以上資料為本人真實資料，並同意以線上點擊確認作為簽署意思表示。'
+  const consentText = previewOnly ? '我已確認此為測試預覽，不會送出正式簽署、產生訂單或開通會員。' : isOnlinePlan ? ONLINE_QUOTE_CONSENT : '我已閱讀並同意本合作協議書內容，確認以上資料為本人真實資料，並同意以線上點擊確認作為簽署意思表示。'
   const normalizedContractName = String(contractName || '').trim()
   const normalizedContractPhone = normalizeTaiwanMobilePhone(phone)
   const canProceedToPayment = Boolean(acceptedContract && signatureDataUrl && normalizedContractName.length >= 2 && normalizedContractPhone)
@@ -678,6 +679,7 @@ function PlanCheckoutPreview({
   }
 
   const signContract = async ({ cycle = billingCycle, signerName = contractName || currentUser?.name, signerPhone = phone } = {}) => {
+    if (previewOnly) throw new Error('測試預覽不可建立正式簽署紀錄。')
     const normalizedPhone = normalizeTaiwanMobilePhone(signerPhone) || String(signerPhone || '').trim()
     const amountLabel = getCheckoutAmount(plan.id, cycle)
     const token = await getAccessToken()
@@ -730,6 +732,7 @@ function PlanCheckoutPreview({
   }
 
   const createUpgradeOrder = async ({ normalizedPhone, contractId }) => {
+    if (previewOnly) throw new Error('測試預覽不可建立訂單。')
     const token = await getAccessToken()
     if (!token) throw new Error('登入狀態已過期，請重新登入後再升級。')
 
@@ -770,6 +773,7 @@ function PlanCheckoutPreview({
   }
 
   const startUpgradePayment = async () => {
+    if (previewOnly) return
     if (loading) return
     if (!canProceedToPayment) { setError('請完成姓名、手機、電子簽名與同意勾選。'); return }
     const normalizedPhone = normalizeTaiwanMobilePhone(phone)
@@ -828,6 +832,10 @@ function PlanCheckoutPreview({
       return
     }
     setError('')
+    if (previewOnly) {
+      setCheckoutStep(3)
+      return
+    }
     if (signingOnly || isOnlinePlan) {
       setLoading(true)
       ;(async () => {
@@ -895,10 +903,10 @@ function PlanCheckoutPreview({
     <section className="plan-checkout-panel">
       <div className="checkout-panel-head">
         <div>
-          <p>{signingOnly ? '線上簽署' : '升級流程'}</p>
+          <p>{previewOnly ? '測試預覽・不會送出' : signingOnly ? '線上簽署' : '升級流程'}</p>
           <h3>{plan.name}</h3>
         </div>
-        <button type="button" onClick={onClose}>關閉</button>
+        <button type="button" onClick={onClose}>{previewOnly ? '重新預覽' : '關閉'}</button>
       </div>
 
       {!signingOnly && <div className="checkout-steps" aria-label="升級流程">
@@ -956,7 +964,7 @@ function PlanCheckoutPreview({
       {checkoutStep === 1 && (
         <div className="checkout-preview-card">
           <div className="checkout-card-title">
-            <h4>確認升級資料</h4>
+            <h4>{previewOnly ? '測試簽署資料' : '確認升級資料'}</h4>
             <span>{currentUser?.email}</span>
           </div>
           {isMonthlyCheckout && (
@@ -972,7 +980,7 @@ function PlanCheckoutPreview({
                 <span>線上簽署合約</span>
                 <strong>{isOnlinePlan ? '年度線上會員報價單' : `${plan.name}合作協議書`}</strong>
               </div>
-              <em>簽署後後台可下載</em>
+              <em>{previewOnly ? '測試文件・不會存入後台' : '簽署後後台可下載'}</em>
             </div>
             <div className="contract-preview-meta">
               <p><span>甲方</span>{currentUser?.name || '目前登入學員'}</p>
@@ -1032,7 +1040,7 @@ function PlanCheckoutPreview({
                   <p>電話：{phone || '請於下方填寫'}</p>
                   {signatureDataUrl && <img className="contract-signer-signature" src={signatureDataUrl} alt="甲方電子簽名" />}
                   <p>電子簽名：{signatureDataUrl ? '已完成' : '尚未完成'}</p>
-                  <p>簽署日期：完成付款流程時紀錄</p>
+                  <p>簽署日期：{previewOnly ? '測試預覽，不產生正式日期' : '完成付款流程時紀錄'}</p>
                 </div>
                 <div>
                   <strong>乙方</strong>
@@ -1042,7 +1050,7 @@ function PlanCheckoutPreview({
                   <p>E-mail：xgfxstudio.ks01@gmail.com</p>
                   <p>電話：07-2367660</p>
                   <p>線上簽署：乙方系統紀錄</p>
-                  <p>簽署日期：完成付款流程時紀錄</p>
+                  <p>簽署日期：{previewOnly ? '測試預覽，不產生正式日期' : '完成付款流程時紀錄'}</p>
                   <img className="contract-company-seal" src="/contract-assets/xgfx-company-seal.png" alt="遐光映畫工作室印章" />
                 </div>
               </div>
@@ -1071,19 +1079,21 @@ function PlanCheckoutPreview({
             <label className="form-label">真實姓名</label>
             <input
               className="form-input"
+              aria-label="真實姓名"
               value={contractName}
               onChange={event => {
                 setContractName(event.target.value)
                 setError('')
               }}
               placeholder="請填寫真實姓名"
-              autoComplete="name"
+              autoComplete={previewOnly ? 'off' : 'name'}
             />
           </div>
           <div className="form-group" style={{ marginTop: 14 }}>
             <label className="form-label">聯絡手機</label>
             <input
               className="form-input"
+              aria-label="聯絡手機"
               value={phone}
               onChange={event => {
                 setPhone(event.target.value)
@@ -1091,7 +1101,7 @@ function PlanCheckoutPreview({
               }}
               placeholder="例：0912-345-678"
               inputMode="tel"
-              autoComplete="tel"
+              autoComplete={previewOnly ? 'off' : 'tel'}
             />
           </div>
           <label className="contract-check">
@@ -1114,7 +1124,7 @@ function PlanCheckoutPreview({
               disabled={!canProceedToPayment || loading}
               onClick={handleContractNext}
             >
-              {loading ? '送出中...' : signingOnly ? '確認並完成簽署' : isMonthlyCheckout ? '送出並通知客服' : '下一步，確認付款'}
+              {loading ? '送出中...' : previewOnly ? '完成測試預覽' : signingOnly ? '確認並完成簽署' : isMonthlyCheckout ? '送出並通知客服' : '下一步，確認付款'}
             </button>
           </div>
         </div>
@@ -1156,13 +1166,13 @@ function PlanCheckoutPreview({
 
       {checkoutStep === 3 && (
         <div className="checkout-preview-card success">
-          <h4>已完成電子簽署</h4>
-          <p>{message || '文件已留存，客服可於後台下載。'} 簽署本身不會扣款或變更會員權限。</p>
-          <button type="button" className="checkout-next-btn" onClick={onClose}>回到方案比較</button>
+          <h4>{previewOnly ? '測試預覽完成' : '已完成電子簽署'}</h4>
+          <p>{previewOnly ? '本次僅測試畫面，沒有送出簽名、建立合約或訂單，也沒有變更任何學員權限。' : `${message || '文件已留存，客服可於後台下載。'} 簽署本身不會扣款或變更會員權限。`}</p>
+          <button type="button" className="checkout-next-btn" onClick={onClose}>{previewOnly ? '重新預覽' : '回到方案比較'}</button>
         </div>
       )}
 
-      {manualMonthlyOpen && (
+      {!previewOnly && manualMonthlyOpen && (
         <ManualPaymentModal
           planName={`${plan.name}｜月付`}
           amount={monthlyAmount}
@@ -1191,6 +1201,7 @@ function PlanCheckoutPreview({
       )}
       {signatureModalOpen && (
         <SignaturePadModal
+          previewOnly={previewOnly}
           existingSignature={signatureDataUrl}
           onClose={() => {
             setSignatureModalOpen(false)
